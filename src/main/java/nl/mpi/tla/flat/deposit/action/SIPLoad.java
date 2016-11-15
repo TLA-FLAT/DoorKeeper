@@ -20,7 +20,6 @@ import java.io.File;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.sip.CMDI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,27 +35,13 @@ public class SIPLoad extends AbstractAction {
     
     @Override
     public boolean perform(Context context) throws DepositException {
-        XdmValue work = context.getProperty("work",".");
-        if (work == null) {
-            logger.error("no work directory specified!");
+        XdmValue sip = context.getProperty("sip","./metadata/record.cmdi");
+        if (sip == null) {
+            logger.error("no sip file specified!");
             return false;
         }
 
-        File wd = new File(work.toString());
-        if (!wd.isDirectory()) {
-            logger.error("work["+wd+"] is not a directory!");
-            return false;
-        }
-        if (!wd.canRead()) {
-            logger.error("work["+wd+"] directory cannot be read!");
-            return false;
-        }
-        if (!wd.canWrite()) {
-            logger.error("work["+wd+"] directory cannot be written!");
-            return false;
-        }
-
-        File mr = wd.toPath().resolve("./metadata/record.cmdi").toFile();
+        File mr = new File(sip.toString());;
         if (!mr.isFile()) {
             logger.error("record["+mr+"] is not a file!");
             return false;
