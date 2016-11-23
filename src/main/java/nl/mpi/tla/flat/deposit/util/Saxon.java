@@ -27,6 +27,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.ErrorListener;
 import javax.xml.transform.Source;
 import net.sf.saxon.Configuration;
+import net.sf.saxon.Transform;
 import net.sf.saxon.s9api.DocumentBuilder;
 import net.sf.saxon.s9api.Processor;
 import net.sf.saxon.s9api.QName;
@@ -50,7 +51,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author menzowi
  */
-public class Saxon {
+public class Saxon  extends Transform {
     
     private static final Logger logger = LoggerFactory.getLogger(Saxon.class.getName());
     
@@ -363,6 +364,17 @@ public class Saxon {
         } catch (Exception ex) {
             throw new SaxonApiException(ex);
         }
+    }
+    
+    // Extension of default Saxon CLI with our extension functions
+    
+    protected void initializeConfiguration(Configuration config) {
+        SaxonExtensionFunctions.registerAll(config);
+    }
+   
+    public static void main(String args[]) {        
+        Saxon saxon = new Saxon();
+        saxon.doTransform(args, "DoorKeeper Saxon");
     }
     
 }

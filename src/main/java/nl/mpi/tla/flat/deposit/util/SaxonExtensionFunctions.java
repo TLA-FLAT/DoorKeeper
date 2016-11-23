@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 import net.sf.saxon.trans.XPathException;
@@ -48,10 +49,10 @@ public final class SaxonExtensionFunctions {
      * This object must be an instance of 
      * <tt>net.sf.saxon.TransformerFactoryImpl</tt>.
      */
-    public static void registerAll(Configuration config) 
-        throws Exception {
+    public static void registerAll(Configuration config) {
         config.registerExtensionFunction(new FileExistsDefinition());
         config.registerExtensionFunction(new CheckURLDefinition());
+        config.registerExtensionFunction(new UUIDDefinition());
         config.registerExtensionFunction(new EvaluateDefinition());
         config.registerExtensionFunction(new FindBagBaseDefinition());
     }
@@ -99,6 +100,54 @@ public final class SaxonExtensionFunctions {
                         seq = (new XdmAtomicValue(exists)).getUnderlyingValue();
                     } catch(Exception e) {
                         logger.error("sx:fileExists failed!",e);
+                    }
+                    return seq;
+                }
+            };
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // sx:fileExists
+    // -----------------------------------------------------------------------
+
+    public static final class UUIDDefinition 
+                        extends ExtensionFunctionDefinition {
+        public StructuredQName getFunctionQName() {
+            return new StructuredQName("sx", 
+                                       "java:nl.mpi.tla.saxon", 
+                                       "uuid");
+        }
+
+        public int getMinimumNumberOfArguments() {
+            return 0;
+        }
+
+        public int getMaximumNumberOfArguments() {
+            return 0;
+        }
+
+        public SequenceType[] getArgumentTypes() {
+            return new SequenceType[] { };
+        }
+
+        public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
+            return SequenceType.SINGLE_STRING;
+        }
+        
+        public boolean dependsOnFocus() {
+           return false;
+        }
+
+        public ExtensionFunctionCall makeCallExpression() {
+            return new ExtensionFunctionCall() {
+                @Override
+                public Sequence call(XPathContext context, Sequence[] arguments) throws XPathException {
+                    Sequence seq = null;
+                    try {
+                        seq = (new XdmAtomicValue(UUID.randomUUID().toString())).getUnderlyingValue();
+                    } catch(Exception e) {
+                        logger.error("sx:uuid failed!",e);
                     }
                     return seq;
                 }
@@ -212,7 +261,7 @@ public final class SaxonExtensionFunctions {
                             xpc.declareNamespace(n.getLocalPart(),n.getStringValue());
                             n = (NamespaceNode)iter.next();
                         }
-                        XPathExecutable xpe = xpc.compile(path.asString());
+                        XPathExecutable xpe = xpc.compile(path.getStringValue());
                         XPathSelector xps   = xpe.load();
                         xps.setContextItem(new XdmNode(node));
                         seq = xps.evaluate().getUnderlyingValue();
