@@ -190,7 +190,10 @@ public class CMDI implements SIPInterface {
     
     public Resource getResource(URI pid) throws DepositException {
         for (Resource res:getResources()) {
-            if (res.getPID().equals(pid)) {
+            if (pid.toString().matches("^(hdl:|http(s)?://hdl.handle.net/).*")) {
+                if (res.getPID().toString().replaceAll("^(hdl:|http(s)?://hdl.handle.net/)","").equals(pid.toString().replaceAll("^(hdl:|http(s)?://hdl.handle.net/)","")))
+                    return res;
+            } else if (res.getPID().equals(pid)) {
                 return res;
             }
         }

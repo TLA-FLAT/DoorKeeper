@@ -35,7 +35,7 @@ public class SIPLoad extends AbstractAction {
     
     @Override
     public boolean perform(Context context) throws DepositException {
-        XdmValue sip = context.getProperty("sip","./metadata/record.cmdi");
+        String sip = this.getParameter("sip","./metadata/record.cmdi");
         if (sip == null) {
             logger.error("no sip file specified!");
             return false;
@@ -43,18 +43,19 @@ public class SIPLoad extends AbstractAction {
 
         File mr = new File(sip.toString());;
         if (!mr.isFile()) {
-            logger.error("record["+mr+"] is not a file!");
+            logger.error("record["+mr.getAbsolutePath()+"] is not a file!");
             return false;
         }
         if (!mr.canRead()) {
-            logger.error("record["+mr+"] file cannot be read!");
+            logger.error("record["+mr.getAbsolutePath()+"] file cannot be read!");
             return false;
         }
         if (!mr.canWrite()) {
-            logger.error("work["+mr+"] file cannot be written!");
+            logger.error("work["+mr.getAbsolutePath()+"] file cannot be written!");
             return false;
         }
 
+        logger.debug("SIP["+mr.getAbsolutePath()+"]");
         context.setSIP(new CMDI(mr));
 
         return true;
