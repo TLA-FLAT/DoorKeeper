@@ -1,7 +1,27 @@
 # FLAT DoorKeeper
 The DoorKeeper guards the entry at a (FLAT) repository. It does so by running a SIP (_Submission Information Package_) through a sequence of actions, when one of them fails the SIP should not be allowed into the repository.
 
+Some actions depend on some (patched) libraries which are not available in a Maven repository:
+- https://github.com/menzowindhouwer/fedora-cargo-plugin.git
+- https://github.com/menzowindhouwer/fedora-client.git
+- https://github.com/meertensinstituut/EPICify.git
+
 ```sh
+$ git clone https://github.com/menzowindhouwer/fedora-cargo-plugin.git 
+$ cd fedora-cargo-plugin
+$ mvn clean install
+$ cd ..
+
+$ git clone https://github.com/menzowindhouwer/fedora-client.git 
+$ cd fedora-client
+$ mvn clean install
+$ cd ..
+
+$ git clone https://github.com/meertensinstituut/EPICify.git  
+$ cd EPICify
+$ mvn clean install
+$ cd ..
+
 $ git clone https://github.com/TLA-FLAT/DoorKeeper.git
 $ cd DoorKeeper
 $ mvn clean install
