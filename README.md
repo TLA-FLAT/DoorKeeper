@@ -8,7 +8,7 @@ $ mvn clean install
 ```
 
 ## DoorKeeper command line
-The DoorKeeper can be executed from the command line. But can also be embedded in a servlet (UPCOMMING: ServiceFlat).
+The DoorKeeper can be executed from the command line. But can also be embedded in a servlet (_UPCOMMING_: [ServiceFlat](https://github.com/TheLanguageArchive/FLAT/tree/develop/docker/add-doorkeeper-to-flat/flat/deposit/ServiceFLAT)).
 
 ```sh
 $ java -jar target/doorkeeper.jar -?
@@ -301,15 +301,19 @@ _NOTES_:
 
 ### <a name="EasyBag"></a>`nl.mpi.tla.flat.deposit.action.EasyBag`
 
-parameter | default  | cardinality | notes
-----------|----------|-------------|------
-`foxes`   |          | 1           |
-`bags`    |          | 1           |
+parameter      | default  | cardinality | notes
+---------------|----------|-------------|------
+`foxes`        |          | 1           |
+`bags`         |          | 1           |
+`creator`      |          | ?           |
+`audience`     |          | ?           |
+`accessRights` |          | ?           |
 
-Creates an [EASY Bag](https://github.com/DANS-KNAW/easy-sword2) for this SIP for a backup deposit to [DANS](http://www.dans.knaw.nl/) via SWORD. The FOXML file is used to pick up the Dublin Core metadata generated before.
+Creates an [EASY Bag](https://github.com/DANS-KNAW/easy-sword2) for this SIP for a backup deposit to [DANS](http://www.dans.knaw.nl/) via SWORD.
 
 _NOTES_:
-- this just creates the ZIPped BAGs, the actual upload to DANS is a separate (batch) process
+- the FOXML file is used to pick up the Dublin Core metadata generated before
+- this just creates the ZIPped BAG, the actual upload to DANS is a separate (batch) process
 
 ### <a name="Deposit"></a>`nl.mpi.tla.flat.deposit.action.Deposit`
 
@@ -401,3 +405,105 @@ Will remove the active log setup, i.e., the MDC associated with the thread that 
 _NOTES_:
 - best be used as the last action in the `final` section of the workflow
 - see [WorkspaceLogSetup](#WorkspaceLogSetup) (mandatory, earlier)
+
+## Example workflow
+
+Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https://github.com/TheLanguageArchive/FLAT/blob/develop/docker/add-doorkeeper-to-flat/flat/deposit/flat-deposit.xml):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<flow xmlns:flat="java:nl.mpi.tla.flat">
+    <config>
+        <import class="nl.mpi.tla.flat.deposit.context.Environment" prefix="env-"/>
+        <import class="nl.mpi.tla.flat.deposit.context.SystemProperties" prefix="sys-"/>
+        <property name="fitsService" value="http://localhost:8080/fits/" uniq="true"/>
+        <property name="home" value="/app/flat" uniq="true"/>
+        <property name="base" value="{$home}/deposit" uniq="true"/>
+        <property name="bag" value="{$base}/bags/{$sip}" uniq="true"/>
+        <property name="work" value="{flat:findBagBase($bag)}" uniq="true"/>
+        <property name="easy" value="{$base}/easy" uniq="true"/>
+        <property name="epicPrefix" value="12345"/>
+        <property name="fedoraUser" value="fedoraAdmin"/>
+        <property name="fedoraPassword" value="fedora"/>
+        <property name="fedoraServer" value="https://localhost:8443/fedora"/>
+        <property name="publicFedoraServer" value="http://localhost/flat"/>
+        <property name="gsearchUser" value="fgsAdmin"/>
+        <property name="gsearchPassword" value="fgsAdmin"/>
+        <property name="gsearchServer" value="http://localhost:8080/fedoragsearch"/>
+    </config>
+    <init>
+        <action name="log setup" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogSetup">
+            <parameter name="dir" value="{$work}/logs"/>
+        </action>        
+        <action name="check workspace" class="nl.mpi.tla.flat.deposit.action.SIPLoad">
+            <parameter name="sip" value="{$work}/metadata/record.cmdi"/>
+        </action>
+    </init>
+    <main>
+        <action name="assemble package" class="nl.mpi.tla.flat.deposit.action.PackageAssembly">
+            <parameter name="dir" value="{$work}/resources"/>
+            <parameter name="prefix" value="{$epicPrefix}"/>
+        </action>
+        <action name="validate metadata" class="nl.mpi.tla.flat.deposit.action.Validate">
+            <parameter name="schemaCache" value="{$base}/cache/schemas"/>
+            <parameter name="rules" value="{$base}/policies/rules.sch"/>
+        </action>
+        <action name="validate resources" class="nl.mpi.tla.flat.deposit.action.FITS">
+        	<parameter name="fitsService" value="{$fitsService}"/>
+        	<parameter name="mimetypes" value="{$base}/policies/fits-mimetypes.xml"/>
+        </action>
+        <action name="persist resources" class="nl.mpi.tla.flat.deposit.action.Persist">
+            <parameter name="resourcesDir" value="{$work}/resources"/>
+            <parameter name="policyFile" value="{$base}/policies/persistence-policy.xml"/>
+            <parameter name="xpathDatasetName" value="replace(//*[name()='MdSelfLink'], 'hdl:{$epicPrefix}/','')"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.HandleAssignment">
+            <parameter name="prefix" value="{$epicPrefix}"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.ACL">
+            <parameter name="policy" value="{$work}/metadata/policy.n3"/>
+            <parameter name="dir" value="{$work}/acl"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.CreateFOX">
+            <parameter name="cmd2dc" value="{$base}/policies/cmd2dc.xsl"/>
+            <parameter name="cmd2fox" value="{$base}/transforms/cmd2fox.xsl"/>
+            <parameter name="dir" value="{$work}/fox"/>
+            <parameter name="relations" value="{$base}/dummies/relations.xml"/>
+            <parameter name="policies" value="{$work}/acl"/>
+            <parameter name="policies" value="{$home}/policies"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.EasyBag">
+            <parameter name="bags" value="{$easy}"/>
+            <parameter name="foxes" value="{$work}/fox"/>
+            <parameter name="creator" value="{$base}/policies/easy-bag-creator.xml"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.Deposit">
+            <parameter name="fedoraServer" value="{$fedoraServer}"/>
+            <parameter name="fedoraUser" value="{$fedoraUser}"/>
+            <parameter name="fedoraPassword" value="{$fedoraPassword}"/>
+            <parameter name="dir" value="{$work}/fox"/>
+            <parameter name="trustStore" value="/opt/jssecacerts"/>
+            <parameter name="trustStorePass" value="changeit"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.EPICHandleCreation">
+            <parameter name="fedoraServer" value="{$publicFedoraServer}"/>
+            <parameter name="epicConfig" value="{$base}/policies/epic-config.xml"/>
+            <parameter name="trustStore" value="/opt/jssecacerts"/>
+            <parameter name="trustStorePass" value="changeit"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.Index">
+            <parameter name="gsearchServer" value="{$gsearchServer}"/>
+            <parameter name="gsearchUser" value="{$gsearchUser}"/>
+            <parameter name="gsearchPassword" value="{$gsearchPassword}"/>
+        </action>
+    </main>
+    <exception>
+    </exception>
+    <final>
+        <action name="status" class="nl.mpi.tla.flat.deposit.action.UpdateSwordStatus">
+            <parameter name="props" value="{$work}/../../deposit.properties"/>
+        </action>
+        <action name="log teardown" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogCleanup"/>        
+    </final>
+</flow>
+```
