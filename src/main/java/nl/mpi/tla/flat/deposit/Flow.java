@@ -242,7 +242,7 @@ public class Flow {
         if (initFlow()) {
             DepositException t = null;
             try {
-                status = new Boolean(mainFlow(start,stop));
+                status = new Boolean(mainFlow(this.start,this.stop));
             } catch (Exception e) {
                 status = new Boolean(false);
                 try {
@@ -280,7 +280,7 @@ public class Flow {
     }
     
     private boolean mainFlow(String start,String stop) throws DepositException {
-        Flow.logger.debug("BEGIN  main flow");
+        Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
         boolean next = true;
         boolean run  = (start==null?true:false);
         for (ActionInterface action:mainActions) {
@@ -293,7 +293,8 @@ public class Flow {
                     break;
                 if (stop!=null && action.getName().equals(stop))
                     break;
-            }
+            } else
+                Flow.logger.debug("ACTION main flow["+action.getName()+"] skipped!");
         }
         Flow.logger.debug(" END   main flow["+next+"]");
         return next;

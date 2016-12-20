@@ -34,7 +34,6 @@ public class SaxonListener implements MessageListener, ErrorListener {
     }
 
     public SaxonListener(String type,String sip) {
-        System.err.println("!MENZO: setup SaxonErrorListener["+type+"]["+sip+"]");
         if (type != null)
             this.type = type;
         if (sip != null)
@@ -45,7 +44,6 @@ public class SaxonListener implements MessageListener, ErrorListener {
         if (this.sip != null)
             if (MDC.get("sip")==null)
                 MDC.put("sip",sip);
-        System.err.println("!MENZO: SaxonErrorListener.sip["+MDC.get("sip")+"]");
     }
     
     protected boolean handleMessage(String msg, String loc, Exception e) {
