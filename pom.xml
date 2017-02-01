@@ -141,6 +141,10 @@
     </build>
     <repositories>
         <repository>
+            <id>MPI</id>
+            <url>http://lux15.mpi.nl/nexus/content/groups/public</url>
+        </repository>
+        <repository>
             <id>CLARIN</id>
             <url>https://nexus.clarin.eu/content/repositories/Clarin</url>
         </repository>
