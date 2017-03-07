@@ -98,21 +98,21 @@ public class Saxon  extends Transform {
         return sxProcessor;
     }
 
-    private static synchronized XsltCompiler getXsltCompiler() {
+    public static synchronized XsltCompiler getXsltCompiler() {
         if (sxXsltCompiler == null) {
             sxXsltCompiler = getProcessor().newXsltCompiler();
         }
         return sxXsltCompiler;
     }
 
-    private static synchronized XQueryCompiler getXQueryCompiler() {
+    public static synchronized XQueryCompiler getXQueryCompiler() {
         if (sxXQueryCompiler == null) {
             sxXQueryCompiler = getProcessor().newXQueryCompiler();
         }        
         return sxXQueryCompiler;
     }
 
-    private static synchronized DocumentBuilder getDocumentBuilder() {
+    public static synchronized DocumentBuilder getDocumentBuilder() {
         if (sxDocumentBuilder == null) {
             sxDocumentBuilder = getProcessor().newDocumentBuilder();
         }

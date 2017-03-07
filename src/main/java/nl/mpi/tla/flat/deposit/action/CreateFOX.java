@@ -18,7 +18,10 @@ package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
 import java.net.URI;
+import javax.xml.transform.Source;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.URIResolver;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
@@ -34,6 +37,7 @@ import nl.mpi.tla.flat.deposit.DepositException;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.flat.deposit.util.SaxonListener;
 import nl.mpi.tla.flat.deposit.util.Saxon;
+import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,29 +54,42 @@ public class CreateFOX extends AbstractAction {
     @Override
     public boolean perform(Context context) throws DepositException {
         try {
+            
+            // check for the user profile
+            File owner = new File(getParameter("owner"));
+            if (!owner.exists()) {
+                logger.error("The owner profile doesn't exist!");
+                return true;
+            } else if (!owner.isFile()) {
+                logger.error("The owner profile isn't a file!");
+                return false;
+            } else if (!owner.canRead()) {
+                logger.error("The owner profile can't be read!");
+                return false;
+            }
+            XMLConfiguration profile = new XMLConfiguration(owner);
+            
             File dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
                  FileUtils.forceMkdir(dir);
-            File xsl = new File(getParameter("cmd2fox"));
-            XsltExecutable cmd2fox = null;
-            if (hasParameter("cmd2dc")) {
-                XsltTransformer inclCMD2DC = Saxon.buildTransformer(CreateFOX.class.getResource("/CreateFOX/inclCMD2DC.xsl")).load();
-                SaxonListener listener = new SaxonListener("CreateFOX",MDC.get("sip"));
-                inclCMD2DC.setMessageListener(listener);
-                inclCMD2DC.setErrorListener(listener);
-                inclCMD2DC.setSource(new StreamSource(xsl));
-                inclCMD2DC.setParameter(new QName("cmd2dc"),new XdmAtomicValue("file://"+(new File(getParameter("cmd2dc"))).getAbsolutePath()));
-                XdmDestination destination = new XdmDestination();
-                inclCMD2DC.setDestination(destination);
-                inclCMD2DC.transform();
-                cmd2fox = Saxon.buildTransformer(destination.getXdmNode());                
-            } else {
-                cmd2fox = Saxon.buildTransformer(xsl);
+
+            URIResolver org = Saxon.getXsltCompiler().getURIResolver();
+            if (hasParameter("jar_cmd2fox")) {
+                Saxon.getXsltCompiler().setURIResolver(new JarURIResolver(org,new File(getParameter("jar_cmd2fox"))));
             }
+            
+            File xsl = new File(getParameter("cmd2fox"));
+            XsltExecutable cmd2fox = Saxon.buildTransformer(xsl);
+            
+            if (org!=null) {
+                Saxon.getXsltCompiler().setURIResolver(org);
+            }
+            
             XsltTransformer fox = cmd2fox.load();
             SaxonListener listener = new SaxonListener("CreateFOX",MDC.get("sip"));
             fox.setMessageListener(listener);
             fox.setErrorListener(listener);
+            fox.setParameter(new QName("owner"), new XdmAtomicValue(profile.getString("name")));
             fox.setParameter(new QName("fox-base"), new XdmAtomicValue(dir.toString()));
             fox.setParameter(new QName("rels-uri"), new XdmAtomicValue(getParameter("relations")));
             fox.setParameter(new QName("create-cmd-object"), new XdmAtomicValue(false));
@@ -82,6 +99,7 @@ public class CreateFOX extends AbstractAction {
             XdmDestination destination = new XdmDestination();
             fox.setDestination(destination);
             fox.transform();
+            
             String fid = Saxon.xpath2string(destination.getXdmNode(),"/*/@PID").replaceAll("[^a-zA-Z0-9]", "_");
             File out = new File(dir + "/"+fid+"_CMD.xml");
             if (out.exists()) {
@@ -110,4 +128,22 @@ public class CreateFOX extends AbstractAction {
         return true;
     }
     
+    static class JarURIResolver implements URIResolver {
+        
+        private URIResolver resolver = null;
+        private File xsl = null;
+        
+        public JarURIResolver(URIResolver resolver, File xsl) {
+            this.resolver = resolver;
+            this.xsl = xsl;
+        }
+        
+        public Source resolve(String href,String base) throws TransformerException {
+            if (href.equals("jar:cmd2fox.xsl")) {
+                return new javax.xml.transform.stream.StreamSource(xsl);
+            } else {
+                return resolver.resolve(href,base);
+            }
+        }        
+    }
 }

@@ -222,7 +222,7 @@ parameter | default                | cardinality | notes
 `policy`  | `./metadata/policy.n3` | ?           | should point to a valid [WebAccessControl file](#WebAccessControl)
 `dir`     | `./acl`                | ?           | directory will be created if it doesn't exist already
 
-Converts a WebAccessControl file into a set of [XACML policies](https://wiki.duraspace.org/display/FEDORA38/XACML+Policy+Enforcement), i.e., one for each resource in the SIP, in the specified directory.
+Converts a WebAccessControl file into a set of [XACML policies](https://wiki.duraspace.org/display/FEDORA38/XACML+Policy+Enforcement), i.e., one for each resource in the SIP, in the specified directory. It will also extract the owner profile into an `owner.xml` in the specified directory. This profile can be used by subsequent actions that need info on the owner. 
 
 #### <a name="WebAccessControl"></a>WebAccessControl
 
@@ -299,15 +299,16 @@ The policy file should be based on the [WebAccessControl W3C proposal](https://w
 
 ### <a name="CreateFOX"></a>`nl.mpi.tla.flat.deposit.action.CreateFOX`
 
-parameter   | default  | cardinality | notes
-------------|----------|-------------|------
-`dir`       | `./fox`  | ?           | directory will be created if it doesn't exist already
-`cmd2fox`   |          | 1           | should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/) 
-`cmd2dc`    |          | ?           | should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/)
-`relations` |          | 1           |
-`policies`  |          | *           | should point to directories containing valid XACML policy files (see [ACL](#ACL))
+parameter    | default  | cardinality | notes
+-------------|----------|-------------|------
+`owner`      |          | 1           | the [user profile](#userProfile) of the owner
+`dir`        | `./fox`  | ?           | directory will be created if it doesn't exist already
+`cmd2fox`    |          | 1           | should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/) 
+`jar_cmd2fox`|          | ?           | used to resolve the include of jar:cmd2fox.xsl, which is the main cmd2fox.xsl embedded in LAT2FOX, should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/). Not needed when the cmd2fox XSL doesn't use this include!
+`relations`  |          | 1           |
+`policies`   |          | *           | should point to directories containing valid XACML policy files (see [ACL](#ACL))
 
-Uses the XSLT stylesheets, where `cmd2dc` is incorporated into `cmd2fox`, to convert the SIP XML specification into a set of [FOXML](https://wiki.duraspace.org/pages/viewpage.action?pageId=66585857) files, which are stored into the specified directory. If a policy file exists for the SIP and/or a resource in one of the policies directories it will be included in the FOXML.
+Uses the XSLT stylesheets, where (optionally) `jar_cmd2fox` is included into `cmd2fox` as `jar:cmd2fox.xsl`, to convert the SIP XML specification into a set of [FOXML](https://wiki.duraspace.org/pages/viewpage.action?pageId=66585857) files, which are stored into the specified directory. If a policy file exists for the SIP and/or a resource in one of the policies directories it will be included in the FOXML.
 
 _NOTES_:
 - for a SIP a specific access policy based on its Fedora ID is looked for, if it doesn't exist it fallsback to `default-cmd-policy.xml` or even `default-policy.xml`
@@ -318,6 +319,13 @@ _NOTES_:
 **TODO**:
 - [ ] could be less CMDI specific
 - [ ] hide away `relations`
+
+#### <a name="userProfile"></a>User profile
+```xml
+<user>
+  <name>me@example.com</name>
+</user>
+```
 
 ### <a name="EasyBag"></a>`nl.mpi.tla.flat.deposit.action.EasyBag`
 
@@ -335,35 +343,59 @@ _NOTES_:
 - the FOXML file is used to pick up the Dublin Core metadata generated before
 - this just creates the ZIPped BAG, the actual upload to DANS is a separate (batch) process
 
+### <a name="FedoraUser"></a>`nl.mpi.tla.flat.deposit.action.FedoraUser`
+
+parameter         | default  | cardinality | notes
+------------------|----------|-------------|------
+`user`            |          | 1           | an [user profile](#userProfile)
+`fedoraConfig`    |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig)
+`userFedoraConfig`|          | 1           | path to the to be created user-specific [Fedora Commons configuration](#fedoraConfig)
+`drupal`          |          | 1           | Drupal directory where Islandora is installed
+`drush`           |          | 1           | path to the `drush` command
+
+Looks up the Drupal (hashed) password of the user and creates a [Fedora Commons configuration](#fedoraConfig) that allows to login as that user and thus actions take place with permissions of this user and the user will associated with them in the audit trail.
+
+_NOTES_:
+- see [Deposit](#Deposit) (optional, later)
+
+#### <a name="fedoraConfig"></a>Fedora Commons configuration
+```xml
+<FedoraCommons>
+  <localServer>https://localhost:8443/fedora</localServer>
+  <publicServer>http://localhost/flat</publicServer>
+  <userName>fedoraAdmin</userName>
+  <userPass>fedora</userPass>
+  <trustStore>/opt/jssecacerts</trustStore>
+  <trustStorePass>changeit</trustStorePass>
+</FedoraCommons>
+```
+
 ### <a name="Deposit"></a>`nl.mpi.tla.flat.deposit.action.Deposit`
 
 parameter        | default  | cardinality | notes
 -----------------|----------|-------------|------
-`trustStore`     |          | ?           | path to a trust store
-`trustStorePass` |          | ?           | mandatory if `trustStore` is specified
-`fedoraServer`   |          | 1           |
-`fedoraUser`     |          | 1           |
-`fedoraPassword` |          | 1           |
+`fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig) 
 `dir`            | `./fox`  | ?           |
 
 Loads all the FOXML files in the specified directory and loads them into the specified Fedora Commons repository. After this the URLs for the datastreams to which the assigned handles can resolve are known.
 
 _NOTES_:
 - use the trust store if the Fedora Commons server uses HTTPS with a self signed certificate
+- see [FedoraUser](#FedoraUser) (optional, earlier)
 - see [HandleAssignment](#HandleAssignment) (optional, earlier)
 - see [CreateFOX](#CreateFOX) (mandatory, earlier)
 - see [EPICHandleCreation](#EPICHandleCreation) (optional, later)
 
 **TODO**:
 - [ ] validate the FOXML files
-- [ ] make it possible to load the credentials from a separate file
+- [X] make it possible to load the credentials from a separate file
 
 ### <a name="EPICHandleCreation"></a>`nl.mpi.tla.flat.deposit.action.EPICHandleCreation`
 
 parameter        | default  | cardinality | notes
 -----------------|----------|-------------|------
-`fedoraServer`   |          | 1           |
-`epicCongif`     |          | 1           | should point to a valid [EPIC config file](#EPICconfig)
+`fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig) 
+`epicConfig`     |          | 1           | should point to a valid [EPIC config file](#EPICconfig)
 `trustStore`     |          | ?           | path to a trust store
 `trustStorePass` |          | ?           | mandatory if `trustStore` is specified
 
@@ -443,10 +475,6 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
         <property name="work" value="{flat:findBagBase($bag)}" uniq="true"/>
         <property name="easy" value="{$base}/easy" uniq="true"/>
         <property name="epicPrefix" value="12345"/>
-        <property name="fedoraUser" value="fedoraAdmin"/>
-        <property name="fedoraPassword" value="fedora"/>
-        <property name="fedoraServer" value="https://localhost:8443/fedora"/>
-        <property name="publicFedoraServer" value="http://localhost/flat"/>
         <property name="gsearchUser" value="fgsAdmin"/>
         <property name="gsearchPassword" value="fgsAdmin"/>
         <property name="gsearchServer" value="http://localhost:8080/fedoragsearch"/>
@@ -485,8 +513,9 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
             <parameter name="dir" value="{$work}/acl"/>
         </action>
         <action class="nl.mpi.tla.flat.deposit.action.CreateFOX">
-            <parameter name="cmd2dc" value="{$base}/policies/cmd2dc.xsl"/>
-            <parameter name="cmd2fox" value="{$base}/transforms/cmd2fox.xsl"/>
+            <parameter name="owner" value="{$work}/acl/owner.xml"/>
+            <parameter name="cmd2fox" value="{$base}/policies/cmd2dc.xsl"/>
+            <parameter name="jar_cmd2fox" value="{$base}/transforms/cmd2fox.xsl"/>
             <parameter name="dir" value="{$work}/fox"/>
             <parameter name="relations" value="{$base}/dummies/relations.xml"/>
             <parameter name="policies" value="{$work}/acl"/>
@@ -497,16 +526,19 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
             <parameter name="foxes" value="{$work}/fox"/>
             <parameter name="creator" value="{$base}/policies/easy-bag-creator.xml"/>
         </action>
+        <action class="nl.mpi.tla.flat.deposit.action.FedoraUser">
+            <parameter name="user" value="{$work}/acl/owner.xml"/>
+            <parameter name="fedoraConfig" value="{$base}/policies/fedora-config.xml"/>
+            <parameter name="userFedoraConfig" value="{$work}/acl/fedora-config.xml"/>
+            <parameter name="drupal" value="/var/www/html/flat"/>
+            <parameter name="drush"  value="/var/www/composer/vendor/drush/drush/drush"/>
+        </action>
         <action class="nl.mpi.tla.flat.deposit.action.Deposit">
-            <parameter name="fedoraServer" value="{$fedoraServer}"/>
-            <parameter name="fedoraUser" value="{$fedoraUser}"/>
-            <parameter name="fedoraPassword" value="{$fedoraPassword}"/>
+            <parameter name="fedoraConfig" value="{$work}/acl/fedora-config.xml"/>
             <parameter name="dir" value="{$work}/fox"/>
-            <parameter name="trustStore" value="/opt/jssecacerts"/>
-            <parameter name="trustStorePass" value="changeit"/>
         </action>
         <action class="nl.mpi.tla.flat.deposit.action.EPICHandleCreation">
-            <parameter name="fedoraServer" value="{$publicFedoraServer}"/>
+            <parameter name="fedoraConfig" value="{$base}/policies/fedora-config.xml"/>
             <parameter name="epicConfig" value="{$base}/policies/epic-config.xml"/>
             <parameter name="trustStore" value="/opt/jssecacerts"/>
             <parameter name="trustStorePass" value="changeit"/>

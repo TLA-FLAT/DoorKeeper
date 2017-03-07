@@ -14,7 +14,7 @@
     <xsl:param name="default-accounts" select="()"/>
     <xsl:param name="default-roles" select="('administrator')"/>
     
-    <xsl:variable name="debug" select="false()" static="yes"/>
+    <xsl:variable name="debug" select="true()" static="yes"/>
     
     <xsl:variable name="t" select="/"/>
     <xsl:key name="t-subject"   match="sem:triple" use="sem:subject"/>
@@ -38,6 +38,7 @@
         
     <xsl:variable name="sip" select="functx:min-non-empty-string(key('t-predicate',$acl-accessTo,$t)/sem:object)"/>
     <xsl:variable name="flat" select="distinct-values(key('t-predicate',$foaf-service,$t)/sem:object)[ends-with(.,'#flat')]"/>
+    <xsl:variable name="owner" select="distinct-values(key('t-predicate',$acl-agent,$t)/sem:object)[ends-with(.,'#owner')]"/>
     
     <xsl:function name="cmd:hdl">
         <xsl:param name="pid"/>
@@ -57,6 +58,25 @@
     <xsl:template match="/">
         <xsl:message use-when="$debug">DBG: sip[<xsl:value-of select="$sip"/>]</xsl:message>
         <xsl:message use-when="$debug">DBG: flat[<xsl:value-of select="$flat"/>]</xsl:message>
+        <xsl:message use-when="$debug">DBG: owner[<xsl:value-of select="$owner"/>]</xsl:message>
+        <xsl:result-document href="{$acl-base}/owner.xml">
+            <user>
+                <xsl:for-each select="key('t-subject',$owner,$t)[sem:predicate=$foaf-account]/sem:object">
+                    <xsl:variable name="account" select="."/>
+                    <xsl:message use-when="$debug">DBG: owner account[<xsl:value-of select="$account"/>]</xsl:message>
+                    <!-- does the agent have a FLAT account? -->
+                    <xsl:if test="key('t-subject',$account,$t)[sem:predicate=$foaf-service]/sem:object=$flat">
+                        <xsl:for-each select="key('t-subject',$account,$t)[sem:predicate=$foaf-accountName]/sem:object">
+                            <xsl:variable name="eppn" select="."/>
+                            <xsl:message use-when="$debug">DBG: owner eppn[<xsl:value-of select="$eppn"/>]</xsl:message>
+                            <name>
+                                <xsl:value-of select="$eppn"/>
+                            </name>
+                        </xsl:for-each>
+                    </xsl:if>
+                </xsl:for-each>
+            </user>
+        </xsl:result-document>
         <xsl:for-each select="$record/cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType = 'Resource']">
             <xsl:variable name="resource" select="."/>
             <xsl:variable name="rid" select="concat($sip,'#',$resource/@id)"/>

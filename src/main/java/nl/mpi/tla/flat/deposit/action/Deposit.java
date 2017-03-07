@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 menzowi
+ * Copyright (C) 2015-2017 menzowi
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,19 +16,11 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import com.yourmediashelf.fedora.client.FedoraClient;
 import static com.yourmediashelf.fedora.client.FedoraClient.*;
-import com.yourmediashelf.fedora.client.FedoraCredentials;
-import com.yourmediashelf.fedora.client.request.FedoraRequest;
 import com.yourmediashelf.fedora.client.response.IngestResponse;
 import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import java.io.File;
-import java.io.FileInputStream;
-import java.security.KeyStore;
 import java.util.Collection;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
@@ -41,55 +33,21 @@ import org.slf4j.LoggerFactory;
  *
  * @author menzowi
  */
-public class Deposit extends AbstractAction {
+public class Deposit extends FedoraAction {
 
     private static final Logger logger = LoggerFactory.getLogger(Deposit.class.getName());
 
     @Override
     public boolean perform(Context context) throws DepositException {
-        javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
-            new javax.net.ssl.HostnameVerifier(){
-                public boolean verify(String hostname,javax.net.ssl.SSLSession sslSession) {
-                    return true;
-                }
-        });
         try {
-            SSLContext theSslContext = null;
-            if (this.hasParameter("trustStore")) {
-                String ts = this.getParameter("trustStore");
-                String tsPass = this.getParameter("trustStorePass");
-                KeyStore theClientTruststore = KeyStore.getInstance(KeyStore.getDefaultType());
-                theClientTruststore.load(new FileInputStream(ts),tsPass.toCharArray());
-                TrustManagerFactory theTrustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                theTrustManagerFactory.init(theClientTruststore);
-                theSslContext = SSLContext.getInstance("TLS");
-                theSslContext.init(null,theTrustManagerFactory.getTrustManagers(),null);
-                HttpsURLConnection.setDefaultSSLSocketFactory(theSslContext.getSocketFactory());
-            }
-//            String keystore = System.getProperty("javax.net.ssl.trustStore"); 
-//            if (keystore!=null) {
-//                File ks = new File(keystore);
-//                if (ks.exists())
-//                    logger.debug("keystore["+keystore+"]["+ks.getAbsolutePath()+"] exists");
-//                else
-//                    logger.error("keystore["+keystore+"]["+ks.getAbsolutePath()+"] doesn't exist!");
-//            } else
-//                logger.debug("keystore[NULL]");
-            SIPInterface sip = context.getSIP();
-            logger.debug("Fedora Commons["+this.getParameter("fedoraServer")+"]["+this.getParameter("fedoraUser")+":"+this.getParameter("fedoraPassword")+"]");
-            if (!FedoraRequest.isDefaultClientSet()) {
-                FedoraCredentials credentials = new FedoraCredentials(this.getParameter("fedoraServer"), this.getParameter("fedoraUser"), this.getParameter("fedoraPassword"));
-                FedoraClient fedora = new FedoraClient(theSslContext,credentials);
-                fedora.debug(true);
-                FedoraRequest.setDefaultClient(fedora);
-            }
-            logger.debug("Fedora Commons repository["+FedoraClient.describeRepository().xml(true).execute()+"]");
+            connect(context);
             
+            SIPInterface sip = context.getSIP();            
             Collection<File> foxs = FileUtils.listFiles(new File(this.getParameter("dir", "./fox")),new String[] {"xml"},true);
             logger.debug("Loading ["+foxs.size()+"] FOX files from dir["+this.getParameter("dir", "./fox")+"]");
             for (File fox:foxs) {
                 logger.debug("FOX["+fox+"]");
-                IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).ignoreMime(true).execute();
+                IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
                 logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]");
             }
             for (Resource res:sip.getResources()) {

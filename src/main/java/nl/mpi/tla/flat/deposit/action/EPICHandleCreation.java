@@ -42,28 +42,44 @@ public class EPICHandleCreation extends AbstractAction {
     @Override
     public boolean perform(Context context) throws DepositException {
         
-        String fedora = this.getParameter("fedoraServer");
-        String epic   = this.getParameter("epicConfig");
-
-        if (epic == null) {
-            logger.error("No EPIC configuration has been specified! Use the epicConfig parameter.");
-            return false;
-        }
-        
-        File config = new File(epic);
-        if (!config.exists()) {
-            logger.error("The EPIC configuration["+epic+"] doesn't exist!");
-            return false;
-        } else if (!config.isFile()) {
-            logger.error("The EPIC configuration["+epic+"] isn't a file!");
-            return false;
-        } else if (!config.canRead()) {
-            logger.error("The EPIC configuration["+epic+"] can't be read!");
-            return false;
-        }
-
         try {
             
+            String fedora = this.getParameter("fedoraConfig");
+            String epic   = this.getParameter("epicConfig");
+
+            if (epic == null) {
+                logger.error("No EPIC configuration has been specified! Use the epicConfig parameter.");
+                return false;
+            }
+
+            File fconfig = new File(fedora);
+            if (!fconfig.exists()) {
+                logger.error("The Fedora configuration["+fedora+"] doesn't exist!");
+                return false;
+            } else if (!fconfig.isFile()) {
+                logger.error("The Fedora configuration["+fedora+"] isn't a file!");
+                return false;
+            } else if (!fconfig.canRead()) {
+                logger.error("The Fedora configuration["+fedora+"] can't be read!");
+                return false;
+            }
+            logger.debug("Fedora configuration["+fconfig.getAbsolutePath()+"]");
+
+            String server = (new XMLConfiguration(fconfig)).getString("publicServer");
+
+            File config = new File(epic);
+            if (!config.exists()) {
+                logger.error("The EPIC configuration["+epic+"] doesn't exist!");
+                return false;
+            } else if (!config.isFile()) {
+                logger.error("The EPIC configuration["+epic+"] isn't a file!");
+                return false;
+            } else if (!config.canRead()) {
+                logger.error("The EPIC configuration["+epic+"] can't be read!");
+                return false;
+            }
+            logger.debug("EPIC configuration["+config.getAbsolutePath()+"]");
+
             javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
                 new javax.net.ssl.HostnameVerifier(){
                     public boolean verify(String hostname,javax.net.ssl.SSLSession sslSession) {
@@ -84,7 +100,6 @@ public class EPICHandleCreation extends AbstractAction {
                 HttpsURLConnection.setDefaultSSLSocketFactory(theSslContext.getSocketFactory());
             }
             
-            logger.debug("EPIC configuration["+config.getAbsolutePath()+"]");
             PIDService ps = new PIDService(new XMLConfiguration(config), theSslContext);
 
             String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
@@ -93,7 +108,7 @@ public class EPICHandleCreation extends AbstractAction {
 
             URI    pid  = context.getSIP().getPID();
             String uuid = pid.toString().replaceAll(".*/","");
-            String loc  = fedora+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+            String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
             
             logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
             
@@ -108,7 +123,7 @@ public class EPICHandleCreation extends AbstractAction {
 
                 pid  = res.getPID();
                 uuid = pid.toString().replaceAll(".*/","");
-                loc  = fedora+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
                 logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
 
