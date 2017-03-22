@@ -17,7 +17,6 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
-import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.CMDI;
@@ -41,7 +40,7 @@ public class SIPLoad extends AbstractAction {
             return false;
         }
 
-        File mr = new File(sip.toString());;
+        File mr = new File(sip);;
         if (!mr.isFile()) {
             logger.error("record["+mr.getAbsolutePath()+"] is not a file!");
             return false;

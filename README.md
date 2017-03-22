@@ -222,7 +222,7 @@ parameter | default                | cardinality | notes
 `policy`  | `./metadata/policy.n3` | ?           | should point to a valid [WebAccessControl file](#WebAccessControl)
 `dir`     | `./acl`                | ?           | directory will be created if it doesn't exist already
 
-Converts a WebAccessControl file into a set of [XACML policies](https://wiki.duraspace.org/display/FEDORA38/XACML+Policy+Enforcement), i.e., one for each resource in the SIP, in the specified directory. It will also extract the owner profile into an `owner.xml` in the specified directory. This profile can be used by subsequent actions that need info on the owner. 
+Converts a WebAccessControl file into a set of [XACML policies](https://wiki.duraspace.org/display/FEDORA38/XACML+Policy+Enforcement), i.e., one for each resource in the SIP, in the specified directory. It will also extract the [user profile](#userProfile) of the owner into an `owner.xml` in the specified directory. This profile can be used by subsequent actions that need info on the owner. 
 
 #### <a name="WebAccessControl"></a>WebAccessControl
 
@@ -297,34 +297,99 @@ The policy file should be based on the [WebAccessControl W3C proposal](https://w
    foaf:account [foaf:accountServiceHomepage <#flat>; foaf:accountName "bob@meertens.knaw.nl"].
 ```
 
-### <a name="CreateFOX"></a>`nl.mpi.tla.flat.deposit.action.CreateFOX`
-
-parameter    | default  | cardinality | notes
--------------|----------|-------------|------
-`owner`      |          | 1           | the [user profile](#userProfile) of the owner
-`dir`        | `./fox`  | ?           | directory will be created if it doesn't exist already
-`cmd2fox`    |          | 1           | should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/) 
-`jar_cmd2fox`|          | ?           | used to resolve the include of jar:cmd2fox.xsl, which is the main cmd2fox.xsl embedded in LAT2FOX, should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/). Not needed when the cmd2fox XSL doesn't use this include!
-`relations`  |          | 1           |
-`policies`   |          | *           | should point to directories containing valid XACML policy files (see [ACL](#ACL))
-
-Uses the XSLT stylesheets, where (optionally) `jar_cmd2fox` is included into `cmd2fox` as `jar:cmd2fox.xsl`, to convert the SIP XML specification into a set of [FOXML](https://wiki.duraspace.org/pages/viewpage.action?pageId=66585857) files, which are stored into the specified directory. If a policy file exists for the SIP and/or a resource in one of the policies directories it will be included in the FOXML.
-
-_NOTES_:
-- for a SIP a specific access policy based on its Fedora ID is looked for, if it doesn't exist it fallsback to `default-cmd-policy.xml` or even `default-policy.xml`
-- for a resource a specific access policy based on its Fedora ID is looked for, if it doesn't exist it fallsback to `default-resource-policy.xml` or even `default-policy.xml`
-- see [ACL](#ACL) (optional, earlier)
-- see [Deposit](#Deposit) (mandatory, later)
-
-**TODO**:
-- [ ] could be less CMDI specific
-- [ ] hide away `relations`
-
 #### <a name="userProfile"></a>User profile
 ```xml
 <user>
   <name>me@example.com</name>
 </user>
+```
+
+### <a name="CreateFOX"></a>`nl.mpi.tla.flat.deposit.action.CreateFOX`
+
+parameter               | default                    | cardinality | notes
+------------------------|----------------------------|-------------|------
+`owner`                 |                            | 1           | the [user profile](#userProfile) of the owner
+`fedoraConfig`          |                            | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig)
+`cmd2fox`               |                            | 1           | should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/)
+`jar_cmd2fox`           |                            | ?           | used to resolve the include of jar:cmd2fox.xsl, which is the main cmd2fox.xsl embedded in LAT2FOX, should point to a valid [XSLT 2.0 stylesheet](https://www.w3.org/TR/xslt20/). Not needed when the cmd2fox XSL doesn't use this include!
+`dir`                   | `./fox`                    | ?           | directory will be created if it doesn't exist already
+`policies`              |                            | *           | should point to directories containing valid XACML policy files (see [ACL](#ACL))
+`management`            |                            | *           | should point to directories containing managenent files
+`icons`                 | `/app/flat/icons`          | ?           | directory where the icons are found
+`collections-map`       |                            | ?           | a [collections map](#collectionsMap) to dynamically determine the collection the SIP is a member of, if there are no explicit memberships in the SIP itself
+`oai-include-eval`      | `true()`                   | ?           | [XPath 2.0 expression](https://www.w3.org/TR/xpath20/) to determine if a SIP should be available via OAI-PMH
+`always-collection-eval`| `false()`                  | ?           | [XPath 2.0 expression](https://www.w3.org/TR/xpath20/) to determine if a SIP should always get the `islandora:collectionCModel`, if `false` this only happens when a SIP already refers to other SIPs
+`always-compound-eval`  | `false()`                  | ?           | [XPath 2.0 expression](https://www.w3.org/TR/xpath20/) to determine if a SIP should always get the `islandora:compoundCModel`, if `false` this only happens when a SIP contains resources
+
+Uses the XSLT stylesheets, where (optionally) `jar_cmd2fox` is included into `cmd2fox` as `jar:cmd2fox.xsl`, to convert the SIP XML specification into a set of [FOXML](https://wiki.duraspace.org/pages/viewpage.action?pageId=66585857) files, which are stored into the specified directory.
+
+If a policy file exists for the SIP and/or a resource in one of the policies directories it will be included in the FOXML.
+
+If a management file exists for the SIP its included in the MGMT datastream. This stream is meant to contain collection management specific info, e.g., curation notes, and is only accessible for users with a _data manager_ or _administrator_ role.
+
+_NOTES_:
+- for a SIP a specific access policy based on its Fedora ID (+ `.xml`) is looked for, if it doesn't exist it fallsback to `default-cmd-policy.xml` or even `default-policy.xml`
+- for a resource a specific access policy based on its Fedora ID (+ `.xml`) is looked for, if it doesn't exist it fallsback to `default-resource-policy.xml` or even `default-policy.xml`
+- for a SIP a specific management file based on its Fedora ID (+ `.xml`) is looked for
+- a management file should be a valid [Java XML properties](http://docs.oracle.com/javase/8/docs/api/java/util/Properties.html) file 
+- see [ACL](#ACL) (optional, earlier)
+- see [Deposit](#Deposit) (mandatory, later)
+
+**TODO**:
+- [ ] should be less CMDI/`jar:cmd2fox.xsl` specific, e.g., the documented parameter behaviour depends actually on the XSLT used
+- [X] hide away `relations`
+
+#### <a name="collectionsMap"></a>Collections map
+
+Each collection in the collections map contains an [XPath 2.0 expression](https://www.w3.org/TR/xpath20/), which is evaluated against the SIP. If the evaluation returns true the SIP is a potential member of that collection. If it actually will be is determined by the mode:
+- `first`: the SIP becomes a member of the first collection
+- `all` (default): the SIP becomes a member of all the collections
+
+When there is no potential collection the, optional, default collection is taken or the SIP becomes a member of the fallback `islandora:compound_collection` collection.
+
+```xml
+<map xmlns:cmd="http://www.clarin.eu/cmd/" mode="all">
+    <default pid="lat:collection_meertens"/>
+    <!--
+Papieren collecties: 0-1000, 
+
+Digitale collecties: 1001-1999 en 3000-e.v., 
+
+Audio collecties: 2000 – 2999.
+    -->
+    <collection pid="lat:collection_paper">
+        <xpath>exists(/cmd:CMD/cmd:Components/cmd:MeertensCollection/cmd:CoreCollectionInformation
+            [number(cmd:collectionID) le 1000])</xpath>
+    </collection>
+    <collection pid="lat:collection_digital">
+        <xpath>exists(/cmd:CMD/cmd:Components/cmd:MeertensCollection/cmd:CoreCollectionInformation
+            [(number(cmd:collectionID) ge 1001 and number(cmd:collectionID) le 1999) or (number(cmd:collectionID) ge 3000)])</xpath>
+    </collection>
+    <collection pid="lat:collection_audio">
+        <xpath>exists(/cmd:CMD/cmd:Components/cmd:MeertensCollection/cmd:CoreCollectionInformation
+            [number(cmd:collectionID) ge 2000 and number(cmd:collectionID) le 2999])</xpath>
+    </collection>
+    <!-- CLARIN-NL -->
+    <!-- - DBD -->
+    <collection pid="hdl:10744/cff73032-1005-4347-a1f0-e840793822cd">
+        <xpath>exists(/cmd:CMD/cmd:Components/cmd:DBD)</xpath>
+        <policy type="resource">public-resource-policy.xml</policy>
+    </collection>
+    <!-- - NEHOL -->
+    <collection pid="hdl:10744/e0e0253e-94d9-4d1f-90a8-4ad2464ed794">
+        <xpath>exists(/cmd:CMD/cmd:Components/(cmd:lat-corpus|cmd:lat-session))</xpath>
+        <policy type="resource">public-resource-policy.xml</policy>
+    </collection>
+    <!-- - D-LUCEA -->
+    <collection pid="hdl:10744/dcd5f7ad-da56-4a73-9f57-510a628879ba">
+        <xpath>exists(/cmd:CMD/cmd:Components/(cmd:collection|cmd:lucea))</xpath>
+        <policy type="resource">public-resource-policy.xml</policy>
+    </collection>
+    <!-- Roots of Ethnolect -->
+    <collection pid="hdl:10744/682ea992-b567-4c02-8f94-8291d8610ef5">
+	   <xpath>exists(/cmd:CMD/cmd:Components/cmd:EthnolectConversation)</xpath>
+    </collection>
+</map>
 ```
 
 ### <a name="EasyBag"></a>`nl.mpi.tla.flat.deposit.action.EasyBag`
@@ -514,10 +579,10 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
         </action>
         <action class="nl.mpi.tla.flat.deposit.action.CreateFOX">
             <parameter name="owner" value="{$work}/acl/owner.xml"/>
+            <parameter name="fedoraConfig" value="{$base}/policies/fedora-config.xml"/>
             <parameter name="cmd2fox" value="{$base}/policies/cmd2dc.xsl"/>
             <parameter name="jar_cmd2fox" value="{$base}/transforms/cmd2fox.xsl"/>
             <parameter name="dir" value="{$work}/fox"/>
-            <parameter name="relations" value="{$base}/dummies/relations.xml"/>
             <parameter name="policies" value="{$work}/acl"/>
             <parameter name="policies" value="{$home}/policies"/>
         </action>

@@ -69,6 +69,19 @@ public class CreateFOX extends AbstractAction {
             }
             XMLConfiguration profile = new XMLConfiguration(owner);
             
+            File fedora = new File(getParameter("fedoraConfig"));
+            if (!fedora.exists()) {
+                logger.error("The Fedora configuration["+fedora+"] doesn't exist!");
+                return false;
+            } else if (!fedora.isFile()) {
+                logger.error("The Fedora configuration["+fedora+"] isn't a file!");
+                return false;
+            } else if (!fedora.canRead()) {
+                logger.error("The Fedora configuration["+fedora+"] can't be read!");
+                return false;
+            }
+            logger.debug("Fedora configuration["+fedora.getAbsolutePath()+"]");
+            
             File dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
                  FileUtils.forceMkdir(dir);
@@ -89,12 +102,31 @@ public class CreateFOX extends AbstractAction {
             SaxonListener listener = new SaxonListener("CreateFOX",MDC.get("sip"));
             fox.setMessageListener(listener);
             fox.setErrorListener(listener);
+            
+            // fixed parameters
             fox.setParameter(new QName("owner"), new XdmAtomicValue(profile.getString("name")));
             fox.setParameter(new QName("fox-base"), new XdmAtomicValue(dir.toString()));
-            fox.setParameter(new QName("rels-uri"), new XdmAtomicValue(getParameter("relations")));
+            fox.setParameter(new QName("rels-doc"), Saxon.buildDocument(new StreamSource(CreateFOX.class.getResource("/CreateFOX/relations.xml").toString())));
             fox.setParameter(new QName("create-cmd-object"), new XdmAtomicValue(false));
+            fox.setParameter(new QName("repository"), new XdmAtomicValue((new XMLConfiguration(fedora)).getString("publicServer")));
+            
+            // optional parameters
+            if (hasParameter("management"))
+                fox.setParameter(new QName("management-dir"), params.get("management"));
             if (hasParameter("policies"))
                 fox.setParameter(new QName("policies-dir"), params.get("policies"));
+            if (hasParameter("icons"))
+                fox.setParameter(new QName("icon-base"), params.get("icons"));
+            if (hasParameter("collections-map"))
+                fox.setParameter(new QName("collections-map"), Saxon.buildDocument(new StreamSource(getParameter("collections-map"))));
+            if (hasParameter("oai-include-eval"))
+                fox.setParameter(new QName("oai-include-eval"), params.get("oai-include-eval"));
+            if (hasParameter("always-collection-eval"))
+                fox.setParameter(new QName("always-collection-eval"), params.get("always-collection-eval"));
+            if (hasParameter("always-compound-eval"))
+                fox.setParameter(new QName("always-compound-eval"), params.get("always-compound-eval"));            
+            
+            // go
             fox.setSource(new DOMSource(context.getSIP().getRecord(),context.getSIP().getBase().toURI().toString()));
             XdmDestination destination = new XdmDestination();
             fox.setDestination(destination);
