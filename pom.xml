@@ -82,7 +82,7 @@
         <!-- EPIC -->
         <dependency>
             <groupId>nl.knaw.meertens.pid</groupId>
-            <artifactId>epicify</artifactId>
+            <artifactId>epicify-lib</artifactId>
             <version>1.0-SNAPSHOT</version>
             <exclusions>
             	<exclusion>
@@ -127,7 +127,6 @@
                     </execution>
                 </executions>
             </plugin>
-            
             <plugin>
             	<groupId>org.apache.maven.plugins</groupId>
             	<artifactId>maven-surefire-plugin</artifactId>
@@ -136,7 +135,6 @@
             		<argLine>-noverify</argLine>
             	</configuration>
             </plugin>
-            
         </plugins>
     </build>
     <repositories>
