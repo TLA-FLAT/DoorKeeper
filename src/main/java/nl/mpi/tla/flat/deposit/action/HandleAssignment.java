@@ -38,7 +38,7 @@ public class HandleAssignment extends AbstractAction {
         try {
             SIPInterface sip = context.getSIP();
             if (!sip.hasPID()) {
-                    sip.setPID(new URI("hdl:"+getParameter("prefix","foo")+"/"+UUID.randomUUID()));
+                    sip.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
                     logger.info("Assigned new PID["+sip.getPID()+"] to the SIP");
             } else {
                 logger.info("Retained existing PID["+sip.getPID()+"] for the SIP");
@@ -55,7 +55,6 @@ public class HandleAssignment extends AbstractAction {
                     logger.info("Assigned new PID["+res.getPID()+"] to Resource["+res.getURI()+"]");
                 }
             }
-            context.getSIP().save();
         } catch (Exception ex) {
             throw new DepositException("Couldn't assign PIDs!",ex);
         }

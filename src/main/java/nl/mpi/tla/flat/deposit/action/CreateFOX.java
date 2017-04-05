@@ -153,7 +153,6 @@ public class CreateFOX extends AbstractAction {
                     context.getSIP().getResource(pid).setFID(new URI(Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:localURI",null,NAMESPACES)));
                 }
             }
-            context.getSIP().save();
         } catch(Exception e) {
             throw new DepositException("The creation of FOX files failed!",e);
         }

@@ -7,6 +7,7 @@ import org.w3c.dom.Document;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 
 /**
@@ -25,16 +26,16 @@ public class PersistDatasetNameRetriever {
 	 */
 	public String getDatasetName(Document sipRecord, String datasetNameXpath) throws DepositException {
 
-    	XdmNode sipNode = Saxon.wrapNode(sipRecord);
-    	String datasetName;
-    	try {
-			datasetName = Saxon.xpath2string(sipNode, datasetNameXpath);
-		} catch (SaxonApiException ex) {
-			String message = "Error extracting name to use as base folder for the resource policy";
-			logger.error(message, ex);
-			throw new DepositException(message, ex);
-		}
-    	
-    	return datasetName;
+            XdmNode sipNode = Saxon.wrapNode(sipRecord);
+            String datasetName;
+            try {
+                datasetName = Saxon.xpath2string(sipNode, datasetNameXpath, null, Global.NAMESPACES);
+            } catch (SaxonApiException ex) {
+                String message = "Error extracting name to use as base folder for the resource policy";
+                logger.error(message, ex);
+                throw new DepositException(message, ex);
+            }
+
+            return datasetName;
 	}
 }

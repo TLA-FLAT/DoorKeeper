@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package nl.mpi.tla.flat.deposit.sip;
+package nl.mpi.tla.flat.deposit.sip.cmdi;
 
 import java.io.File;
 import java.net.URI;
@@ -32,6 +32,9 @@ import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.Collection;
+import nl.mpi.tla.flat.deposit.sip.Resource;
+import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.flat.deposit.util.Saxon;
@@ -46,9 +49,9 @@ import org.w3c.dom.Node;
  *
  * @author menzowi
  */
-public class CMDI implements SIPInterface {
+public class CMD implements SIPInterface {
     
-    private static final Logger logger = LoggerFactory.getLogger(CMDI.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(CMD.class.getName());
     protected Marker marker = null;
     
     public static String CMD_NS = "http://www.clarin.eu/cmd/";
@@ -62,13 +65,17 @@ public class CMDI implements SIPInterface {
     protected Document rec = null;
     
     protected Set<Resource> resources = new LinkedHashSet();
+    protected Set<Collection> collections = new LinkedHashSet();
     
     protected Map<String,String> namespaces = new LinkedHashMap<>();
     
-    public CMDI(File spec) throws DepositException {
+    protected boolean dirty = false;
+    
+    public CMD(File spec) throws DepositException {
         this.base = spec;
         load(spec);
-        loadResourceList();
+        loadResources();
+        loadCollections();
     }
     
     public File getBase() {
@@ -89,15 +96,16 @@ public class CMDI implements SIPInterface {
             throw new DepositException("SIP["+this.base+"] has already a PID!");
         if (pid.toString().startsWith("hdl:")) {
             this.pid = pid;
-        } else if (pid.toString().startsWith("http://hdl.handle.net/")) {
+        } else if (pid.toString().matches("http(s)?://hdl.handle.net/.*")) {
             try {
-                this.pid = new URI(pid.toString().replace("http://hdl.handle.net/", "hdl:"));
+                this.pid = new URI(pid.toString().replace("http(s)?://hdl.handle.net/", "hdl:"));
             } catch (URISyntaxException ex) {
                 throw new DepositException(ex);
             }
         } else {
             throw new DepositException("The URI["+pid+"] isn't a valid PID!");
         }
+        dirty();
     }
     
     public URI getPID() throws DepositException {
@@ -119,6 +127,7 @@ public class CMDI implements SIPInterface {
         } else {
             throw new DepositException("The URI["+fid+"] isn't a valid FLAT Fedora Commons PID!");
         }
+        dirty();
     }
     
     public void setFIDStream(String dsid) throws DepositException {
@@ -129,6 +138,7 @@ public class CMDI implements SIPInterface {
         } catch (URISyntaxException ex) {
            throw new DepositException(ex);
         }
+        dirty();
     }
     
     public void setFIDasOfTimeDate(Date date) throws DepositException {
@@ -139,6 +149,7 @@ public class CMDI implements SIPInterface {
         } catch (URISyntaxException ex) {
            throw new DepositException(ex);
         }
+        dirty();
     }
     
     public URI getFID() throws DepositException {
@@ -149,37 +160,19 @@ public class CMDI implements SIPInterface {
        
     // resources
     
-    private void loadResourceList() throws DepositException {
+    private void loadResources() throws DepositException {
         try {
             for (XdmItem resource:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType='Resource']",null,NAMESPACES)) {
                 Node resNode = Saxon.unwrapNode((XdmNode)resource);
-                Resource res = new Resource(base.toURI().resolve(new URI(null,null,Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES),null,null)),resNode);
-                if (Saxon.xpath2boolean(resource,"normalize-space(cmd:ResourceType/@mimetype)!=''",null,NAMESPACES)) {
-                    res.setMime(Saxon.xpath2string(resource,"cmd:ResourceType/@mimetype",null,NAMESPACES));
-                }
-                if (Saxon.xpath2boolean(resource,"normalize-space(cmd:ResourceRef/@lat:localURI)!=''",null,NAMESPACES)) {
-                    File resFile = new File(base.toPath().getParent().normalize().toString(),Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:localURI",null,NAMESPACES));
-                    if (resFile.exists()) {
-                        if (resFile.canRead()) {
-                            res.setFile(resFile);
-                        } else
-                            logger.warn("local file for ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+resFile.getPath()+"] isn't readable!");
-                    } else
-                        logger.warn("local file for ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+resFile.getPath()+"] doesn't exist!");
-                }
-                if (Saxon.xpath2boolean(resource,"normalize-space(cmd:ResourceRef/@lat:flatURI)!=''",null,NAMESPACES)) {
-                    res.setFID(new URI(Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
-                }
+                Resource res = new CMDResource(base.toURI().resolve(new URI(null,null,Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES),null,null)),resNode);
                 if (resources.contains(res)) {
-                    logger.warn("double ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]!");
+                    logger.warn("double ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]["+(res.hasFID()?res.getFID():"")+"]!");
                 } else {
                     resources.add(res);
-                    logger.debug("ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]");
+                    logger.debug("ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]["+(res.hasFID()?res.getFID():"")+"]");
                 }
             }
-        } catch(SaxonApiException e) {
-            throw new DepositException(e);
-        } catch (URISyntaxException e) {
+        } catch(SaxonApiException|URISyntaxException e) {
             throw new DepositException(e);
         }
     }
@@ -200,34 +193,86 @@ public class CMDI implements SIPInterface {
         throw new DepositException("SIP["+this.base+"] has no Resource with this PID["+pid+"]!");
     }
     
-    public void saveResourceList() throws DepositException {
+    public void saveResources() throws DepositException {
+        for (Resource res:getResources())
+            res.save(this);
+    }
+    
+    // Collections
+    
+    private void loadCollections() throws DepositException {
         try {
-            for (Resource res:getResources()) {
-                Node node = res.getNode();
-                if (res.hasMime()) {
-                    Element rt = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceType", null, NAMESPACES));
-                    rt.setAttribute("mimetype", res.getMime());
+            for (XdmItem collection:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
+                Node colNode = Saxon.unwrapNode((XdmNode)collection);
+                Collection col = new CMDCollection(base.toURI(), colNode);
+                if (collections.contains(col)) {
+                    logger.warn("double IsPartOf["+collection.getStringValue()+"]["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]!");
+                } else {
+                    collections.add(col);
+                    logger.debug("IsPartOf["+collection.getStringValue()+"]["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
                 }
-                if (res.hasFile()) {
-                    Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
-                    rr.setAttribute("lat:localURI",base.getParentFile().toPath().normalize().relativize(res.getFile().toPath().normalize()).toString());
-                }
-                if (res.hasPID()) {
-                    Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
-                    rr.setTextContent(res.getPID().toString());
-                }
-                if (res.hasFID()) {
-                    Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
-                    rr.setAttribute("lat:flatURI",res.getFID().toString());
-                }
-            }                    
-        } catch(Exception e) {
+            }
+        } catch(SaxonApiException e) {
             throw new DepositException(e);
         }
     }
+
+    public Set<Collection> getCollections() {
+        return this.collections;
+    }
     
+    public Collection getCollection(URI pid) throws DepositException {
+        for (Collection col:getCollections()) {
+            if (pid.toString().matches("^(hdl:|http(s)?://hdl.handle.net/).*")) {
+                if (col.getPID().toString().replaceAll("^(hdl:|http(s)?://hdl.handle.net/)","").equals(pid.toString().replaceAll("^(hdl:|http(s)?://hdl.handle.net/)","")))
+                    return col;
+            } else if (col.getPID().equals(pid)) {
+                return col;
+            }
+        }
+        throw new DepositException("SIP["+this.base+"] has no Resource with this PID["+pid+"]!");
+    }
+       
+    public void saveCollections() throws DepositException {
+        for (Collection col:getCollections())
+            col.save(this);
+    }
+    
+    // Dirty or clean?
+    
+    protected void dirty() {
+        this.dirty = true;
+    }
+    
+    public boolean isDirty() {
+        if (!this.dirty) {
+            // dirty resources?
+            for (Resource res:getResources()) {
+                if (res.isDirty()) {
+                    this.dirty = true;
+                    break;
+                }
+            }
+        }
+        if (!this.dirty) {
+            // dirty collections?
+            for (Collection col:getCollections()) {
+                if (col.isDirty()) {
+                    this.dirty = true;
+                    break;
+                }
+            }
+        }
+        return this.dirty;
+    }
+    
+    protected void clean() {
+        this.dirty = false;
+    }
+
     // IO
     
+    @Override
     public void load(File spec) throws DepositException {
         try {
             this.rec = Saxon.buildDOM(spec);
@@ -256,46 +301,60 @@ public class CMDI implements SIPInterface {
         }
     }
     
-    public void save() throws DepositException {
-        try {
-            if (base.exists()) {
-                // always keep the org around
-                File org = new File(base.toString()+".org");
-                if (!org.exists())
-                    Files.copy(base.toPath(),org.toPath());
-                // and keep timestamped backups
-                FileTime stamp = Files.getLastModifiedTime(base.toPath());
-                SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd-HHmmss");
-                String ext = df.format(stamp.toMillis());
-                int i = 0;
-                File bak = new File(base.toString()+"."+ext);
-                while (bak.exists())
-                    bak = new File(base.toString()+"."+ext+"."+(++i));
-                Files.move(base.toPath(),bak.toPath());
+    @Override
+    public boolean save() throws DepositException {
+        return save(false);
+    }
+
+    public boolean save(boolean force) throws DepositException {
+        boolean save = force || isDirty();
+        if (save) {
+            try {
+                if (base.exists()) {
+                    // always keep the org around
+                    File org = new File(base.toString()+".org");
+                    if (!org.exists())
+                        Files.copy(base.toPath(),org.toPath());
+                    // and keep timestamped backups
+                    FileTime stamp = Files.getLastModifiedTime(base.toPath());
+                    SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd-HHmmss");
+                    String ext = df.format(stamp.toMillis());
+                    int i = 0;
+                    File bak = new File(base.toString()+"."+ext);
+                    while (bak.exists())
+                        bak = new File(base.toString()+"."+ext+"."+(++i));
+                    Files.move(base.toPath(),bak.toPath());
+                    logger.debug("saved backup to ["+bak+"]");
+                }
+                // put PID into place
+                if (this.hasPID()) {
+                    Element self = null;
+                    XdmItem _self = Saxon.xpathSingle(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+                    if (_self==null) {
+                        Element profile = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Header/cmd:MdProfile", null, NAMESPACES));
+                        Element header = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Header", null, NAMESPACES));
+                        self = rec.createElementNS(CMD_NS, "MdSelfLink");
+                        self.setTextContent(this.getPID().toString());
+                        header.insertBefore(self, profile);
+                    } else {
+                        self = (Element)Saxon.unwrapNode((XdmNode)_self);
+                    }
+                    if (this.hasFID()) {
+                        self.setAttribute("lat:flatURI",this.getFID().toString());
+                    }
+                }   
+                // save changes to the resource list
+                saveResources();
+                // save changes to the collections list
+                saveCollections();
+                DOMSource source = new DOMSource(rec);
+                Saxon.save(source,base);
+                logger.debug("saved new version to ["+base+"]");
+            } catch(Exception e) {
+                throw new DepositException(e);
             }
-            // put PID into place
-            if (this.hasPID()) {
-                Element self = null;
-                XdmItem _self = Saxon.xpathSingle(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
-                if (_self==null) {
-                    Element profile = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Header/cmd:MdProfile", null, NAMESPACES));
-                    Element header = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Header", null, NAMESPACES));
-                    self = rec.createElementNS(CMD_NS, "MdSelfLink");
-                    self.setTextContent(this.getPID().toString());
-                    header.insertBefore(self, profile);
-                } else {
-                    self = (Element)Saxon.unwrapNode((XdmNode)_self);
-                }
-                if (this.hasFID()) {
-                    self.setAttribute("lat:flatURI",this.getFID().toString());
-                }
-            }   
-            // save changes to the resource list
-            saveResourceList();
-            DOMSource source = new DOMSource(rec);
-            Saxon.save(source,base);
-        } catch(Exception e) {
-            throw new DepositException(e);
+            clean();
         }
+        return save;
     }
 }

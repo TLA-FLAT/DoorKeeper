@@ -59,10 +59,10 @@ abstract public class AbstractAction implements ActionInterface {
         return def;
     }
 
-    public String getParameter(String name) {
+    public String getParameter(String name) throws DepositException {
         if (hasParameter(name))
             return params.get(name).toString();
-        return null;
+        throw new DepositException("Mandatory parameter["+name+"] for Action["+this.getName()+"] is not available!");
     }
     
     @Override

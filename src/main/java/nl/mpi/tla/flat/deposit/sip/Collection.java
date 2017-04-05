@@ -16,62 +16,37 @@
  */
 package nl.mpi.tla.flat.deposit.sip;
 
-import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Path;
 import java.util.Date;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.util.Global;
+import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
+import nl.mpi.tla.flat.deposit.util.Saxon;
+import org.slf4j.LoggerFactory;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 
 /**
  *
  * @author menzowi
  */
-abstract public class Resource {
+abstract public class Collection {
+    
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(Collection.class.getName());
     
     protected URI uri = null;
     protected URI pid = null;
     protected URI fid = null;
-    protected File file = null;
-    protected String mime = null;
-    
+    protected Set<Collection> collections = new LinkedHashSet();
     protected boolean dirty = false;
-
+    
     public URI getURI() {
         return this.uri;
-    }
-    
-    public void setFile(File file) {
-        this.file = file;
-        dirty();
-    }
-    
-    public boolean hasFile() {
-        return (this.file!=null);
-    }
-    
-    public File getFile() {
-        return this.file;
-    }
-    
-    public Path getPath() {
-        return this.file.toPath();
-    }
-    
-    public void setMime(String mime) {
-        this.mime = mime;
-        dirty();
-    }
-    
-    public boolean hasMime() {
-        return (this.mime!=null);
-    }
-    
-    public String getMime() {
-        if (hasMime())
-            return this.mime;
-        return "application/octet-stream";
     }
     
     // PID
@@ -81,7 +56,7 @@ abstract public class Resource {
     
     public void setPID(URI pid) throws DepositException {
         if (this.pid!=null)
-            throw new DepositException("Resource["+this.uri+"] has already a PID!");
+            throw new DepositException("Collection["+this.uri+"] has already a PID!");
         if (pid.toString().startsWith("hdl:")) {
             this.pid = pid;
         } else if (pid.toString().matches("http(s)?://hdl.handle.net/.*")) {
@@ -109,29 +84,28 @@ abstract public class Resource {
     
     public void setFID(URI fid) throws DepositException {
         if (this.fid!=null)
-            throw new DepositException("Resource["+this.uri+"] has already a Fedora Commons PID!");
+            throw new DepositException("Collection["+this.uri+"] has already a Fedora Commons PID!");
         if (fid.toString().startsWith("lat:")) {
             this.fid = fid;
         } else {
-            throw new DepositException("The Resource["+fid+"] isn't a valid FLAT Fedora Commons PID!");
+            throw new DepositException("The Collection["+fid+"] isn't a valid FLAT Fedora Commons PID!");
         }
         dirty();
     }
     
     public void setFIDStream(String dsid) throws DepositException {
         if (this.fid==null)
-            throw new DepositException("Resource["+this.uri+"] has no Fedora Commons PID yet!");
+            throw new DepositException("Collection["+this.uri+"] has no Fedora Commons PID yet!");
         try {
             this.fid = new URI(this.fid.toString()+"#"+dsid);
         } catch (URISyntaxException ex) {
            throw new DepositException(ex);
         }
-        dirty();
     }
     
     public void setFIDasOfTimeDate(Date date) throws DepositException {
         if (this.fid==null)
-            throw new DepositException("Resource["+this.uri+"] has no Fedora Commons PID yet!");
+            throw new DepositException("Collection["+this.uri+"] has no Fedora Commons PID yet!");
         try {
             this.fid = new URI(this.fid.toString()+"@"+Global.asOfDateTime(date));
         } catch (URISyntaxException ex) {
@@ -142,10 +116,25 @@ abstract public class Resource {
     
     public URI getFID() throws DepositException {
         if (this.fid==null)
-            throw new DepositException("Resource["+this.uri+"] has no Fedora Commons PID yet!");
+            throw new DepositException("Collection["+this.uri+"] has no Fedora Commons PID yet!");
         return this.fid;
     }
     
+    // parent collections
+    
+    public boolean hasParentCollections() {
+        return !this.collections.isEmpty();
+    }
+    
+    public void addParentCollection(Collection col) throws DepositException {
+        this.collections.add(col);
+        dirty();
+    }
+    
+    public Set<Collection> getParentCollections() throws DepositException {
+        return this.collections;
+    }
+           
     // dirty or not 
     
     protected void dirty() {
@@ -172,15 +161,14 @@ abstract public class Resource {
             return false;
         if (other == this)
             return true;
-        if (!(other instanceof Resource))
+        if (!(other instanceof Collection))
             return false;
-        Resource otherResource = (Resource)other;
-        return otherResource.uri.equals(this.uri);
+        Collection otherCollection = (Collection)other;
+        return otherCollection.uri.equals(this.uri);
     }
     
     @Override
     public int hashCode() {
         return this.uri.hashCode();
-    }
-    
+    }   
 }

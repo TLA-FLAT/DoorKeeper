@@ -19,7 +19,7 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.CMDI;
+import nl.mpi.tla.flat.deposit.sip.cmdi.CMD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +55,7 @@ public class SIPLoad extends AbstractAction {
         }
 
         logger.debug("SIP["+mr.getAbsolutePath()+"]");
-        context.setSIP(new CMDI(mr));
+        context.setSIP(new CMD(mr));
 
         return true;
     }

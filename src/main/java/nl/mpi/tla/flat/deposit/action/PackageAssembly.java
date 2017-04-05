@@ -73,9 +73,6 @@ public class PackageAssembly extends AbstractAction {
                     logger.info("Downloaded Resource["+(++downloads)+"]["+uri+"] to ["+file+"]");
                 }
             }
-            if (downloads>0) {
-                context.getSIP().save();
-            }
         } catch (Exception ex) {
             throw new DepositException("Couldn't assemble the package!",ex);
         }

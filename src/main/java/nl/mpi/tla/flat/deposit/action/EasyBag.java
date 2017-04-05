@@ -64,7 +64,7 @@ public class EasyBag extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
         try {
             SIPInterface sip = context.getSIP();
-            Path fox = Paths.get(this.getParameter("foxes"));
+            Path fox = Paths.get(this.getParameter("dir"));
             Path tmp = Paths.get(this.getParameter("bags"));
             Path bag = Files.createTempDirectory(tmp, "easy-bag-");
             

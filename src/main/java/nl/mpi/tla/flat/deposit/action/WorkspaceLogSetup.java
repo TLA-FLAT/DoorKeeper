@@ -120,11 +120,11 @@ public class WorkspaceLogSetup extends AbstractAction {
                 // StatusPrinter will handle this
             }
             StatusPrinter.printInCaseOfErrorsOrWarnings(logctxt);
-            logger.info("\"Welcome to FLAT!\"\n" +
+            logger.debug("\n\n" +
                 "\"Relax,\" said the DoorKeeper,\n" +
-                "\"We are programmed to receive.\n" +
+                "\"I'm programmed to receive.\n" +
                 "You can check-out any time you like,\n" +
-                "But you can never leave!\""
+                "But you can never leave!\"\n"
             );
         } catch (IOException ex) {
             this.logger.error("Couldn't setup the deposit log!",ex);

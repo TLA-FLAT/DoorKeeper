@@ -57,9 +57,15 @@ public interface SIPInterface {
     
     public Resource getResource(URI pid) throws DepositException;
     
+    // collections
+    
+    public Set<Collection> getCollections();
+    
+    public Collection getCollection(URI pid) throws DepositException;
+    
     // IO
     
     public void load(File spec) throws DepositException;
     
-    public void save() throws DepositException;
+    public boolean save() throws DepositException;
 }

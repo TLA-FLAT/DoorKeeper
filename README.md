@@ -127,7 +127,7 @@ Load a [CMD record](http://www.clarin.eu/cmdi) as a SIP.
 
 _NOTES_:
 - best be used in the `init` section of the workflow, so the SIP is loaded even if only some of the main actions are requested
-- the DoorKeeper interacts with a SIP through the [`nl.mpi.tla.flat.deposit.sip.SIPInterface` interface](src/main/java/nl/mpi/tla/flat/deposit/sip/SIPInterface.java), so its possible to potentially use other SIP specifications than CMDI
+- the DoorKeeper interacts with a SIP through the [`nl.mpi.tla.flat.deposit.sip.SIPInterface` interface](src/main/java/nl/mpi/tla/flat/deposit/sip/SIPInterface.java), so its possible to use other SIP specifications than [CMDI](src/main/java/nl/mpi/tla/flat/deposit/sip/cmdi/)
 
 ### <a name="PackageAssembly"></a>`nl.mpi.tla.flat.deposit.action.PackageAssembly`
 
@@ -204,7 +204,7 @@ _NOTES_:
 
 parameter | default  | cardinality | notes
 ----------|----------|-------------|------
-`prefix`  | `foo`    | ?           |
+`prefix`  |          | 1           |
 
 Assigns handles to the SIP and its resources.
 
@@ -396,7 +396,7 @@ Audio collecties: 2000 – 2999.
 
 parameter      | default  | cardinality | notes
 ---------------|----------|-------------|------
-`foxes`        |          | 1           |
+`dir`          |          | 1           |
 `bags`         |          | 1           |
 `creator`      |          | ?           |
 `audience`     |          | ?           |

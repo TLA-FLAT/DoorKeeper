@@ -91,9 +91,6 @@ public class Persist extends AbstractAction {
     		res.setFile(newResourceFile);
     	}
     	
-    	sip.save();
-    	logger.debug("Saved SIP with new locations set");
-    	
     	return true;
     }
     

@@ -47,6 +47,8 @@ public class Context {
     protected Map<String,XdmValue> props = new LinkedHashMap<>();
     
     protected SIPInterface sip = null;
+    
+    protected Exception ex = null;
         
     public Context(Flow flow,XdmNode spec,Map<String,XdmValue> params)  throws DepositException {
         this.flow = flow;
@@ -120,6 +122,26 @@ public class Context {
         if (this.sip==null)
             throw new DepositException("SIP is not specified!");
         return this.sip;
+    }
+    
+    // Save (the SIP)
+    
+    public boolean save() throws DepositException {
+       return (this.hasSIP()?this.sip.save():false);
+    }
+    
+    // Exception
+    
+    public void setException(Exception ex) {
+        this.ex = ex;
+    }
+    
+    public boolean hasException() {
+        return (this.ex!=null);
+    }
+    
+    public Exception getException() {
+        return this.ex;
     }
     
     // Utilities: general method to load properties or parameters

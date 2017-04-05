@@ -60,7 +60,6 @@ public class Deposit extends FedoraAction {
             sip.setFIDStream("CMD");
             sip.setFIDasOfTimeDate(dsResponse.getLastModifiedDate());
 
-            sip.save();
         } catch(Exception e) {
             throw new DepositException("The actual deposit in Fedora failed!",e);
         }

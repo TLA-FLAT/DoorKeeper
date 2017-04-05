@@ -20,8 +20,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import static nl.mpi.tla.flat.deposit.sip.CMDI.CMD_NS;
-import static nl.mpi.tla.flat.deposit.sip.CMDI.LAT_NS;
+import static nl.mpi.tla.flat.deposit.sip.cmdi.CMD.CMD_NS;
+import static nl.mpi.tla.flat.deposit.sip.cmdi.CMD.LAT_NS;
 
 /**
  *

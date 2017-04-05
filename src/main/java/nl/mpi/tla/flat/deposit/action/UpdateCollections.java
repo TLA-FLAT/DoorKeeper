@@ -16,19 +16,34 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.getDatastream;
-import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import net.sf.saxon.s9api.SaxonApiException;
+import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreamDissemination;
+import com.yourmediashelf.fedora.client.response.FedoraResponse;
+import java.io.File;
+import java.io.InputStream;
+import java.net.URI;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Deque;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.QName;
+import net.sf.saxon.s9api.XdmAtomicValue;
+import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XdmItem;
+import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.Resource;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
+import nl.mpi.tla.flat.deposit.sip.Collection;
+import nl.mpi.tla.flat.deposit.sip.cmdi.CMDCollection;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.flat.deposit.util.SaxonListener;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.w3c.dom.Node;
 
 /**
  *
@@ -38,16 +53,80 @@ public class UpdateCollections extends FedoraAction {
     
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(UpdateCollections.class.getName());
     
+    private File dir = null;
+    
     @Override
     public boolean perform(Context context) throws DepositException {       
         try {
             connect(context);
-            for (XdmItem resource:Saxon.xpath(Saxon.wrapNode(context.getSIP().getRecord()),"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf/(@lat:flatURI,.)[1]",null,NAMESPACES)) {
-                logger.debug("isPartOf collection["+resource.getStringValue()+"]");
-                String fid = resource.getStringValue();
-                if (fid.startsWith("lat:")) {
-                    GetDatastreamResponse dsResponse = getDatastream(fid,"CMD").execute();
-                    logger.debug("collection CMD["+dsResponse.getLastModifiedDate()+"]");
+
+            // create the output dir
+            dir = new File(getParameter("dir","./fox"));
+            if (!dir.exists())
+                 FileUtils.forceMkdir(dir);
+
+            // prep the stylesheet
+            XsltTransformer add = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/add-to-collection.xsl")).load();
+            SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
+            add.setMessageListener(listener);
+            add.setErrorListener(listener);            
+            add.setParameter(new QName("pid"),new XdmAtomicValue(context.getSIP().getPID()));
+            add.setParameter(new QName("fid"),new XdmAtomicValue(context.getSIP().getFID()));
+            add.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
+            add.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+            // loop over collections
+            // TODO: collection cascade
+            for (Collection col:context.getSIP().getCollections()) {
+                logger.debug("isPartOf collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
+                if (col.hasPID() && col.getPID().equals(context.getSIP().getPID()))
+                    throw new DepositException("direct cycle for PID["+col.getPID()+"]");
+                else if (col.getURI().equals(context.getSIP().getPID()))
+                    throw new DepositException("direct cycle for PID["+col.getURI()+"]");
+                else if (col.hasFID() && col.getFID().equals(context.getSIP().getFID()))
+                    throw new DepositException("direct cycle for FID["+col.getFID()+"]");
+                if (col.hasFID() && col.getFID().toString().startsWith("lat:")) {
+                    // load the collection's CMD
+                    FedoraResponse res = getDatastreamDissemination(col.getFID().toString(),"CMD").execute();
+                    if (res.getStatus()==200) {
+                        InputStream str = res.getEntityInputStream();
+                        XdmNode old = Saxon.buildDocument(new StreamSource(str));
+                        String oldPID = (col.hasPID()?col.getPID().toString():Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES));
+                        add.setSource(old.asSource());
+                        XdmDestination destination = new XdmDestination();
+                        add.setDestination(destination);
+                        add.transform();
+                        if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
+                            // write to fox dir: <fid>.CMD.xml
+                            File out = new File(dir + "/"+col.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+".CMD.xml");
+                            TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+                            logger.info("created FOX["+out.getAbsolutePath()+"]");
+                            // TODO: deposit action should understand:
+                            // - <fid>.xml (FOXML -> ingest)
+                            // - <fid>.prop.xml (props -> modify (some) properties)
+                            // - <fid>.<dsid>... (DS -> modifyDatastream)
+                            // TODO: get PID and FID+timestamp -> register for upsert
+                            String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+                            if (!newPID.equals(oldPID)) {
+                                col.setPID(new URI(newPID));
+                                // TODO: use the relations instead of cmd:IsPartOfList
+                                for (XdmItem coll:Saxon.xpath(old,"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
+                                    Node colNode = Saxon.unwrapNode((XdmNode)coll);
+                                    Collection par = new CMDCollection(colNode);
+                                    col.addParentCollection(par);
+                                    if (Saxon.xpath2boolean(coll,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
+                                        par.setFID(new URI(Saxon.xpath2string(coll,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
+                                    }
+                                    if (par.getFID().toString().startsWith("lat:")) {
+                                        updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, oldPID, newPID);
+                                    }
+                                }
+                            }
+                        } else {
+                            logger.debug("Already a member of collection["+col.getFID()+"]!");
+                        }
+                    } else {
+                        logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
+                    }
                 }
             }
         } catch (Exception ex) {
@@ -56,4 +135,70 @@ public class UpdateCollections extends FedoraAction {
         return true;
     }
     
+    private XsltTransformer upd = null;
+    
+    private void updateCollection(Deque<URI> hist, Collection col, String oldPart, String newPart) throws Exception {
+        // load the collection's CMD
+        FedoraResponse res = getDatastreamDissemination(col.getFID().toString(),"CMD").execute();
+        if (res.getStatus()==200) {
+            // prep the stylesheet
+            if (upd == null) {
+                XsltTransformer upd = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/update-collection.xsl")).load();
+                SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
+                upd.setMessageListener(listener);
+                upd.setErrorListener(listener);
+            }
+               
+            // set parameters
+            upd.setParameter(new QName("old-pid"),new XdmAtomicValue(oldPart));
+            upd.setParameter(new QName("new-pid"),new XdmAtomicValue(newPart));
+            upd.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
+            upd.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+
+            InputStream str = res.getEntityInputStream();
+            XdmNode old = Saxon.buildDocument(new StreamSource(str));
+            String oldPID = Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+            upd.setSource(old.asSource());
+            XdmDestination destination = new XdmDestination();
+            upd.setDestination(destination);
+            upd.transform();
+            if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
+                // write to fox dir: <fid>.CMD.xml
+                File out = new File(dir + "/"+col.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+".CMD.xml");
+                TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+                logger.info("created FOX["+out.getAbsolutePath()+"]");
+                // TODO: deposit action should understand:
+                // - <fid>.xml (FOXML -> ingest)
+                // - <fid>.prop.xml (props -> modify (some) properties)
+                // - <fid>.<dsid>... (DS -> modifyDatastream)
+                // TODO: get PID and FID+timestamp -> register for upsert
+                String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+                if (!newPID.equals(oldPID)) {
+                    col.setPID(new URI(newPID));
+                    // TODO: use the relations instead of cmd:IsPartOfList
+                    for (XdmItem coll:Saxon.xpath(old,"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
+                        Node colNode = Saxon.unwrapNode((XdmNode)coll);
+                        Collection par = new CMDCollection(colNode);
+                        col.addParentCollection(par);
+                        if (Saxon.xpath2boolean(coll,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
+                            par.setFID(new URI(Saxon.xpath2string(coll,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
+                        }
+                        if (par.getFID().toString().startsWith("lat:")) {
+                            if (!hist.contains(par.getFID())) {
+                                hist.push(col.getFID());
+                                updateCollection(hist, par, oldPID, newPID);
+                            } else {
+                                hist.push(col.getFID());
+                                throw new DepositException("(in)direct cycle["+hist+"] for FID["+par.getFID()+"]");
+                            }
+                        }
+                    }
+                }
+            } else {
+                logger.debug("Part["+oldPart+"]["+newPart+"] is not a member of collection["+col.getFID()+"]!");
+            }
+        } else {
+            logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
+        }
+    }
 }

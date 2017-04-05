@@ -239,30 +239,33 @@ public class Flow {
             this.start = start;
         if (stop != null)
             this.stop = start;
-        if (initFlow()) {
-            DepositException t = null;
-            try {
+        DepositException t = null;
+        try {
+            if (initFlow()) {
                 status = new Boolean(mainFlow(this.start,this.stop));
-            } catch (Exception e) {
+            } else
                 status = new Boolean(false);
-                try {
-                    exceptionFlow(e);
-                } catch(DepositException x) {
-                    t = x;
-                    Flow.logger.error(" exception during the exception handling flow! "+x.getMessage(),x);
-                }
-            } finally {
-                try {
-                    finalFlow();
-                } catch(DepositException x) {
-                    t = x;
-                    Flow.logger.error(" exception during the final flow! "+x.getMessage());
-                }
-            }
-            if (t != null)
-                throw t;
-        } else
+        } catch (Exception e) {
             status = new Boolean(false);
+            try {
+                context.setException(e);
+                exceptionFlow(e);
+            } catch(DepositException x) {
+                t = x;
+                Flow.logger.error(" exception during the exception handling flow! "+x.getMessage(),x);
+            }
+        } finally {
+            try {
+                finalFlow();
+            } catch(DepositException x) {
+                t = x;
+                Flow.logger.error(" exception during the final flow! "+x.getMessage());
+            }
+        }
+        if (t != null) {
+            context.setException(t);
+            throw t;
+        }
         return status.booleanValue();
     }
     
@@ -272,6 +275,7 @@ public class Flow {
         for (ActionInterface action:initActions) {
             Flow.logger.debug("ACTION init flow["+action.getName()+"]");
             next = action.perform(context);
+            context.save();
             if (!next)
                 break;
         }
@@ -289,6 +293,7 @@ public class Flow {
             if (run) {
                 Flow.logger.debug("ACTION main flow["+action.getName()+"]");
                 next = action.perform(context);
+                context.save();
                 if (!next)
                     break;
                 if (stop!=null && action.getName().equals(stop))
@@ -304,10 +309,11 @@ public class Flow {
         Flow.logger.debug("BEGIN  exception flow");
         boolean next = true;
         if (exceptionActions.isEmpty())
-            Flow.logger.error(" exception during the flow! "+e.getMessage(),e);
+            Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
         for (ActionInterface action:exceptionActions) {
             Flow.logger.debug("ACTION exception flow["+action.getName()+"]");
             next = action.perform(context);
+            context.save();
             if (!next)
                 break;
         }
@@ -321,6 +327,7 @@ public class Flow {
         for (ActionInterface action:finalActions) {
             Flow.logger.debug("ACTION final flow["+action.getName()+"]");
             next = action.perform(context);
+            context.save();
             if (!next)
                 break;
         }

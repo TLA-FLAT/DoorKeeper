@@ -75,7 +75,7 @@ public class ACL extends AbstractAction {
 
             // convert trix to semantic triples using ACL/sl-trix-to-sem-triples.xsl
             XsltTransformer trix2sem = Saxon.buildTransformer(ACL.class.getResource("/ACL/sl-trix-to-sem-triples.xsl")).load();
-            SaxonListener listener = new SaxonListener("CreateFOX",MDC.get("sip"));
+            SaxonListener listener = new SaxonListener("ACL",MDC.get("sip"));
             trix2sem.setMessageListener(listener);
             trix2sem.setErrorListener(listener);
             trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
