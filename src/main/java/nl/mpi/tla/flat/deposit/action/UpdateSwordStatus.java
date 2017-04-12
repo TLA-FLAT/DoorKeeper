@@ -39,8 +39,8 @@ public class UpdateSwordStatus extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
         String pfile = this.getParameter("props");
         Path ppath = Paths.get(pfile);
-        logger.debug("SWORD status properties["+ppath.toAbsolutePath()+"]");
         if (Files.exists(ppath) && Files.isReadable(ppath)) {
+            logger.debug("SWORD status properties["+ppath.toAbsolutePath()+"]");
             Properties props = new Properties();
             try {
                 FileInputStream in = new FileInputStream(ppath.toFile());

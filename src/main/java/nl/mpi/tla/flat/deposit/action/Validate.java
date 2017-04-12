@@ -26,9 +26,7 @@ import eu.clarin.cmdi.validator.CMDIValidatorInitException;
 import eu.clarin.cmdi.validator.SimpleCMDIValidatorProcessor;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.logging.Level;
 
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;

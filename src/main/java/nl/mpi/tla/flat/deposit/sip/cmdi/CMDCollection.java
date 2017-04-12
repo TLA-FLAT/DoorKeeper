@@ -45,41 +45,41 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             // string value
             String str = node.getTextContent();
             if (str!=null && !str.trim().isEmpty()) {
-                URI uri = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (uri.toString().startsWith("lat:"))
-                    this.setFID(uri);
-                else if (uri.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
-                    this.setPID(uri);
+                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                    this.setPID(u);
                 else
-                    this.uri = uri;
+                    this.uri = u;
             }
                 
             // @lat:flatURI
             str = ((Element)node).getAttribute("lat:flatURI");
             if (str!=null && !str.trim().isEmpty()) {
-                uri = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (uri.toString().startsWith("lat:"))
-                    this.setFID(uri);
-                else if (uri.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
-                    this.setPID(uri);
+                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                    this.setPID(u);
                 else if (this.uri==null)
-                    this.uri = uri;
-                else
-                    throw new DepositException("two candidates for a collection URI["+this.uri+"]["+uri+"]!");
+                    this.uri = u;
+                else if (!this.uri.equals(u))
+                    throw new DepositException("two candidates for a collection URI["+this.uri+"]["+u+"]!");
             }
 
             // @lat:localURI
             str = ((Element)node).getAttribute("lat:localURI");
             if (str!=null && !str.trim().isEmpty()) {
-                uri = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (uri.toString().startsWith("lat:"))
-                    this.setFID(uri);
-                else if (uri.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
-                    this.setPID(uri);
+                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                    this.setPID(u);
                 else if (this.uri==null)
-                    this.uri = uri;
-                else
-                    throw new DepositException("two candidates for a collection URI["+this.uri+"]["+uri+"]!");
+                    this.uri = u;
+                else if (!this.uri.equals(u))
+                    throw new DepositException("two candidates for a collection URI["+this.uri+"]["+u+"]!");
             }
             
             // make sure we have at least an URI

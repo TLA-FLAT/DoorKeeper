@@ -20,14 +20,9 @@ import nl.mpi.tla.flat.deposit.sip.*;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.util.Date;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.util.Global;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import org.slf4j.LoggerFactory;
@@ -51,41 +46,41 @@ public class CMDResource extends Resource {
             // ResourceRef value
             String str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                URI uri = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (uri.toString().startsWith("lat:"))
-                    this.setFID(uri);
-                else if (uri.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
-                    this.setPID(uri);
+                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                    this.setPID(u);
                 else
-                    this.uri = uri;
+                    this.uri = u;
             }
                 
             // @lat:flatURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                uri = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (uri.toString().startsWith("lat:"))
-                    this.setFID(uri);
-                else if (uri.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
-                    this.setPID(uri);
+                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                    this.setPID(u);
                 else if (this.uri==null)
-                    this.uri = uri;
-                else
-                    throw new DepositException("two candidates for a resource URI["+this.uri+"]["+uri+"]!");
+                    this.uri = u;
+                else if (!this.uri.equals(u))
+                    throw new DepositException("two candidates for a resource URI["+this.uri+"]["+u+"]!");
             }
 
             // @lat:localURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:localURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                uri = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (uri.toString().startsWith("lat:"))
-                    this.setFID(uri);
-                else if (uri.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
-                    this.setPID(uri);
+                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                    this.setPID(u);
                 else if (this.uri==null)
-                    this.uri = uri;
-                else
-                    throw new DepositException("two candidates for a resource URI["+this.uri+"]["+uri+"]!");
+                    this.uri = u;
+                else if (!this.uri.equals(u))
+                    throw new DepositException("two candidates for a resource URI["+this.uri+"]["+u+"]!");
             }
             
             // make sure we have at least an URI

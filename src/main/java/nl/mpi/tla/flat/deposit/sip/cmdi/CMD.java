@@ -164,7 +164,7 @@ public class CMD implements SIPInterface {
         try {
             for (XdmItem resource:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType='Resource']",null,NAMESPACES)) {
                 Node resNode = Saxon.unwrapNode((XdmNode)resource);
-                Resource res = new CMDResource(base.toURI().resolve(new URI(null,null,Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES),null,null)),resNode);
+                Resource res = new CMDResource(base.toURI(),resNode);
                 if (resources.contains(res)) {
                     logger.warn("double ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]["+(res.hasFID()?res.getFID():"")+"]!");
                 } else {
@@ -172,7 +172,7 @@ public class CMD implements SIPInterface {
                     logger.debug("ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]["+(res.hasFID()?res.getFID():"")+"]");
                 }
             }
-        } catch(SaxonApiException|URISyntaxException e) {
+        } catch(Exception e) {
             throw new DepositException(e);
         }
     }
