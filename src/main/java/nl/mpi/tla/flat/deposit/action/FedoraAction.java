@@ -42,33 +42,13 @@ abstract public class FedoraAction extends AbstractAction {
     private XMLConfiguration fedoraConfig = null;
 
     public void connect(Context context) throws DepositException {
-        javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
-            new javax.net.ssl.HostnameVerifier(){
-                public boolean verify(String hostname,javax.net.ssl.SSLSession sslSession) {
-                    return true;
-                }
-            }
-        );
         try {
             fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));        
 
-            SSLContext theSslContext = null;
-            if (fedoraConfig.containsKey("trustStore")) {
-                String ts = fedoraConfig.getString("trustStore");
-                String tsPass = fedoraConfig.getString("trustStorePass");
-                KeyStore theClientTruststore = KeyStore.getInstance(KeyStore.getDefaultType());
-                theClientTruststore.load(new FileInputStream(ts),tsPass.toCharArray());
-                TrustManagerFactory theTrustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                theTrustManagerFactory.init(theClientTruststore);
-                theSslContext = SSLContext.getInstance("TLS");
-                theSslContext.init(null,theTrustManagerFactory.getTrustManagers(),null);
-                HttpsURLConnection.setDefaultSSLSocketFactory(theSslContext.getSocketFactory());
-            }
-            
             logger.debug("Fedora Commons["+fedoraConfig.getString("localServer")+"]["+fedoraConfig.getString("userName")+":"+fedoraConfig.getString("userPass")+"]");
             if (!FedoraRequest.isDefaultClientSet()) {
                 FedoraCredentials credentials = new FedoraCredentials(fedoraConfig.getString("localServer"), fedoraConfig.getString("userName"), fedoraConfig.getString("userPass"));
-                FedoraClient fedora = new FedoraClient(theSslContext,credentials);
+                FedoraClient fedora = new FedoraClient(credentials);
                 fedora.debug(true);
                 FedoraRequest.setDefaultClient(fedora);
             }

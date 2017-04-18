@@ -87,20 +87,7 @@ public class EPICHandleCreation extends AbstractAction {
                     }
                 });
             
-            SSLContext theSslContext = null;
-            if (this.hasParameter("trustStore")) {
-                String ts = this.getParameter("trustStore");
-                String tsPass = this.getParameter("trustStorePass");
-                KeyStore theClientTruststore = KeyStore.getInstance(KeyStore.getDefaultType());
-                theClientTruststore.load(new FileInputStream(ts),tsPass.toCharArray());
-                TrustManagerFactory theTrustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                theTrustManagerFactory.init(theClientTruststore);
-                theSslContext = SSLContext.getInstance("TLS");
-                theSslContext.init(null,theTrustManagerFactory.getTrustManagers(),null);
-                HttpsURLConnection.setDefaultSSLSocketFactory(theSslContext.getSocketFactory());
-            }
-            
-            PIDService ps = new PIDService(new XMLConfiguration(config), theSslContext);
+            PIDService ps = new PIDService(new XMLConfiguration(config), null);
 
             String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
             String dsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
