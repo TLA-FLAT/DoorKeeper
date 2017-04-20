@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2017 menzowi
+/* 
+ * Copyright (C) 2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -100,11 +100,6 @@ public class UpdateCollections extends FedoraAction {
                             File out = new File(dir + "/"+col.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+".CMD.xml");
                             TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
                             logger.info("created FOX["+out.getAbsolutePath()+"]");
-                            // TODO: deposit action should understand:
-                            // - <fid>.xml (FOXML -> ingest)
-                            // - <fid>.prop.xml (props -> modify (some) properties)
-                            // - <fid>.<dsid>... (DS -> modifyDatastream)
-                            // TODO: get PID and FID+timestamp -> register for upsert
                             String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
                             if (!newPID.equals(oldPID)) {
                                 col.setPID(new URI(newPID));
