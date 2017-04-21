@@ -18,6 +18,7 @@ package nl.mpi.tla.flat.deposit.action;
 
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,12 +42,24 @@ public class HandleCreation extends AbstractAction {
         
         logger.info("Create handle["+context.getSIP().getPID()+"] -> URI["+fedora+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof+"]");
         
-        for (Resource res:context.getSIP().getResources()) {
-            String rfid = res.getFID().toString().replaceAll("#.*","");
-            String rdsid = res.getFID().getRawFragment().replaceAll("@.*","");
-            String rasof = res.getFID().getRawFragment().replaceAll(".*@","");
+        for (Collection col:context.getSIP().getCollections(true)) {
+            if (col.hasPID() && col.hasFID()) {
+                String cfid = col.getFID().toString().replaceAll("#.*","");
+                String cdsid = col.getFID().getRawFragment().replaceAll("@.*","");
+                String casof = col.getFID().getRawFragment().replaceAll(".*@","");
 
-            logger.info("Create handle["+res.getPID()+"] -> URI["+fedora+"/objects/"+rfid+"/datastreams/"+rdsid+"/content?asOfDateTime="+rasof+"]");
+                logger.info("Create handle["+col.getPID()+"] -> URI["+fedora+"/objects/"+cfid+"/datastreams/"+cdsid+"/content?asOfDateTime="+casof+"]");
+            }
+        }
+        
+        for (Resource res:context.getSIP().getResources()) {
+            if (res.hasPID() && res.hasFID()) {
+                String rfid = res.getFID().toString().replaceAll("#.*","");
+                String rdsid = res.getFID().getRawFragment().replaceAll("@.*","");
+                String rasof = res.getFID().getRawFragment().replaceAll(".*@","");
+
+                logger.info("Create handle["+res.getPID()+"] -> URI["+fedora+"/objects/"+rfid+"/datastreams/"+rdsid+"/content?asOfDateTime="+rasof+"]");
+            }
         }
         
         return true;

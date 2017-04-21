@@ -131,8 +131,19 @@ abstract public class Collection {
         dirty();
     }
     
-    public Set<Collection> getParentCollections() throws DepositException {
-        return this.collections;
+    public Set<Collection> getParentCollections(boolean deep) {
+        Set<Collection> colls =  new LinkedHashSet();
+        colls.addAll(this.collections);
+        if (deep) {
+            for (Collection col:this.collections) {
+                colls.addAll(col.getParentCollections(deep));
+            }
+        }
+        return colls;
+    }
+           
+    public Set<Collection> getParentCollections() {
+        return getParentCollections(false);
     }
            
     // dirty or not 

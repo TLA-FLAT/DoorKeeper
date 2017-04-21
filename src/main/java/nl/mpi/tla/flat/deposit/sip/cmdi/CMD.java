@@ -78,19 +78,23 @@ public class CMD implements SIPInterface {
         loadCollections();
     }
     
+    @Override
     public File getBase() {
         return this.base;
     }
     
+    @Override
     public Document getRecord() {
         return this.rec;
     }
     
     // PID
+    @Override
     public boolean hasPID() {
         return (this.pid != null);
     }
     
+    @Override
     public void setPID(URI pid) throws DepositException {
         if (this.pid!=null)
             throw new DepositException("SIP["+this.base+"] has already a PID!");
@@ -108,6 +112,7 @@ public class CMD implements SIPInterface {
         dirty();
     }
     
+    @Override
     public URI getPID() throws DepositException {
         if (this.pid==null)
             throw new DepositException("SIP["+this.base+"] has no PID yet!");
@@ -115,10 +120,12 @@ public class CMD implements SIPInterface {
     }
        
     // FID
+    @Override
     public boolean hasFID() {
         return (this.fid != null);
     }
     
+    @Override
     public void setFID(URI fid) throws DepositException {
         if (this.fid!=null)
             throw new DepositException("SIP["+this.base+"] has already a Fedora Commons PID!");
@@ -130,6 +137,7 @@ public class CMD implements SIPInterface {
         dirty();
     }
     
+    @Override
     public void setFIDStream(String dsid) throws DepositException {
         if (this.fid==null)
             throw new DepositException("SIP["+this.base+"] has no Fedora Commons PID yet!");
@@ -141,6 +149,7 @@ public class CMD implements SIPInterface {
         dirty();
     }
     
+    @Override
     public void setFIDasOfTimeDate(Date date) throws DepositException {
         if (this.fid==null)
             throw new DepositException("SIP["+this.base+"] has no Fedora Commons PID yet!");
@@ -152,6 +161,7 @@ public class CMD implements SIPInterface {
         dirty();
     }
     
+    @Override
     public URI getFID() throws DepositException {
         if (this.fid==null)
             throw new DepositException("SIP["+this.base+"] has no Fedora Commons PID yet!");
@@ -177,10 +187,12 @@ public class CMD implements SIPInterface {
         }
     }
     
+    @Override
     public Set<Resource> getResources() {
         return this.resources;
     }
     
+    @Override
     public Resource getResource(URI pid) throws DepositException {
         for (Resource res:getResources()) {
             if (pid.toString().matches("^(hdl:|http(s)?://hdl.handle.net/).*")) {
@@ -193,6 +205,16 @@ public class CMD implements SIPInterface {
         throw new DepositException("SIP["+this.base+"] has no Resource with this PID["+pid+"]!");
     }
     
+    @Override
+    public Resource getResourceByFID(URI fid) throws DepositException {
+        for (Resource res:getResources()) {
+            if (res.getFID().toString().startsWith(fid.toString())) {
+                return res;
+            }
+        }
+        return null;
+    }
+        
     public void saveResources() throws DepositException {
         for (Resource res:getResources())
             res.save(this);
@@ -217,10 +239,24 @@ public class CMD implements SIPInterface {
         }
     }
 
-    public Set<Collection> getCollections() {
-        return this.collections;
+    @Override
+    public Set<Collection> getCollections(boolean deep) {
+        Set<Collection> colls =  new LinkedHashSet();
+        colls.addAll(this.collections);
+        if (deep) {
+            for (Collection col:this.collections) {
+                colls.addAll(col.getParentCollections(deep));
+            }
+        }
+        return colls;
     }
     
+    @Override
+    public Set<Collection> getCollections() {
+        return getCollections(true);
+    }
+
+    @Override
     public Collection getCollection(URI pid) throws DepositException {
         for (Collection col:getCollections()) {
             if (pid.toString().matches("^(hdl:|http(s)?://hdl.handle.net/).*")) {
@@ -233,6 +269,16 @@ public class CMD implements SIPInterface {
         throw new DepositException("SIP["+this.base+"] has no Resource with this PID["+pid+"]!");
     }
        
+    @Override
+    public Collection getCollectionByFID(URI fid) throws DepositException {
+        for (Collection col:getCollections()) {
+            if (col.getFID().toString().startsWith(fid.toString())) {
+                return col;
+            }
+        }
+        return null;
+    }
+        
     public void saveCollections() throws DepositException {
         for (Collection col:getCollections())
             col.save(this);

@@ -26,6 +26,7 @@ import javax.net.ssl.TrustManagerFactory;
 import nl.knaw.meertens.pid.PIDService;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.slf4j.Logger;
@@ -103,20 +104,40 @@ public class EPICHandleCreation extends AbstractAction {
 
             logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
 
+            for (Collection col:context.getSIP().getCollections(true)) {
+                if (col.hasPID() && col.hasFID()) {
+                    fid  = col.getFID().toString().replaceAll("#.*","");
+                    dsid = col.getFID().getRawFragment().replaceAll("@.*","");
+                    asof = col.getFID().getRawFragment().replaceAll(".*@","");
+
+                    pid  = col.getPID();
+                    uuid = pid.toString().replaceAll(".*/","");
+                    loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+
+                    logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
+
+                    hdl = ps.requestHandle(uuid, loc);
+
+                    logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                }
+            }
+
             for (Resource res:context.getSIP().getResources()) {
-                fid = res.getFID().toString().replaceAll("#.*","");
-                dsid = res.getFID().getRawFragment().replaceAll("@.*","");
-                asof = res.getFID().getRawFragment().replaceAll(".*@","");
+                if (res.hasPID() && res.hasFID()) {
+                    fid = res.getFID().toString().replaceAll("#.*","");
+                    dsid = res.getFID().getRawFragment().replaceAll("@.*","");
+                    asof = res.getFID().getRawFragment().replaceAll(".*@","");
 
-                pid  = res.getPID();
-                uuid = pid.toString().replaceAll(".*/","");
-                loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                    pid  = res.getPID();
+                    uuid = pid.toString().replaceAll(".*/","");
+                    loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
-                logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
+                    logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
 
-                hdl = ps.requestHandle(uuid, loc);
+                    hdl = ps.requestHandle(uuid, loc);
 
-                logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                    logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                }
             }
         } catch(Exception e) {
             throw new DepositException(e);

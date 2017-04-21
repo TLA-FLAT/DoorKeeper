@@ -22,12 +22,13 @@ import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
 import java.io.File;
 import java.io.FilenameFilter;
-import java.util.Collection;
+import java.net.URI;
+import java.util.Date;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,7 @@ public class FedoraInteract extends FedoraAction {
                 IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
                 GetDatastreamResponse dsResponse = getDatastream(fid,dsid).execute();
                 logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]["+dsid+"]["+dsResponse.getLastModifiedDate()+"]");
+                completeFID(sip,new URI(fid),dsid,dsResponse.getLastModifiedDate());
             }
 
             // - <fid>.prop (props -> modify (some) properties)
@@ -72,30 +74,34 @@ public class FedoraInteract extends FedoraAction {
                 logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]");
                 ModifyDatastreamResponse mdsResponse = modifyDatastream(fid,dsid).content(fox).logMessage("Updated "+dsid).execute();
                 logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+mdsResponse.getLastModifiedDate()+"]");
+                completeFID(sip,new URI(fid),dsid,mdsResponse.getLastModifiedDate());
             }
             
-            // TODO: get PID and FID+timestamp -> register for upsert
-            /*
-            Collection<File> foxs = FileUtils.listFiles(new File(this.getParameter("dir", "./fox")),new String[] {"xml"},true);
-            logger.debug("Loading ["+foxs.size()+"] FOX files from dir["+this.getParameter("dir", "./fox")+"]");
-            for (File fox:foxs) {
-                logger.debug("FOX["+fox+"]");
-                IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
-                logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]");
-            }
-            for (Resource res:sip.getResources()) {
-                GetDatastreamResponse dsResponse = getDatastream(res.getFID().toString(),"OBJ").execute();
-                res.setFIDStream("OBJ");
-                res.setFIDasOfTimeDate(dsResponse.getLastModifiedDate());
-            }
-            
-            GetDatastreamResponse dsResponse = getDatastream(sip.getFID().toString(),"CMD").execute();
-            sip.setFIDStream("CMD");
-            sip.setFIDasOfTimeDate(dsResponse.getLastModifiedDate());
-            */
         } catch(Exception e) {
             throw new DepositException("The actual deposit in Fedora failed!",e);
         }
+        return true;
+    }
+    
+    protected boolean completeFID(SIPInterface sip, URI fid, String dsid, Date date) throws DepositException {
+        if (sip.hasFID() && sip.getFID().toString().startsWith(fid.toString())) {
+            sip.setFIDStream(dsid);
+            sip.setFIDasOfTimeDate(date);
+            return true;
+        }
+        Collection col = sip.getCollectionByFID(fid);
+        if (col!=null) {
+            col.setFIDStream(dsid);
+            col.setFIDasOfTimeDate(date);
+            return true;
+        }
+        Resource res = sip.getResourceByFID(fid);
+        if (res!=null) {
+            res.setFIDStream(dsid);
+            res.setFIDasOfTimeDate(date);
+            return true;
+        }
+        logger.debug("Fedora datastream["+fid+"]["+dsid+"]["+date+"] couldn't be associated with a PID!");
         return false;
     }
     
