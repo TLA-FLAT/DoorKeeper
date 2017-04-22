@@ -75,7 +75,6 @@ public class UpdateCollections extends FedoraAction {
             add.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
             add.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
             // loop over collections
-            // TODO: collection cascade
             for (Collection col:context.getSIP().getCollections()) {
                 logger.debug("isPartOf collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
                 if (col.hasPID() && col.getPID().equals(context.getSIP().getPID()))
@@ -122,6 +121,8 @@ public class UpdateCollections extends FedoraAction {
                     } else {
                         logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
                     }
+                } else {
+                    logger.debug("Collection["+col.getURI()+"] skipped: "+(col.hasFID()?"no lat FID":"unknown FID")+"!");
                 }
             }
         } catch (Exception ex) {
@@ -162,11 +163,6 @@ public class UpdateCollections extends FedoraAction {
                 File out = new File(dir + "/"+col.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+".CMD.xml");
                 TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
                 logger.info("created FOX["+out.getAbsolutePath()+"]");
-                // TODO: deposit action should understand:
-                // - <fid>.xml (FOXML -> ingest)
-                // - <fid>.prop.xml (props -> modify (some) properties)
-                // - <fid>.<dsid>... (DS -> modifyDatastream)
-                // TODO: get PID and FID+timestamp -> register for upsert
                 String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
                 if (!newPID.equals(oldPID)) {
                     col.setPID(new URI(newPID));
