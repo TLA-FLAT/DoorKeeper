@@ -74,7 +74,9 @@ public class FedoraInteract extends FedoraAction {
                 logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]");
                 ModifyDatastreamResponse mdsResponse = modifyDatastream(fid,dsid).content(fox).logMessage("Updated "+dsid).execute();
                 logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+mdsResponse.getLastModifiedDate()+"]");
-                completeFID(sip,new URI(fid),dsid,mdsResponse.getLastModifiedDate());
+                // we should update the PID if this is the "main" datastream
+                if (dsid.equals("CMD") || dsid.equals("OBJ"))
+                    completeFID(sip,new URI(fid),dsid,mdsResponse.getLastModifiedDate());
             }
             
         } catch(Exception e) {
@@ -87,18 +89,21 @@ public class FedoraInteract extends FedoraAction {
         if (sip.hasFID() && sip.getFID().toString().startsWith(fid.toString())) {
             sip.setFIDStream(dsid);
             sip.setFIDasOfTimeDate(date);
+            logger.debug("Fedora SIP datastream["+sip.getPID()+"]->["+sip.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
             return true;
         }
         Collection col = sip.getCollectionByFID(fid);
         if (col!=null) {
             col.setFIDStream(dsid);
             col.setFIDasOfTimeDate(date);
+            logger.debug("Fedora Collection datastream["+col.getPID()+"]->["+col.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
             return true;
         }
         Resource res = sip.getResourceByFID(fid);
         if (res!=null) {
             res.setFIDStream(dsid);
             res.setFIDasOfTimeDate(date);
+            logger.debug("Fedora Resource datastream["+res.getPID()+"]->["+res.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
             return true;
         }
         logger.debug("Fedora datastream["+fid+"]["+dsid+"]["+date+"] couldn't be associated with a PID!");
