@@ -121,7 +121,8 @@ public class UpdateCollections extends FedoraAction {
                                         updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, oldPID, newPID);
                                     }
                                 }
-                            }
+                            } else
+                                col.setPID(new URI(oldPID));
                         } else {
                             logger.debug("Already a member of collection["+col.getFID()+"]!");
                         }
@@ -194,7 +195,8 @@ public class UpdateCollections extends FedoraAction {
                             }
                         }
                     }
-                }
+                } else
+                    col.setPID(new URI(oldPID));
             } else {
                 logger.debug("Part["+oldPart+"]["+newPart+"] is not a member of collection["+col.getFID()+"]!");
             }

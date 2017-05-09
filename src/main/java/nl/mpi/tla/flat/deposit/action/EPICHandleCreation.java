@@ -89,54 +89,76 @@ public class EPICHandleCreation extends AbstractAction {
                 });
             
             PIDService ps = new PIDService(new XMLConfiguration(config), null);
-
-            String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
-            String dsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
-            String asof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
-
-            URI    pid  = context.getSIP().getPID();
-            String uuid = pid.toString().replaceAll(".*/","");
-            String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
             
-            logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
-            
-            String hdl = ps.requestHandle(uuid, loc);
+            if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
 
-            logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
+                String dsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
+                String asof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
+
+                URI    pid  = context.getSIP().getPID();
+                String uuid = pid.toString().replaceAll(".*/","");
+                String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+
+                logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
+                String hdl = ps.requestHandle(uuid, loc);
+                logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+            } else {
+                if (!context.getSIP().hasPID())
+                    logger.debug("SIP has no PID!");
+                if (!context.getSIP().hasFID())
+                    logger.debug("SIP has no FID!");
+            }
 
             for (Collection col:context.getSIP().getCollections(true)) {
                 if (col.hasPID() && col.hasFID()) {
-                    fid  = col.getFID().toString().replaceAll("#.*","");
-                    dsid = col.getFID().getRawFragment().replaceAll("@.*","");
-                    asof = col.getFID().getRawFragment().replaceAll(".*@","");
+                    String fid    = col.getFID().toString().replaceAll("#.*","");
+                    String dsid   = col.getFID().getRawFragment().replaceAll("@.*","");
+                    String asof   = col.getFID().getRawFragment().replaceAll(".*@","");
 
-                    pid  = col.getPID();
-                    uuid = pid.toString().replaceAll(".*/","");
-                    loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                    URI pid       = col.getPID();
+                    String prefix = pid.toString().replaceAll(".*/([^/]*)/.*","$1");
+                    String uuid   = pid.toString().replaceAll(".*/","");
+                    
+                    String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
-                    logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
-
-                    hdl = ps.requestHandle(uuid, loc);
-
-                    logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                    String cur    = ps.getPIDLocation(prefix+"/"+uuid);
+                    
+                    if (cur == null) {
+                        logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
+                        String hdl = ps.requestHandle(uuid, loc);
+                        logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                    } else {
+                        logger.info("Update handle["+pid+"]["+uuid+"]["+cur+"] -> URI["+loc+"]");
+                        ps.updateLocation(prefix+"/"+uuid, loc);
+                        logger.info("Updated handle["+prefix+"/"+uuid+"] -> URI["+loc+"]");
+                    }
+                } else {
+                    if (!col.hasPID())
+                        logger.debug("Collection["+col+"] has no PID!");
+                    if (!col.hasFID())
+                        logger.debug("Collection["+col+"] has no FID!");
                 }
             }
 
             for (Resource res:context.getSIP().getResources()) {
                 if (res.hasPID() && res.hasFID()) {
-                    fid = res.getFID().toString().replaceAll("#.*","");
-                    dsid = res.getFID().getRawFragment().replaceAll("@.*","");
-                    asof = res.getFID().getRawFragment().replaceAll(".*@","");
+                    String fid  = res.getFID().toString().replaceAll("#.*","");
+                    String dsid = res.getFID().getRawFragment().replaceAll("@.*","");
+                    String asof = res.getFID().getRawFragment().replaceAll(".*@","");
 
-                    pid  = res.getPID();
-                    uuid = pid.toString().replaceAll(".*/","");
-                    loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                    URI pid     = res.getPID();
+                    String uuid = pid.toString().replaceAll(".*/","");
+                    String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
                     logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
-
-                    hdl = ps.requestHandle(uuid, loc);
-
+                    String hdl  = ps.requestHandle(uuid, loc);
                     logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                } else {
+                    if (!res.hasPID())
+                        logger.debug("Resource["+res+"] has no PID!");
+                    if (!res.hasFID())
+                        logger.debug("Resource["+res+"] has no FID!");
                 }
             }
         } catch(Exception e) {

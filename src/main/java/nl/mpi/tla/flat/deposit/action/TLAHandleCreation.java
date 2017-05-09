@@ -56,20 +56,27 @@ public class TLAHandleCreation extends AbstractAction {
             throwDepositException(message, ex);
         }
 
-        String sipFid = context.getSIP().getFID().toString().replaceAll("#.*","");
-        String sipDsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
-        String sipAsof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
-        URI sipHandleTarget = URI.create(fedoraServer + "/objects/" + sipFid + "/datastreams/" + sipDsid + "/content?asOfDateTime=" + sipAsof);
-        File sipBase = context.getSIP().getBase();
-        URI sipPid = context.getSIP().getPID();
+        if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
+            String sipFid = context.getSIP().getFID().toString().replaceAll("#.*","");
+            String sipDsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
+            String sipAsof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
+            URI sipHandleTarget = URI.create(fedoraServer + "/objects/" + sipFid + "/datastreams/" + sipDsid + "/content?asOfDateTime=" + sipAsof);
+            File sipBase = context.getSIP().getBase();
+            URI sipPid = context.getSIP().getPID();
 
-        logger.info("Creating handle[" + sipPid + "] -> URI[" + sipHandleTarget + "]");
+            logger.info("Creating handle[" + sipPid + "] -> URI[" + sipHandleTarget + "]");
 
-        try {
-            handleManager.assignHandle(sipBase, sipPid, sipHandleTarget);
-        } catch (HandleException | IOException ex) {
-            StringBuilder message = new StringBuilder("Error assigning handle '").append(context.getSIP().getPID()).append("', of SIP '").append(context.getSIP().getFID()).append("', to target '").append(sipHandleTarget).append("'.");
-            throwDepositException(message, ex);
+            try {
+                handleManager.assignHandle(sipBase, sipPid, sipHandleTarget);
+            } catch (HandleException | IOException ex) {
+                StringBuilder message = new StringBuilder("Error assigning handle '").append(context.getSIP().getPID()).append("', of SIP '").append(context.getSIP().getFID()).append("', to target '").append(sipHandleTarget).append("'.");
+                throwDepositException(message, ex);
+            }
+        } else {
+            if (!context.getSIP().hasPID())
+                logger.debug("SIP has no PID!");
+            if (!context.getSIP().hasFID())
+                logger.debug("SIP has no FID!");
         }
 
         for (Collection col : context.getSIP().getCollections(true)) {
@@ -82,6 +89,9 @@ public class TLAHandleCreation extends AbstractAction {
                 try {
                     URI colPid = col.getPID();
 
+                    // TODO: check if handle exists already
+                    // no : create handle = existing code
+                    // yes: update handle =  new code
                     logger.info("Creating handle[" + colPid + "] -> URI[" + colHandleTarget + "]");
 
                     handleManager.assignHandle(null,colPid, colHandleTarget);
@@ -93,6 +103,11 @@ public class TLAHandleCreation extends AbstractAction {
                     logger.error(ex.getMessage(), ex);
                     allSuccessful = false;
                 }
+            } else {
+                if (!col.hasPID())
+                    logger.debug("Collection["+col+"] has no PID!");
+                if (!col.hasFID())
+                    logger.debug("Collection["+col+"] has no FID!");
             }
         }
 
@@ -118,6 +133,11 @@ public class TLAHandleCreation extends AbstractAction {
                     logger.error(ex.getMessage(), ex);
                     allSuccessful = false;
                 }
+            } else {
+                if (!res.hasPID())
+                    logger.debug("Resource["+res+"] has no PID!");
+                if (!res.hasFID())
+                    logger.debug("Resource["+res+"] has no FID!");
             }
         }
 

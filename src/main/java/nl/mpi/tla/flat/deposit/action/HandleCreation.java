@@ -36,11 +36,19 @@ public class HandleCreation extends AbstractAction {
         
         String fedora = this.getParameter("fedoraServer");
         
-        String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
-        String dsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
-        String asof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
-        
-        logger.info("Create handle["+context.getSIP().getPID()+"] -> URI["+fedora+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof+"]");
+        if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
+
+            String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
+            String dsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
+            String asof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
+
+            logger.info("Create handle["+context.getSIP().getPID()+"] -> URI["+fedora+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof+"]");
+        } else {
+            if (!context.getSIP().hasPID())
+                logger.debug("SIP has no PID!");
+            if (!context.getSIP().hasFID())
+                logger.debug("SIP has no FID!");
+        }
         
         for (Collection col:context.getSIP().getCollections(true)) {
             if (col.hasPID() && col.hasFID()) {
@@ -48,7 +56,12 @@ public class HandleCreation extends AbstractAction {
                 String cdsid = col.getFID().getRawFragment().replaceAll("@.*","");
                 String casof = col.getFID().getRawFragment().replaceAll(".*@","");
 
-                logger.info("Create handle["+col.getPID()+"] -> URI["+fedora+"/objects/"+cfid+"/datastreams/"+cdsid+"/content?asOfDateTime="+casof+"]");
+                logger.info("Create or update handle["+col.getPID()+"] -> URI["+fedora+"/objects/"+cfid+"/datastreams/"+cdsid+"/content?asOfDateTime="+casof+"]");
+            } else {
+                if (!col.hasPID())
+                    logger.debug("Collection["+col+"] has no PID!");
+                if (!col.hasFID())
+                    logger.debug("Collection["+col+"] has no FID!");
             }
         }
         
@@ -59,6 +72,11 @@ public class HandleCreation extends AbstractAction {
                 String rasof = res.getFID().getRawFragment().replaceAll(".*@","");
 
                 logger.info("Create handle["+res.getPID()+"] -> URI["+fedora+"/objects/"+rfid+"/datastreams/"+rdsid+"/content?asOfDateTime="+rasof+"]");
+            } else {
+                if (!res.hasPID())
+                    logger.debug("Resource["+res+"] has no PID!");
+                if (!res.hasFID())
+                    logger.debug("Resource["+res+"] has no FID!");
             }
         }
         
