@@ -49,7 +49,7 @@ public class FedoraInteract extends FedoraAction {
             SIPInterface sip = context.getSIP(); 
 
             File dir = new File(this.getParameter("dir", "./fox"));
-            String pre = this.getParameter("prefix", "lat");
+            String pre = this.getParameter("namespace", "lat");
             
             // <fid>.xml (FOXML -> ingest)
             File[] foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.xml")));

@@ -333,7 +333,7 @@ _NOTES_:
 - for a SIP a specific management file based on its Fedora ID (+ `.xml`) is looked for
 - a management file should be a valid [Java XML properties](http://docs.oracle.com/javase/8/docs/api/java/util/Properties.html) file 
 - see [ACL](#ACL) (optional, earlier)
-- see [Deposit](#Deposit) (mandatory, later)
+- see [FedoraInteract](#FedoraInteract) (mandatory, later)
 
 **TODO**:
 - [ ] should be less CMDI/`jar:cmd2fox.xsl` specific, e.g., the documented parameter behaviour depends actually on the XSLT used
@@ -421,7 +421,7 @@ parameter         | default  | cardinality | notes
 Looks up the Drupal (hashed) password of the user and creates a [Fedora Commons configuration](#fedoraConfig) that allows to login as that user and thus actions take place with permissions of this user and the user will associated with them in the audit trail.
 
 _NOTES_:
-- see [Deposit](#Deposit) (optional, later)
+- see [FedoraInteract](#FedoraInteract) (optional, later)
 
 #### <a name="fedoraConfig"></a>Fedora Commons configuration
 ```xml
@@ -435,20 +435,38 @@ _NOTES_:
 </FedoraCommons>
 ```
 
-### <a name="Deposit"></a>`nl.mpi.tla.flat.deposit.action.Deposit`
+### <a name="UpdateCollections"></a>`nl.mpi.tla.flat.deposit.action.UpdateCollections`
+
+parameter         | default  | cardinality | notes
+------------------|----------|-------------|------
+`dir`             | `./fox`  | ?           | directory will be created if it doesn't exist already
+`prefix`          |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig)
+`new-pid-eval`    |          | ?           | [XPath 2.0 expression](https://www.w3.org/TR/xpath20/) to determine if a new PID should be assigned to a collection
+
+Updates the CMD collection to which the SIP should belong, if a new PID is assigned to this collection it will also update its parent CMD collection (and so on to potentially the root collection)
+
+_NOTES_:
+- see [FedoraInteract](#FedoraInteract) (optional, later)
+
+### <a name="FedoraInteract"></a>`nl.mpi.tla.flat.deposit.action.FedoraInteract`
 
 parameter        | default  | cardinality | notes
 -----------------|----------|-------------|------
 `fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig) 
 `dir`            | `./fox`  | ?           |
+`namespace`      | `lat`    | ?           | 
 
-Loads all the FOXML files in the specified directory and loads them into the specified Fedora Commons repository. After this the URLs for the datastreams to which the assigned handles can resolve are known.
+Loads all the Digital Objects or datastreams from files in the specified directory and loads them into the specified Fedora Commons repository. After this the URLs for the datastreams to which the assigned handles can resolve are known.
+
+Files that match the following pattern are expected to be FOXML files that describe a new Digital Object: `${namespace}_[A-Za-z0-9_]+\.xml` (basically `<fid>.xml` with nasty characters replaced by `_`)
+
+Files that match the following pattern are expected to be updates of an existing data stream: `${namespace}_[A-Za-z0-9_]+\.[A-Z]+\.[A-Za-z0-9_]+` (basically `<fid>.<dsid>.<ext>` with nasty characters replaced by `_`)
 
 _NOTES_:
-- use the trust store if the Fedora Commons server uses HTTPS with a self signed certificate
 - see [FedoraUser](#FedoraUser) (optional, earlier)
 - see [HandleAssignment](#HandleAssignment) (optional, earlier)
 - see [CreateFOX](#CreateFOX) (mandatory, earlier)
+- see [UpdateCollections](#UpdateCollections) (optional, earlier)
 - see [EPICHandleCreation](#EPICHandleCreation) (optional, later)
 
 **TODO**:
@@ -461,16 +479,13 @@ parameter        | default  | cardinality | notes
 -----------------|----------|-------------|------
 `fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig) 
 `epicConfig`     |          | 1           | should point to a valid [EPIC config file](#EPICconfig)
-`trustStore`     |          | ?           | path to a trust store
-`trustStorePass` |          | ?           | mandatory if `trustStore` is specified
 
-Creates the assigned handles for the SIP and its resources and makes them redirect to the right datastreams stored in the Fedora Commons repository.
+Creates or updates the assigned handles for the SIP, its resources and collections and makes them redirect to the right datastreams stored in the Fedora Commons repository.
 
 _NOTES_:
-- use the trust store if self signed certificates are used
 - to actually create handles the status in the EPIC configuration should be `production`, i.e., not `test`.
 - see [HandleAssignment](#HandleAssignment) (mandatory, earlier)
-- see [Deposit](#Deposit) (mandatory, earlier)
+- see [FedoraInteract](#FedoraInteract) (mandatory, earlier)
 
 #### <a name="EPICconfig"></a>EPIC config file
 ```xml
@@ -496,7 +511,7 @@ parameter         | default  | cardinality | notes
 Triggers indexing the deposited SIP using [gsearch](https://github.com/fcrepo3/gsearch).
 
 _NOTES_:
-- see [Deposit](#Deposit) (mandatory, earlier)
+- see [FedoraInteract](#FedoraInteract) (mandatory, earlier)
 
 ### <a name="UpdateSwordStatus"></a>`nl.mpi.tla.flat.deposit.action.UpdateSwordStatus`
 
@@ -598,15 +613,18 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
             <parameter name="drupal" value="/var/www/html/flat"/>
             <parameter name="drush"  value="/var/www/composer/vendor/drush/drush/drush"/>
         </action>
-        <action class="nl.mpi.tla.flat.deposit.action.Deposit">
+        <action class="nl.mpi.tla.flat.deposit.action.UpdateCollections">
+            <parameter name="fedoraConfig" value="{$work}/acl/fedora-config.xml"/>
+            <parameter name="dir" value="{$work}/fox"/>
+            <parameter name="prefix" value="{$epicPrefix}"/>
+        </action>
+        <action class="nl.mpi.tla.flat.deposit.action.FedoraInteract">
             <parameter name="fedoraConfig" value="{$work}/acl/fedora-config.xml"/>
             <parameter name="dir" value="{$work}/fox"/>
         </action>
         <action class="nl.mpi.tla.flat.deposit.action.EPICHandleCreation">
             <parameter name="fedoraConfig" value="{$base}/policies/fedora-config.xml"/>
             <parameter name="epicConfig" value="{$base}/policies/epic-config.xml"/>
-            <parameter name="trustStore" value="/opt/jssecacerts"/>
-            <parameter name="trustStorePass" value="changeit"/>
         </action>
         <action class="nl.mpi.tla.flat.deposit.action.Index">
             <parameter name="gsearchServer" value="{$gsearchServer}"/>
