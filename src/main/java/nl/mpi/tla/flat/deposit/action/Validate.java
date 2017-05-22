@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
  */
 public class Validate extends AbstractAction {
     
-    private static final Logger logger = LoggerFactory.getLogger(Deposit.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(Validate.class.getName());
     
     @Override
     public boolean perform(Context context) throws DepositException {

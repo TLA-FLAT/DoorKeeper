@@ -49,7 +49,7 @@ abstract public class FedoraAction extends AbstractAction {
             if (!FedoraRequest.isDefaultClientSet()) {
                 FedoraCredentials credentials = new FedoraCredentials(fedoraConfig.getString("localServer"), fedoraConfig.getString("userName"), fedoraConfig.getString("userPass"));
                 FedoraClient fedora = new FedoraClient(credentials);
-                fedora.debug(true);
+                fedora.debug(this.getParameter("fedoraDebug","false").equals("true"));
                 FedoraRequest.setDefaultClient(fedora);
             }
             logger.debug("Fedora Commons repository["+FedoraClient.describeRepository().xml(true).execute()+"]");            

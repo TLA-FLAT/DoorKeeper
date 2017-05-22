@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
  */
 public class FedoraInteract extends FedoraAction {
 
-    private static final Logger logger = LoggerFactory.getLogger(Deposit.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(FedoraInteract.class.getName());
 
     @Override
     public boolean perform(Context context) throws DepositException {

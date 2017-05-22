@@ -80,15 +80,12 @@ public class EPICHandleCreation extends AbstractAction {
                 return false;
             }
             logger.debug("EPIC configuration["+config.getAbsolutePath()+"]");
-
-            javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
-                new javax.net.ssl.HostnameVerifier(){
-                    public boolean verify(String hostname,javax.net.ssl.SSLSession sslSession) {
-                        return true;
-                    }
-                });
             
-            PIDService ps = new PIDService(new XMLConfiguration(config), null);
+            XMLConfiguration xConfig = new XMLConfiguration(config);
+            
+            boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
+
+            PIDService ps = new PIDService(xConfig, null);
             
             if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
 
@@ -122,7 +119,9 @@ public class EPICHandleCreation extends AbstractAction {
                     
                     String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
-                    String cur    = ps.getPIDLocation(prefix+"/"+uuid);
+                    logger.info("Lookup handle["+prefix+"/"+uuid+"]");
+                    String cur    = (isTest?null:ps.getPIDLocation(prefix+"/"+uuid));
+                    logger.info("Looked up handle["+prefix+"/"+uuid+"] -> URI["+cur+"]");
                     
                     if (cur == null) {
                         logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
