@@ -23,6 +23,7 @@ import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmSequenceIterator;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.context.ImportPropertiesInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
@@ -179,7 +180,9 @@ public class Context {
                     throw new DepositException(e);
                 }
             }
-            this.logger.debug(type+"["+name+"]["+map.get(name)+"]");
+            int i = 1;
+            for(XdmItem val:map.get(name))
+                this.logger.debug(type+"["+name+"]["+(i++)+"/"+map.get(name).size()+"]["+val.getStringValue()+"]");
         }
         boolean closure = true;
         int c = 0;
@@ -196,7 +199,7 @@ public class Context {
                     if (nvals==null)
                         nvals = new XdmAtomicValue(avt);
                     else
-                        nvals.append(new XdmAtomicValue(avt));
+                        nvals = nvals.append(new XdmAtomicValue(avt));
                 }
                 map.put(name,nvals);
                 this.logger.debug("closure["+c+"] "+type+"["+name+"]["+map.get(name)+"]");
@@ -210,7 +213,7 @@ public class Context {
                 if (nvals==null)
                     nvals = new XdmAtomicValue(v);
                 else
-                    nvals.append(new XdmAtomicValue(v));
+                    nvals = nvals.append(new XdmAtomicValue(v));
             }
             map.put(name,nvals);
         }
