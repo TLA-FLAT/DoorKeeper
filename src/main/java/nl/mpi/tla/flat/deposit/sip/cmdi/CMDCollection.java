@@ -48,7 +48,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 if (u.toString().startsWith("lat:"))
                     this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
                 else
                     this.uri = u;
@@ -60,7 +60,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 if (u.toString().startsWith("lat:"))
                     this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
                 else if (this.uri==null)
                     this.uri = u;
@@ -74,7 +74,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 if (u.toString().startsWith("lat:"))
                     this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
                 else if (this.uri==null)
                     this.uri = u;

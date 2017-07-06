@@ -69,6 +69,14 @@ public interface SIPInterface {
     
     public Collection getCollectionByFID(URI fid) throws DepositException;
     
+    // update or insert
+    
+    public void update();
+    
+    public boolean isUpdate();
+    
+    public boolean isInsert();
+    
     // IO
     
     public void load(File spec) throws DepositException;

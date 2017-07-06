@@ -71,6 +71,8 @@ public class CMD implements SIPInterface {
     
     protected boolean dirty = false;
     
+    protected boolean update = false;
+    
     public CMD(File spec) throws DepositException {
         this.base = spec;
         load(spec);
@@ -97,7 +99,7 @@ public class CMD implements SIPInterface {
     @Override
     public void setPID(URI pid) throws DepositException {
         if (this.pid!=null)
-            throw new DepositException("SIP["+this.base+"] has already a PID!");
+            logger.warn("SIP["+this.base+"] has already a PID["+this.pid+"]! new PID["+pid+"]");
         if (pid.toString().startsWith("hdl:")) {
             this.pid = pid;
         } else if (pid.toString().matches("http(s)?://hdl.handle.net/.*")) {
@@ -128,7 +130,7 @@ public class CMD implements SIPInterface {
     @Override
     public void setFID(URI fid) throws DepositException {
         if (this.fid!=null)
-            throw new DepositException("SIP["+this.base+"] has already a Fedora Commons PID!");
+            logger.warn("SIP["+this.base+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         if (fid.toString().startsWith("lat:")) {
             this.fid = fid;
         } else {
@@ -163,8 +165,9 @@ public class CMD implements SIPInterface {
     
     @Override
     public URI getFID() throws DepositException {
-        if (this.fid==null)
-            throw new DepositException("SIP["+this.base+"] has no Fedora Commons PID yet!");
+        if (this.fid==null) {
+            logger.warn("SIP["+this.base+"] has not FID yet! Derive one from the PID["+this.getPID()+"].");
+        }
         return this.fid;
     }
        
@@ -315,7 +318,21 @@ public class CMD implements SIPInterface {
     protected void clean() {
         this.dirty = false;
     }
+    
+    // update
 
+    public void update() {
+        this.update = true;
+    }
+    
+    public boolean isUpdate() {
+        return this.update;
+    }
+    
+    public boolean isInsert() {
+        return !this.update;
+    }
+    
     // IO
     
     @Override
@@ -326,22 +343,39 @@ public class CMD implements SIPInterface {
             Element cmd = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(this.rec), "/cmd:CMD", null, NAMESPACES));
             cmd.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:lat", LAT_NS);
             
-            String self = Saxon.xpath2string(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Header/cmd:MdSelfLink", null, NAMESPACES);
-            if (!self.trim().equals("")) {
-                try {
-                    this.setPID(new URI(self));
-                } catch(DepositException e) {
-                    logger.warn("current MdSelfLink["+self+"] isn't a valid PID, ignored for now!");
-                }
+            // MdSelfLink value
+            String str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+            if (str!=null && !str.trim().isEmpty()) {
+                URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
+                logger.debug("MdSelfLink["+str+"]["+u+"]["+u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*")+"]");
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                    this.setPID(u);
             }
-            String flat = Saxon.xpath2string(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI", null, NAMESPACES);
-            if (!flat.trim().equals("")) {
-                try {
-                    this.setFID(new URI(flat));
-                } catch(DepositException e) {
-                    logger.warn("current MdSelfLink/@lat:flatURI["+flat+"] isn't a valid Fecora Commons PID, ignored for now!");
-                }
+            logger.debug("MdSelfLink["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasPID()?getPID():"NONE")+"]");
+                
+            // MdSelfLink @lat:flatURI
+            str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI",null,NAMESPACES);
+            if (str!=null && !str.trim().isEmpty()) {
+                URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                    this.setPID(u);
             }
+            logger.debug("MdSelfLink/@lat:flatURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasPID()?getPID():"NONE")+"]");
+
+            // MdSelfLink @lat:localURI
+            str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:localURI",null,NAMESPACES);
+            if (str!=null && !str.trim().isEmpty()) {
+                URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
+                if (u.toString().startsWith("lat:"))
+                    this.setFID(u);
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                    this.setPID(u);
+            }
+            logger.debug("MdSelfLink/@lat:localURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasPID()?getPID():"NONE")+"]");
         } catch(Exception e) {
             throw new DepositException(e);
         }

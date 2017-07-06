@@ -38,18 +38,25 @@ public class CMDResource extends Resource {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(CMDResource.class.getName());
     
     protected Node node = null;
+    
+    protected String id = null;
 
     public CMDResource(URI base,Node node) throws DepositException {
         try {
             this.node = node;
             
+            // id
+            String str = Saxon.xpath2string(Saxon.wrapNode(node),"@id",null,NAMESPACES);
+            if (str!=null && !str.trim().isEmpty())
+                setID(str);
+
             // ResourceRef value
-            String str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef",null,NAMESPACES);
+            str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 if (u.toString().startsWith("lat:"))
                     this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
                 else
                     this.uri = u;
@@ -61,7 +68,7 @@ public class CMDResource extends Resource {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 if (u.toString().startsWith("lat:"))
                     this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
                 else if (this.uri==null)
                     this.uri = u;
@@ -75,7 +82,7 @@ public class CMDResource extends Resource {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 if (u.toString().startsWith("lat:"))
                     this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:)"))
+                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
                 else if (this.uri==null)
                     this.uri = u;
@@ -120,6 +127,24 @@ public class CMDResource extends Resource {
         return this.node;
     }
     
+    // id
+    public boolean hasID() {
+        return (this.id != null);
+    }
+    
+    public void setID(String id) throws DepositException {
+        if (this.id!=null)
+            throw new DepositException("Resource["+this.uri+"] has already an ID!");
+        this.id = id;
+        dirty();
+    }
+    
+    public String getID() throws DepositException {
+        if (this.id==null)
+            throw new DepositException("Resource["+this.uri+"] has no ID yet!");
+        return this.id;
+    }
+
     @Override
     public void save(SIPInterface sip) throws DepositException {
         if (node!=null) {

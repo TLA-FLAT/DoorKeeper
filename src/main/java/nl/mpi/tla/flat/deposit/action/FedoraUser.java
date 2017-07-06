@@ -59,7 +59,7 @@ public class FedoraUser extends AbstractAction {
             File user = new File(getParameter("user"));
             if (!user.exists()) {
                 logger.error("The user profile doesn't exist!");
-                return true;
+                return false;
             } else if (!user.isFile()) {
                 logger.error("The user profile isn't a file!");
                 return false;
@@ -72,7 +72,7 @@ public class FedoraUser extends AbstractAction {
             File conf = new File(getParameter("fedoraConfig"));
             if (!conf.exists()) {
                 logger.error("The fedora config doesn't exist!");
-                return true;
+                return false;
             } else if (!conf.isFile()) {
                 logger.error("The fedora config isn't a file!");
                 return false;

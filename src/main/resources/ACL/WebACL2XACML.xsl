@@ -100,8 +100,30 @@
                     </xsl:if>
                 </xsl:for-each>
             </xsl:variable>
-            <xsl:message>INF: <xsl:value-of select="if ($public) then ('public') else ('private')"/> resource[<xsl:value-of select="$resource/cmd:ResourceRef/@lat:localURI"/>][<xsl:value-of select="$resource/cmd:ResourceRef"/>]</xsl:message>
-            <xsl:result-document href="{$acl-base}/{concat(replace(cmd:lat('lat:',$resource/cmd:ResourceRef), '[^a-zA-Z0-9]', '_'), '.xml')}">
+            <xsl:message>INF: <xsl:value-of select="if ($public) then ('public') else ('private')"/> resource[<xsl:value-of select="$resource/cmd:ResourceRef/@lat:localURI"/>][<xsl:value-of select="$resource/cmd:ResourceRef/@lat:flatURI"/>][<xsl:value-of select="$resource/cmd:ResourceRef"/>]</xsl:message>
+            <xsl:variable name="resPID">
+                <xsl:choose>
+                    <xsl:when test="starts-with(cmd:hdl($resource/cmd:ResourceRef), 'hdl:')">
+                        <xsl:sequence select="cmd:hdl($resource/cmd:ResourceRef)"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:sequence select="resolve-uri($resource/cmd:ResourceRef, base-uri($resource))"/>
+                    </xsl:otherwise>
+                </xsl:choose>
+            </xsl:variable>
+            <xsl:variable name="resID">
+                <xsl:choose>
+                    <xsl:when test="normalize-space($resource/cmd:ResourceRef/@lat:flatURI) != ''">
+                        <xsl:sequence select="normalize-space($resource/cmd:ResourceRef/@lat:flatURI)"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:sequence select="cmd:lat('lat:', $resPID)"/>
+                    </xsl:otherwise>
+                </xsl:choose>
+            </xsl:variable>
+            <xsl:variable name="href" select="concat($acl-base,'/',replace($resID, '[^a-zA-Z0-9]', '_'), '.xml')"/>
+            <xsl:message>INF: resource policy[<xsl:value-of select="$href"/>]</xsl:message>
+            <xsl:result-document href="{$href}">
                 <xsl:choose>
                     <xsl:when test="$public">
                         <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="flat-acl-resource-policy" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">

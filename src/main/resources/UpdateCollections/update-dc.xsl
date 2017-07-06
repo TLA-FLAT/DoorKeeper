@@ -13,10 +13,10 @@
     <xsl:template match="oai_dc:dc">
         <xsl:copy>
             <xsl:apply-templates select="@*"/>
-            <dc:identifier type="hdl">
+            <dc:identifier>
                 <xsl:value-of select="replace($new-pid, '^hdl:', 'https://hdl.handle.net/')"/>
             </dc:identifier>
-            <xsl:apply-templates select="node() except dc:identifier[@type='hdl']"/>
+            <xsl:apply-templates select="node() except dc:identifier[matches(.,'^(hdl:|http(s)?://hdl.handle.net/).*$')]"/>
         </xsl:copy>        
     </xsl:template>
     

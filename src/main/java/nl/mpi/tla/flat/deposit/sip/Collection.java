@@ -56,7 +56,7 @@ abstract public class Collection {
     
     public void setPID(URI pid) throws DepositException {
         if (this.pid!=null)
-            throw new DepositException("Collection["+this.uri+"] has already a PID!");
+            logger.warn("Collection["+this.uri+"] has already a PID["+this.pid+"]! new PID["+pid+"]");
         if (pid.toString().startsWith("hdl:")) {
             this.pid = pid;
         } else if (pid.toString().matches("http(s)?://hdl.handle.net/.*")) {
@@ -84,7 +84,7 @@ abstract public class Collection {
     
     public void setFID(URI fid) throws DepositException {
         if (this.fid!=null)
-            throw new DepositException("Collection["+this.uri+"] has already a Fedora Commons PID!");
+            logger.warn("Collection["+this.uri+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         if (fid.toString().startsWith("lat:")) {
             this.fid = fid;
         } else {

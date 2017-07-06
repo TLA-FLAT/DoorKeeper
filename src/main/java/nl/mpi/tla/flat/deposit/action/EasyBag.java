@@ -76,7 +76,7 @@ public class EasyBag extends AbstractAction {
             // add a for Easy tailored version of the CMD record
             Path cmdi = Paths.get(bag.toString(),"Niet-DC-metadata/CMDI");
             Files.createDirectories(cmdi);
-            XsltTransformer cmd = Saxon.buildTransformer(CreateFOX.class.getResource("/EasyBag/cmd.xsl")).load();
+            XsltTransformer cmd = Saxon.buildTransformer(FOXCreate.class.getResource("/EasyBag/cmd.xsl")).load();
             cmd.setSource(new DOMSource(sip.getRecord(),sip.getBase().toURI().toString()));
             XdmDestination destination = new XdmDestination();
             cmd.setDestination(destination);
@@ -94,7 +94,7 @@ public class EasyBag extends AbstractAction {
             Files.createDirectory(meta);
             
             // create metadata/dataset.xml
-            XsltTransformer dataset = Saxon.buildTransformer(CreateFOX.class.getResource("/EasyBag/dataset.xsl")).load();
+            XsltTransformer dataset = Saxon.buildTransformer(FOXCreate.class.getResource("/EasyBag/dataset.xsl")).load();
             dataset.setSource(new StreamSource(new File(fox+"/"+sip.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+"_CMD.xml")));
             if (this.hasParameter("creator"))
                 dataset.setParameter(new QName("creator"), new XdmAtomicValue(this.getParameter("creator")));
@@ -108,7 +108,7 @@ public class EasyBag extends AbstractAction {
             TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(Paths.get(meta.toString(),"dataset.xml").toFile()));
             
             // create metadata/files.xml
-            XsltTransformer files = Saxon.buildTransformer(CreateFOX.class.getResource("/EasyBag/files.xsl")).load();
+            XsltTransformer files = Saxon.buildTransformer(FOXCreate.class.getResource("/EasyBag/files.xsl")).load();
             files.setSource(new DOMSource(sip.getRecord(),sip.getBase().toURI().toString()));
             destination = new XdmDestination();
             files.setDestination(destination);

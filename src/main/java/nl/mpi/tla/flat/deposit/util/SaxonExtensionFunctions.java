@@ -16,6 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.util;
 
+import com.twmacinta.util.MD5;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -71,6 +72,7 @@ public final class SaxonExtensionFunctions {
         config.registerExtensionFunction(new UUIDDefinition());
         config.registerExtensionFunction(new EvaluateDefinition());
         config.registerExtensionFunction(new FindBagBaseDefinition());
+        config.registerExtensionFunction(new MD5Definition());
     }
 
     // -----------------------------------------------------------------------
@@ -355,6 +357,57 @@ public final class SaxonExtensionFunctions {
                         }
                     } catch(Exception e) {
                         logger.error("flat:findBagBase failed!",e);
+                    }
+                    return seq;
+                }
+            };
+        }
+    }
+    
+    // -----------------------------------------------------------------------
+    // sx:fileExists
+    // -----------------------------------------------------------------------
+
+    public static final class MD5Definition 
+                        extends ExtensionFunctionDefinition {
+        public StructuredQName getFunctionQName() {
+            return new StructuredQName("sx", 
+                                       "java:nl.mpi.tla.saxon", 
+                                       "md5");
+        }
+
+        public int getMinimumNumberOfArguments() {
+            return 1;
+        }
+
+        public int getMaximumNumberOfArguments() {
+            return 1;
+        }
+
+        public SequenceType[] getArgumentTypes() {
+            return new SequenceType[] { SequenceType.SINGLE_ANY_URI };
+        }
+
+        public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
+            return SequenceType.SINGLE_STRING;
+        }
+        
+        public boolean dependsOnFocus() {
+           return false;
+        }
+
+        public ExtensionFunctionCall makeCallExpression() {
+            return new ExtensionFunctionCall() {
+                @Override
+                public Sequence call(XPathContext context, Sequence[] arguments) throws XPathException {
+                    Sequence seq = null;
+                    try {
+                        URI uri = new URI(((StringValue) arguments[0].head()).getStringValue());
+                        String hash = MD5.asHex(MD5.getHash(new java.io.File(uri)));
+                        seq = (new XdmAtomicValue(hash)).getUnderlyingValue();
+                    } catch(Exception e) {
+                        System.err.println("ERR: ["+((StringValue) arguments[0].head()).getStringValue()+"]:"+e.getMessage());
+                        e.printStackTrace(System.err);
                     }
                     return seq;
                 }

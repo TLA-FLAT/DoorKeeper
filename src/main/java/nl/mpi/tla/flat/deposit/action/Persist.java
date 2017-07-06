@@ -44,7 +44,7 @@ import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicyMatcher;
  */
 public class Persist extends AbstractAction {
 	
-	private static final Logger logger = LoggerFactory.getLogger(Persist.class);
+    private static final Logger logger = LoggerFactory.getLogger(Persist.class);
     
     @Override
     public boolean perform(Context context) throws DepositException {
@@ -62,33 +62,38 @@ public class Persist extends AbstractAction {
     	String datasetName = datasetNameRetrieved.getDatasetName(sip.getRecord(), getParameter("xpathDatasetName"));
     	
     	PersistencePolicies policies;
-		try {
-			policies = policyLoader.loadPersistencePolicies(new StreamSource(policyFile), sip, datasetName);
-		} catch (SaxonApiException | IllegalStateException ex) {
-			String message = "Error loading policy file '" + policyFile.toString() + "'";
-			logger.error(message, ex);
-			throw new DepositException(message, ex);
-		}
+        try {
+            policies = policyLoader.loadPersistencePolicies(new StreamSource(policyFile), sip, datasetName);
+        } catch (SaxonApiException | IllegalStateException ex) {
+            String message = "Error loading policy file '" + policyFile.toString() + "'";
+            logger.error(message, ex);
+            throw new DepositException(message, ex);
+        }
 		
     	for(Resource res : sipResources) {
-    		
-    		PersistencePolicyMatcher policyMatcher = newPersistencePolicyMatcher(policies);
-    		PersistencePolicy matchedPolicy = policyMatcher.matchPersistencePolicy(res);
-    		logger.debug("Matched policy for resource '" + res.getFile().getName() + "': " + matchedPolicy);
-    		File newResourceDir = matchedPolicy.getTarget();
-    		File newResourceFile = new File(newResourceDir, res.getFile().getName());
-
-    		try {
-    			Files.createDirectories(newResourceDir.toPath());
-				Files.move(res.getFile().toPath(), newResourceFile.toPath());
-			} catch (IOException ex) {
-				String message = "Error moving resource from " + res.getFile() + " to " + newResourceFile; 
-				logger.error(message, ex);
-				throw new DepositException(message, ex);
-				
-			}
-    		logger.info("Moved resource from " + res.getFile() + " to " + newResourceFile);
-    		res.setFile(newResourceFile);
+            if (res.getStatus()==Resource.Status.INSERT || res.getStatus()==Resource.Status.UPDATE) {
+                PersistencePolicyMatcher policyMatcher = newPersistencePolicyMatcher(policies);
+                PersistencePolicy matchedPolicy = policyMatcher.matchPersistencePolicy(res);
+                logger.debug("Matched policy for resource '" + res.getFile().getName() + "': " + matchedPolicy);
+                File newResourceDir = matchedPolicy.getTarget();
+                File newResourceFile = new File(newResourceDir, res.getFile().getName());
+                try {
+                    Files.createDirectories(newResourceDir.toPath());
+                    // add version number (if needed)
+                    // 0 is used for the initial ingest (cf FC version numbers)
+                    int v = 1;
+                    while (newResourceFile.exists())
+                        newResourceFile = new File(newResourceFile.toString()+"."+(v++));
+                    // move the file to its persistent place
+                    Files.move(res.getFile().toPath(), newResourceFile.toPath());
+                } catch (IOException ex) {
+                    String message = "Error moving resource from " + res.getFile() + " to " + newResourceFile; 
+                    logger.error(message, ex);
+                    throw new DepositException(message, ex);
+                }
+                logger.info("Moved resource from " + res.getFile() + " to " + newResourceFile);
+                res.setFile(newResourceFile);
+            }
     	}
     	
     	return true;

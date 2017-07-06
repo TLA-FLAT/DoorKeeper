@@ -106,7 +106,7 @@ public class WorkspaceLogSetup extends AbstractAction {
                 );
                 out.close();
                 // copy log4j.dtd to {$work}/logs/
-                Files.copy(CreateFOX.class.getResourceAsStream("/WorkspaceLog/log4j.dtd"), dir.toPath().resolve("./log4j.dtd"));
+                Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/log4j.dtd"), dir.toPath().resolve("./log4j.dtd"));
             }
             
             Logger logger = LoggerFactory.getLogger(nl.mpi.tla.flat.deposit.Flow.class);

@@ -23,12 +23,17 @@ import java.nio.file.Path;
 import java.util.Date;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.util.Global;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author menzowi
  */
 abstract public class Resource {
+    
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(Resource.class.getName());
+    
+    public enum Status { NOOP, INSERT, UPDATE, DELETE };
     
     protected URI uri = null;
     protected URI pid = null;
@@ -37,6 +42,8 @@ abstract public class Resource {
     protected String mime = null;
     
     protected boolean dirty = false;
+    
+    protected Status status = Status.INSERT;
 
     public URI getURI() {
         return this.uri;
@@ -81,7 +88,7 @@ abstract public class Resource {
     
     public void setPID(URI pid) throws DepositException {
         if (this.pid!=null)
-            throw new DepositException("Resource["+this.uri+"] has already a PID!");
+            logger.warn("Resource["+this.uri+"] has already a PID["+this.pid+"]! new PID["+pid+"]");
         if (pid.toString().startsWith("hdl:")) {
             this.pid = pid;
         } else if (pid.toString().matches("http(s)?://hdl.handle.net/.*")) {
@@ -109,7 +116,7 @@ abstract public class Resource {
     
     public void setFID(URI fid) throws DepositException {
         if (this.fid!=null)
-            throw new DepositException("Resource["+this.uri+"] has already a Fedora Commons PID!");
+            logger.warn("Resource["+this.uri+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         if (fid.toString().startsWith("lat:")) {
             this.fid = fid;
         } else {
@@ -158,6 +165,32 @@ abstract public class Resource {
     
     protected void clean() {
         this.dirty = false;
+    }
+    
+    // status
+    
+    public void setStatus(Status status) {
+        this.status = status;
+    }
+    
+    public Status getStatus() {
+        return this.status;
+    }
+    
+    public boolean isInsert() {
+        return this.status == Status.INSERT;
+    }
+    
+    public boolean isUpdate() {
+        return this.status == Status.UPDATE;
+    }
+    
+    public boolean isDelete() {
+        return this.status == Status.DELETE;
+    }
+    
+    public boolean isNoop() {
+        return this.status == Status.NOOP;
     }
     
     // save

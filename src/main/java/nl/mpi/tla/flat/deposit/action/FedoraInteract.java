@@ -23,7 +23,10 @@ import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Date;
+import java.util.List;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
@@ -66,13 +69,22 @@ public class FedoraInteract extends FedoraAction {
             // - <fid>.prop (props -> modify (some) properties)
             // TODO
             
-            // - <fid>.<dsid>.<ext>... (DS -> modifyDatastream)
-            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z]+\\.[A-Za-z0-9_]+")));
+            // - <fid>.<dsid>.file ... (DS -> modifyDatastream.dsLocation)
+            // - <fid>.<dsid>.<ext>... (DS -> modifyDatastream.content)
+            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z\\-]+\\.[A-Za-z0-9_]+")));
             for (File fox:foxs) {
-                String fid  = fox.getName().replaceFirst("\\..*$","").replace(pre+"_",pre+":");
-                String dsid =  fox.getName().replaceFirst("^.*\\.([A-Z]+)\\..*$","$1");
-                logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]");
-                ModifyDatastreamResponse mdsResponse = modifyDatastream(fid,dsid).content(fox).logMessage("Updated "+dsid).execute();
+                String fid  = fox.getName().replaceFirst("\\..*$","").replace(pre+"_",pre+":").replace("_CMD","");
+                String dsid =  fox.getName().replaceFirst("^.*\\.([A-Z\\-]+)\\..*$","$1");
+                String ext  =  fox.getName().replaceFirst("^.*\\.(.*)$","$1");
+                logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]["+ext+"]");
+                ModifyDatastreamResponse mdsResponse = null;
+                if (ext.equals("file")) {
+                    List<String> lines = Files.readAllLines(fox.toPath(),StandardCharsets.UTF_8);
+                    if (lines.size()!=1)
+                        throw new DepositException("Datastream location file["+fox+"] should contain exactly one line!");
+                    mdsResponse = modifyDatastream(fid,dsid).dsLocation(lines.get(0)).logMessage("Updated "+dsid).execute();
+                } else
+                    mdsResponse = modifyDatastream(fid,dsid).content(fox).logMessage("Updated "+dsid).execute();
                 logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+mdsResponse.getLastModifiedDate()+"]");
                 // we should update the PID if this is the "main" datastream
                 if (dsid.equals("CMD") || dsid.equals("OBJ"))
@@ -87,6 +99,7 @@ public class FedoraInteract extends FedoraAction {
     
     protected boolean completeFID(SIPInterface sip, URI fid, String dsid, Date date) throws DepositException {
         if (sip.hasFID() && sip.getFID().toString().startsWith(fid.toString())) {
+            sip.setFID(fid);// will reset the FID
             sip.setFIDStream(dsid);
             sip.setFIDasOfTimeDate(date);
             logger.debug("Fedora SIP datastream["+sip.getPID()+"]->["+sip.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
@@ -94,6 +107,7 @@ public class FedoraInteract extends FedoraAction {
         }
         Collection col = sip.getCollectionByFID(fid);
         if (col!=null) {
+            col.setFID(fid);// will reset the FID
             col.setFIDStream(dsid);
             col.setFIDasOfTimeDate(date);
             logger.debug("Fedora Collection datastream["+col.getPID()+"]->["+col.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
@@ -101,6 +115,7 @@ public class FedoraInteract extends FedoraAction {
         }
         Resource res = sip.getResourceByFID(fid);
         if (res!=null) {
+            res.setFID(fid);// will reset the FID
             res.setFIDStream(dsid);
             res.setFIDasOfTimeDate(date);
             logger.debug("Fedora Resource datastream["+res.getPID()+"]->["+res.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");

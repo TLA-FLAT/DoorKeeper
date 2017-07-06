@@ -19,6 +19,7 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.net.URL;
 import java.util.Set;
+import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmNode;
 
 import org.slf4j.Logger;
@@ -29,6 +30,9 @@ import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.action.fits.util.FITSHandler;
+import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
+import nl.mpi.tla.flat.deposit.util.Saxon;
+import org.apache.commons.io.FileUtils;
 
 /**
  *
@@ -43,6 +47,18 @@ public class FITS extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
     	
     	boolean allAcceptable = true;
+        
+        File dir = null;
+        if (hasParameter("dir")) {
+            dir = new File(getParameter("dir"));
+            if (!dir.exists()) {
+                try {
+                    FileUtils.forceMkdir(dir);
+                } catch (Exception ex) {
+                    throw new DepositException(ex);
+                }
+            }
+        }
     	
     	//TODO What default to use?
     	String fitsService = getParameter("fitsService");
@@ -74,6 +90,18 @@ public class FITS extends AbstractAction {
                     logger.error("Error while performing FITS typecheck for file '{}'", currentFile);
                     allAcceptable = false;
                     continue;
+                }
+                
+                if (dir != null) {
+                    String name = currentFile.getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
+                    if (currentResource instanceof CMDResource)
+                        name = ((CMDResource)currentResource).getID();
+                    File out = new File(dir + "/"+name+".FITS.xml");
+                    try {
+                        Saxon.save(result.asSource(),out);
+                    } catch (SaxonApiException ex) {
+                        throw new DepositException(ex);
+                    }
                 }
     			
                 String mimetype;

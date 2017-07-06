@@ -17,14 +17,6 @@
 package nl.mpi.tla.flat.deposit;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -126,71 +118,15 @@ public class Flow {
                 // get parameters
                 Map<String,XdmValue> params = new LinkedHashMap();
                 context.loadParameters(params,Saxon.xpath(action, "parameter"),"parameter");
-                // is there a classpath?
-                String clazzPath = null;
-                if (Saxon.hasAttribute(action,"classpath")) {
-                    clazzPath = Saxon.avt(Saxon.xpath2string(action,"@classpath"),action,context.getProperties());
-                }
                 try {
-                    Class<ActionInterface> face = null;
-                    if (clazzPath != null) {
-                        // expand the classpath
-                        String[] paths = clazzPath.split(System.getProperty("path.separator"));
-                        ArrayList<URL> urlPaths = new ArrayList<>();
-                        int i=0;
-                        for(String path:paths) {
-                            List<String> pathList = new ArrayList<>();
-                            if (path.endsWith("*.jar")) {
-                                // asumes dir/*.jar
-                                String dir = path.replaceAll("(.*)\\*\\.jar","$1");
-                                if (base != null)
-                                    dir = base.toURI().resolve(dir).getPath();
-                                DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(dir),"*.jar");
-                                for (Path entry: stream)
-                                    pathList.add(entry.toString());
-                            } else
-                                pathList.add(path);
-                            for (String p:pathList) {
-                                if (!(p.endsWith(".jar") || p.endsWith(System.getProperty("file.separator"))))
-                                    p += System.getProperty("file.separator");
-                                if (base != null) {
-                                    urlPaths.add(base.toURI().resolve(p).toURL());
-                                } else {
-                                    // assumes we have absolute paths in the classpath
-                                    if (p.startsWith(System.getProperty("file.separator")))
-                                        p = "file:" + p;
-                                    urlPaths.add(new URL(p));
-                                }
-                            }
-                        }
-                        URL a[] = new URL[urlPaths.size()];
-                        a = urlPaths.toArray(a);
-                        // use a classloader to load the action class (and the classes it uses) from the expanded classpath
-                        URLClassLoader clazzLoader = new URLClassLoader(a) {
-                            public Class loadClass(String name) throws ClassNotFoundException {
-                                //Flow.logger.debug("load class["+name+"] from classpath"+Arrays.toString(getURLs()));
-                                Class clazz = null;
-                                try {
-                                    // first try to find the class in the local classpath
-                                    clazz = findClass(name);
-                                } catch(ClassNotFoundException e) {
-                                    // then try to find the class in the global classpath
-                                    clazz = super.loadClass(name);
-                                }
-                                return clazz;
-                            }
-                        };
-                        face = (Class<ActionInterface>) clazzLoader.loadClass(clazz);
-                    } else {
-                        // use the regular class loader to load the action class
-                        face = (Class<ActionInterface>) Class.forName(clazz);
-                    }
+                    // use the regular class loader to load the action class
+                    Class<ActionInterface> face = (Class<ActionInterface>) Class.forName(clazz);
                     // instantiate the class and add it to the workflow
                     ActionInterface actionImpl = face.newInstance();
                     actionImpl.setName(name!=null?name:clazz);
                     actionImpl.setParameters(params);
                     flow.add(actionImpl);
-                } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IOException e) {
+                } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
                     Flow.logger.error(" couldn't load action["+name+"]["+clazz+"]! "+e.getMessage());
                     throw new DepositException(e);
                 }
@@ -276,8 +212,10 @@ public class Flow {
             Flow.logger.debug("ACTION init flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
-            if (!next)
+            if (!next) {
+                Flow.logger.debug("ACTION init BREAK");
                 break;
+            }
         }
         Flow.logger.debug(" END   init flow["+next+"]");
         return next;
@@ -286,7 +224,7 @@ public class Flow {
     private boolean mainFlow(String start,String stop) throws DepositException {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
         boolean next = true;
-        boolean run  = (start==null?true:false);
+        boolean run  = (start==null);
         for (ActionInterface action:mainActions) {
             if (!run && start!=null && action.getName().equals(start))
                 run = true;
@@ -294,10 +232,14 @@ public class Flow {
                 Flow.logger.debug("ACTION main flow["+action.getName()+"]");
                 next = action.perform(context);
                 context.save();
-                if (!next)
+                if (!next) {
+                    Flow.logger.debug("ACTION main BREAK");
                     break;
-                if (stop!=null && action.getName().equals(stop))
+                }
+                if (stop!=null && action.getName().equals(stop)) {
+                    Flow.logger.debug("ACTION main STOP");
                     break;
+                }
             } else
                 Flow.logger.debug("ACTION main flow["+action.getName()+"] skipped!");
         }
@@ -314,8 +256,10 @@ public class Flow {
             Flow.logger.debug("ACTION exception flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
-            if (!next)
+            if (!next) {
+                Flow.logger.debug("ACTION exception BREAK");
                 break;
+            }
         }
         Flow.logger.debug(" END   exception flow["+next+"]");
         return next;
@@ -328,8 +272,10 @@ public class Flow {
             Flow.logger.debug("ACTION final flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
-            if (!next)
+            if (!next) {
+                Flow.logger.debug("ACTION final BREAK");
                 break;
+            }
         }
         Flow.logger.debug(" END   final flow["+next+"]");
         return next;

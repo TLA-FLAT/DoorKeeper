@@ -36,23 +36,26 @@ public class HandleAssignment extends AbstractAction {
     @Override
     public boolean perform(Context context) throws DepositException {
         try {
+            
+            if (!hasParameter("prefix"))
+                throw new DepositException("Handle prefix has not been specified!");
+            
             SIPInterface sip = context.getSIP();
-            if (!sip.hasPID()) {
-                    sip.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
-                    logger.info("Assigned new PID["+sip.getPID()+"] to the SIP");
+            URI pid = (sip.hasPID()?sip.getPID():null);
+            sip.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
+            if (pid==null) {
+                logger.info("Assigned new PID["+sip.getPID()+"] to the SIP");
             } else {
-                logger.info("Retained existing PID["+sip.getPID()+"] for the SIP");
+                logger.info("Assigned new PID["+sip.getPID()+"] to the SIP to update AIP["+pid+"]");
             }
             for (Resource res:sip.getResources()) {
-                URI uri = res.getURI();
-                if (uri.toString().startsWith("hdl:"+getParameter("prefix","foo")+"/") || uri.toString().startsWith("http://hdl.handle.net/"+getParameter("prefix","foo")+"/")) {
-                    // keep the PID
-                    res.setPID(res.getURI());
-                    logger.info("Retained existing PID["+res.getPID()+"] for Resource["+res.getURI()+"]");
-
-                } else {
-                    res.setPID(new URI("hdl:"+getParameter("prefix","foo")+"/"+UUID.randomUUID()));
-                    logger.info("Assigned new PID["+res.getPID()+"] to Resource["+res.getURI()+"]");
+                if (res.isInsert() || res.isUpdate()) {
+                    if (res.isInsert() && res.hasPID()) {
+                        logger.info("Retained existing PID["+res.getPID()+"] for Resource["+res.getURI()+"]");
+                    } else {
+                        res.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
+                        logger.info("Assigned new PID["+res.getPID()+"] to Resource["+res.getURI()+"]");
+                    }
                 }
             }
         } catch (Exception ex) {

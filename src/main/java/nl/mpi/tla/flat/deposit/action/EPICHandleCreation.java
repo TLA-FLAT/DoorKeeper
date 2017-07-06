@@ -141,23 +141,26 @@ public class EPICHandleCreation extends AbstractAction {
             }
 
             for (Resource res:context.getSIP().getResources()) {
-                if (res.hasPID() && res.hasFID()) {
-                    String fid  = res.getFID().toString().replaceAll("#.*","");
-                    String dsid = res.getFID().getRawFragment().replaceAll("@.*","");
-                    String asof = res.getFID().getRawFragment().replaceAll(".*@","");
+                if (res.isInsert() || res.isUpdate()) {
+                    // TODO: update might be a PID update
+                    if (res.hasPID() && res.hasFID()) {
+                        String fid  = res.getFID().toString().replaceAll("#.*","");
+                        String dsid = res.getFID().getRawFragment().replaceAll("@.*","");
+                        String asof = res.getFID().getRawFragment().replaceAll(".*@","");
 
-                    URI pid     = res.getPID();
-                    String uuid = pid.toString().replaceAll(".*/","");
-                    String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                        URI pid     = res.getPID();
+                        String uuid = pid.toString().replaceAll(".*/","");
+                        String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
-                    logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
-                    String hdl  = ps.requestHandle(uuid, loc);
-                    logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
-                } else {
-                    if (!res.hasPID())
-                        logger.debug("Resource["+res+"] has no PID!");
-                    if (!res.hasFID())
-                        logger.debug("Resource["+res+"] has no FID!");
+                        logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
+                        String hdl  = ps.requestHandle(uuid, loc);
+                        logger.info("Created handle["+hdl+"] -> URI["+loc+"]");
+                    } else {
+                        if (!res.hasPID())
+                            logger.debug("Resource["+res+"] has no PID!");
+                        if (!res.hasFID())
+                            logger.debug("Resource["+res+"] has no FID!");
+                    }
                 }
             }
         } catch(Exception e) {
