@@ -16,8 +16,6 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.riSearch;
-import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.action.mapping.util.FileWalker;
@@ -26,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,12 +32,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import java.util.Set;
-import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmAtomicValue;
-import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmSequenceIterator;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
-import nl.mpi.tla.flat.deposit.util.Saxon;
 
 /**
  * This action validates whether resources as specified in the record.cmdi file match up with available files in the resource folder of a sip
@@ -66,12 +60,6 @@ public class ResourceMapping extends FedoraAction {
             
             // first dir is expected to be the resources dir within the workspace
             Path dir = dirs.get(0);
-            if (!dir.toFile().exists())
-                logger.debug("resources dir["+dir+"] doesn't exist!");
-            else if (!dir.toFile().isDirectory())
-                logger.debug("resources dir["+dir+"] isn't a directory!");
-            else if (!dir.toFile().canRead())
-                logger.debug("resources dir["+dir+"] can't be read!");
             
             if (sip.isInsert()) {                
                 // check if resources are locally available, and in a dir
@@ -116,15 +104,22 @@ public class ResourceMapping extends FedoraAction {
                 }
             }
             
-            // check if too many resources are available            
-            FileWalker fileWalker = new FileWalker(resources);
-            Files.walkFileTree(dir, fileWalker);
-            if (fileWalker.foundResources.size() > fileWalker.matchingResources.size()) {
-                throw new Exception("Doorkeeper has found more files in resource directory [" + dir + "] than resources are specified in record.cmdi");
-                //TODO Maybe add feature to add missing resource specification to CMDI
+            if (!dir.toFile().exists())
+                logger.debug("resources dir["+dir+"] doesn't exist!");
+            else if (!dir.toFile().isDirectory())
+                logger.debug("resources dir["+dir+"] isn't a directory!");
+            else if (!dir.toFile().canRead())
+                logger.debug("resources dir["+dir+"] can't be read!");
+            else {
+                // check if too many resources are available            
+                FileWalker fileWalker = new FileWalker(resources);
+                Files.walkFileTree(dir, fileWalker);
+                if (fileWalker.foundResources.size() > fileWalker.matchingResources.size()) {
+                    throw new Exception("Doorkeeper has found more files in resource directory [" + dir + "] than resources are specified in record.cmdi");
+                    //TODO Maybe add feature to add missing resource specification to CMDI
+                }
+                logger.info("Record.cmdi resources neatly match up with available files in resource folder");
             }
-            logger.info("Record.cmdi resources neatly match up with available files in resource folder");
-            
         } catch (Exception ex) {
             throw new DepositException("Couldn't complete CMDI resource mapping", ex);
         }

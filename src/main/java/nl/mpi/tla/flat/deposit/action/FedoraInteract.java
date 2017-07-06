@@ -62,6 +62,8 @@ public class FedoraInteract extends FedoraAction {
                 logger.debug("FOXML["+fox+"] -> ["+fid+"]");
                 IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
                 GetDatastreamResponse dsResponse = getDatastream(fid,dsid).execute();
+                if (dsResponse.getStatus()!=200)
+                    throw new DepositException("Unexpected status["+dsResponse.getStatus()+"] while interacting with Fedora Commons!");
                 logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]["+dsid+"]["+dsResponse.getLastModifiedDate()+"]");
                 completeFID(sip,new URI(fid),dsid,dsResponse.getLastModifiedDate());
             }
@@ -85,6 +87,8 @@ public class FedoraInteract extends FedoraAction {
                     mdsResponse = modifyDatastream(fid,dsid).dsLocation(lines.get(0)).logMessage("Updated "+dsid).execute();
                 } else
                     mdsResponse = modifyDatastream(fid,dsid).content(fox).logMessage("Updated "+dsid).execute();
+                if (mdsResponse.getStatus()!=200)
+                    throw new DepositException("Unexpected status["+mdsResponse.getStatus()+"] while interacting with Fedora Commons!");
                 logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+mdsResponse.getLastModifiedDate()+"]");
                 // we should update the PID if this is the "main" datastream
                 if (dsid.equals("CMD") || dsid.equals("OBJ"))

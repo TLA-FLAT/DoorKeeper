@@ -18,6 +18,7 @@ package nl.mpi.tla.flat.deposit.util;
 
 import java.io.File;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.net.URL;
 import java.util.Iterator;
 import java.util.Map;
@@ -366,6 +367,19 @@ public class Saxon  extends Transform {
         }
     }
     
+    static public String toString(Source source) throws SaxonApiException {
+        try {
+            XsltTransformer transformer = buildTransformer(Saxon.class.getResource("/identity.xsl")).load();
+            transformer.setSource(source);
+            StringWriter str = new StringWriter();
+            transformer.setDestination(getProcessor().newSerializer(str));
+            transformer.transform();
+            transformer.close();
+            return str.toString();
+        } catch (Exception ex) {
+            throw new SaxonApiException(ex);
+        }
+    }
     // Extension of default Saxon CLI with our extension functions
     
     protected void initializeConfiguration(Configuration config) {

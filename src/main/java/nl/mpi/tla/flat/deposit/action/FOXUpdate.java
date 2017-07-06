@@ -22,7 +22,6 @@ import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.util.Saxon;
@@ -90,9 +89,10 @@ public class FOXUpdate extends AbstractAction {
                     // - noop
                     //   -> delete FOXML
                     fox = new File(dir + "/"+res.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+".xml");
-                    if (!fox.exists())
-                        throw new DepositException("The FOX file["+fox.getAbsolutePath()+"] for the Resource["+res.getURI()+"] doesn't exist!");
-                    if (!fox.canRead())
+                    if (!fox.exists()) {
+                        if  (res.isInsert() || res.isUpdate())
+                            throw new DepositException("The FOX file["+fox.getAbsolutePath()+"] for the Resource["+res.getURI()+"] doesn't exist!");
+                    } else if (!fox.canRead())
                         throw new DepositException("The FOX file["+fox.getAbsolutePath()+"] for the Resource["+res.getURI()+"] can't be read!");
                     
                     if (res.isUpdate()) {
@@ -104,11 +104,11 @@ public class FOXUpdate extends AbstractAction {
                             Files.copy(fox, new File(fox.toString().replace(".xml", ".bak")));
                         if (!fox.delete())
                             throw new DepositException("The superfluous FOX file["+fox.getAbsolutePath()+"] for the updated Resource["+res.getURI()+"] can't be deleted!");
-                    } else if (res.isNoop()) {
+                    } else if (fox.exists() && !res.isInsert()) {
                         if (debug)
                             Files.copy(fox, new File(fox.toString().replace(".xml", ".bak")));
                         if (!fox.delete())
-                            throw new DepositException("The superfluous FOX file["+fox.getAbsolutePath()+"] for the noop Resource["+res.getURI()+"] can't be deleted!");
+                            throw new DepositException("The superfluous FOX file["+fox.getAbsolutePath()+"] for the noop/delete Resource["+res.getURI()+"] can't be deleted!");
                     }
                 }
             }

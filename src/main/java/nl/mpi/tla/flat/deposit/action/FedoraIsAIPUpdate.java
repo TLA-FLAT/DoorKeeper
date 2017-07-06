@@ -16,16 +16,10 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.riSearch;
-import com.yourmediashelf.fedora.client.response.RiSearchResponse;
-import java.io.InputStream;
 import java.net.URI;
-import javax.xml.transform.stream.StreamSource;
-import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
-import nl.mpi.tla.flat.deposit.util.Saxon;
 import org.slf4j.LoggerFactory;
 
 /**
