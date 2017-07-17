@@ -40,7 +40,7 @@ public class SIPLoad extends AbstractAction {
             return false;
         }
 
-        File mr = new File(sip);;
+        File mr = new File(sip);
         if (!mr.isFile()) {
             logger.error("record["+mr.getAbsolutePath()+"] is not a file!");
             return false;

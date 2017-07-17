@@ -177,21 +177,15 @@ public class UpdateCollections extends FedoraAction {
                     col.setPID(pid);
                     // update the identifier in the DC
                     updateDC(col.getFID(),pid);
-                    // TODO: use the relations instead of cmd:IsPartOfList
-                    for (XdmItem coll:Saxon.xpath(old,"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
-                        Node colNode = Saxon.unwrapNode((XdmNode)coll);
-                        Collection par = new CMDCollection(colNode);
-                        col.addParentCollection(par);
-                        if (Saxon.xpath2boolean(coll,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
-                            par.setFID(new URI(Saxon.xpath2string(coll,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
-                        }
-                        if (par.getFID().toString().startsWith("lat:")) {
-                            if (!hist.contains(par.getFID())) {
+                    // update the parent collection
+                    for (Collection pcol:col.getParentCollections()) {
+                        if (pcol.getFID().toString().startsWith("lat:")) {
+                            if (!hist.contains(pcol.getFID())) {
                                 hist.push(col.getFID());
-                                updateCollection(hist, par, oldPID, newPID);
+                                updateCollection(hist, pcol, oldPID, newPID);
                             } else {
                                 hist.push(col.getFID());
-                                throw new DepositException("(in)direct cycle["+hist+"] for FID["+par.getFID()+"]");
+                                throw new DepositException("(in)direct cycle["+hist+"] for FID["+pcol.getFID()+"]");
                             }
                         }
                     }

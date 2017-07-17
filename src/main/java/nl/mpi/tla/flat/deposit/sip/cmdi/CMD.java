@@ -241,6 +241,20 @@ public class CMD implements SIPInterface {
             throw new DepositException(e);
         }
     }
+    
+    @Override
+    public boolean hasCollections() {
+        return !this.collections.isEmpty();
+    }
+    
+    public void addCollection(CMDCollection col) throws DepositException {
+        if (this.collections.contains(col)) {
+            logger.warn("double Collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]!");
+        } else {
+            this.collections.add(col);
+            logger.debug("Collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
+        }
+    }
 
     @Override
     public Set<Collection> getCollections(boolean deep) {

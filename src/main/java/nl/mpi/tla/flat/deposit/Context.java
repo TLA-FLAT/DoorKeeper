@@ -16,6 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit;
 
+import java.net.URI;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,7 +24,6 @@ import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
-import net.sf.saxon.s9api.XdmSequenceIterator;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.context.ImportPropertiesInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
@@ -46,6 +46,8 @@ public class Context {
     protected Flow flow = null;
     
     protected Map<String,XdmValue> props = new LinkedHashMap<>();
+    
+    protected Map<URI,URI> pids = new LinkedHashMap<>();
     
     protected SIPInterface sip = null;
     
@@ -129,6 +131,24 @@ public class Context {
     
     public boolean save() throws DepositException {
        return (this.hasSIP()?this.sip.save():false);
+    }
+    
+    // PIDs
+    
+    public URI addPID(URI pid, URI red) {
+        return pids.put(pid,red);
+    }
+    
+    public boolean hasPID(URI pid) {
+        return pids.containsKey(pid);
+    }
+    
+    public URI getPID(URI pid) {
+        return pids.get(pid);
+    }
+    
+    public  Map<URI,URI> getPIDs() {
+        return pids;
     }
     
     // Exception

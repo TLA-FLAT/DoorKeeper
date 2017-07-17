@@ -34,6 +34,17 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
     
     protected Node node = null;
     
+    public CMDCollection(URI pid,URI fid) throws DepositException {
+        this.pid = pid;
+        this.fid = fid;
+        if (this.pid!=null)
+            this.uri = this.pid;
+        else if (this.fid!=null)
+            this.uri = this.fid;
+        else
+            throw new DepositException("no collection URI found!");
+    }
+    
     public CMDCollection(Node node) throws DepositException {
         this(null,node);
     }
@@ -97,7 +108,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             throw new DepositException(ex);
         }
         
-    } 
+    }
     
     public Node getNode() {
         return this.node;

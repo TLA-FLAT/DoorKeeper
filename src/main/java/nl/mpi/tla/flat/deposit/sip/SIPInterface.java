@@ -61,6 +61,8 @@ public interface SIPInterface {
     
     // collections
     
+    public boolean hasCollections();
+    
     public Set<Collection> getCollections();
     
     public Set<Collection> getCollections(boolean deep);

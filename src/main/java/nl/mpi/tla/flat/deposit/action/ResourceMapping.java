@@ -86,7 +86,7 @@ public class ResourceMapping extends FedoraAction {
                         lcl = checkLocalResource(res,dirs);
                     URI fid = null;
                     if (res.hasPID()) {
-                        fid = lookupIdentifier(res.getPID());
+                        fid = lookupFID(res.getPID());
                     }
                     if (!lcl && fid==null) {
                         throw new DepositException("This Resource["+res.getPID()+"] is not accessible!");

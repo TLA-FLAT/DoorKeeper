@@ -17,12 +17,8 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.net.URI;
-import java.security.KeyStore;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
+import java.util.Map;
 import nl.knaw.meertens.pid.PIDService;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
@@ -161,6 +157,37 @@ public class EPICHandleCreation extends AbstractAction {
                         if (!res.hasFID())
                             logger.debug("Resource["+res+"] has no FID!");
                     }
+                }
+            }
+            
+            Map<URI,URI> pids = context.getPIDs();
+            for (URI pid:pids.keySet()) {
+                URI red = pids.get(pid);
+                if (red == null)
+                    continue;
+                if (red.toString().startsWith("lat:")) {
+                    String fid    = red.toString().replaceAll("#.*","");
+                    String dsid   = red.getRawFragment().replaceAll("@.*","");
+                    String asof   = red.getRawFragment().replaceAll(".*@","");
+                    String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                    red           = new URI(loc);
+                }
+
+                String prefix = pid.toString().replaceAll(".*/([^/]*)/.*","$1");
+                String uuid   = pid.toString().replaceAll(".*/","");
+
+                logger.info("Lookup handle["+prefix+"/"+uuid+"]");
+                String cur    = (isTest?null:ps.getPIDLocation(prefix+"/"+uuid));
+                logger.info("Looked up handle["+prefix+"/"+uuid+"] -> URI["+cur+"]");
+                    
+                if (cur == null) {
+                    logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+red+"]");
+                    String hdl = ps.requestHandle(uuid, red.toString());
+                    logger.info("Created handle["+hdl+"] -> URI["+red.toString()+"]");
+                } else {
+                    logger.info("Update handle["+pid+"]["+uuid+"]["+cur+"] -> URI["+red+"]");
+                    ps.updateLocation(prefix+"/"+uuid, red.toString());
+                    logger.info("Updated handle["+prefix+"/"+uuid+"] -> URI["+red+"]");
                 }
             }
         } catch(Exception e) {

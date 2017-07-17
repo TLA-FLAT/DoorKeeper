@@ -40,7 +40,7 @@ public class FedoraIsAIPUpdate extends FedoraAction {
                 // TODO: check if PID exists
                 // TODO: check if PID refers to URI in FC
                 // TODO: check if it refers to the latest version (lost update!)
-                URI fid = lookupIdentifier(sip.getPID());
+                URI fid = lookupFID(sip.getPID());
                 if (fid!=null) {
                     // mark SIP as an update
                     sip.update();

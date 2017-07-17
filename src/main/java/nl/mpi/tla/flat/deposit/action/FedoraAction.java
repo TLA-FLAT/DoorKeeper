@@ -20,17 +20,9 @@ import com.yourmediashelf.fedora.client.FedoraClient;
 import static com.yourmediashelf.fedora.client.FedoraClient.*;
 import com.yourmediashelf.fedora.client.FedoraCredentials;
 import com.yourmediashelf.fedora.client.request.FedoraRequest;
-import com.yourmediashelf.fedora.client.response.IngestResponse;
-import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.io.File;
-import java.io.FileInputStream;
 import java.net.URI;
-import java.security.KeyStore;
-import java.util.Collection;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
@@ -67,10 +59,10 @@ abstract public class FedoraAction extends AbstractAction {
         }
     }
     
-    public URI lookupIdentifier(URI id) throws DepositException {
+    public URI lookupFID(URI pid) throws DepositException {
         URI fid = null;
         try {
-            String sparql = "SELECT ?fid WHERE { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+id.toString().replace("hdl:","https://hdl.handle.net/")+"\" } ";
+            String sparql = "SELECT ?fid WHERE { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+pid.toString().replace("hdl:","https://hdl.handle.net/")+"\" } ";
             logger.debug("SPARQL["+sparql+"]");
             RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
             if (resp.getStatus()==200) {
@@ -85,6 +77,26 @@ abstract public class FedoraAction extends AbstractAction {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
         return fid;
+    }
+    
+    public URI lookupPID(URI fid) throws DepositException {
+        URI pid = null;
+        try {
+            String sparql = "SELECT ?pid WHERE { \"info:fedora/"+fid.toString()+"\" <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
+            logger.debug("SPARQL["+sparql+"]");
+            RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
+            if (resp.getStatus()==200) {
+                XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
+                logger.debug("RESULT["+tpl.toString()+"]");
+                String p = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:pid[starts-with(@uri,'https://hdl.handle.net/')]/@uri)");
+                if (p!=null && !p.isEmpty())
+                    pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
+            } else
+                throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
+        } catch(Exception e) {
+            throw new DepositException("Connecting to Fedora Commons failed!",e);
+        }
+        return pid;
     }
     
 }
