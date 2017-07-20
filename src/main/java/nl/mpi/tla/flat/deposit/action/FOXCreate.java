@@ -127,6 +127,8 @@ public class FOXCreate extends AbstractAction {
                 fox.setParameter(new QName("always-collection-eval"), params.get("always-collection-eval"));
             if (hasParameter("always-compound-eval"))
                 fox.setParameter(new QName("always-compound-eval"), params.get("always-compound-eval"));
+            if (hasParameter("license-uri"))
+                fox.setParameter(new QName("license-uri"), params.get("license-uri"));
             
             // go
             fox.setSource(new DOMSource(context.getSIP().getRecord(),context.getSIP().getBase().toURI().toString()));
