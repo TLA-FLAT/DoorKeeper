@@ -82,13 +82,13 @@ abstract public class FedoraAction extends AbstractAction {
     public URI lookupPID(URI fid) throws DepositException {
         URI pid = null;
         try {
-            String sparql = "SELECT ?pid WHERE { \"info:fedora/"+fid.toString()+"\" <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
+            String sparql = "SELECT ?pid WHERE { <info:fedora/"+fid.toString()+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             logger.debug("SPARQL["+sparql+"]");
             RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
             if (resp.getStatus()==200) {
                 XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
                 logger.debug("RESULT["+tpl.toString()+"]");
-                String p = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:pid[starts-with(@uri,'https://hdl.handle.net/')]/@uri)");
+                String p = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:pid[starts-with(.,'https://hdl.handle.net/')])");
                 if (p!=null && !p.isEmpty())
                     pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
             } else
