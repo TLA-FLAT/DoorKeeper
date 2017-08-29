@@ -49,6 +49,8 @@ public interface SIPInterface {
     
     public void setFIDasOfTimeDate(Date date) throws DepositException;
     
+    public URI getFID(boolean clean) throws DepositException;
+       
     public URI getFID() throws DepositException;
        
     // resources

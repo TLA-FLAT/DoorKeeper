@@ -21,6 +21,7 @@ import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Deque;
 import java.util.Iterator;
 import javax.xml.transform.stream.StreamSource;
@@ -62,12 +63,13 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                         } else
                             logger.error("Collection["+col.getURI()+"] has no PID or FID!");
                     } else if (!col.hasPID()) {
-                        URI pid = lookupPID(col.getPID());
+                        URI pid = lookupPID(col.getFID(true));
                         if (pid!=null)
                             col.setPID(pid);
                         else
                             throw new DepositException("Collection["+col.getURI()+"] is not known in the repository!");
                     }
+                    this.completeFID(col);
                 }
             } else if (sip.isUpdate()) {
                 // fetch collections
@@ -86,6 +88,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                             CMDCollection col = new CMDCollection(pid,fid);
                             if (sip instanceof CMD)
                                 ((CMD)sip).addCollection(col);
+                            this.completeFID(col);
                         }
                     }
                 } else
@@ -115,9 +118,10 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 XdmItem n = iter.next();
                 String f = n.getStringValue();
                 if (f!=null && !f.isEmpty()) {
-                    URI fid = new URI(f.replace("info:fedora/",""));
+                    URI fid = new URI(f.replace("info:fedora/","").replaceAll("#.*",""));
                     URI pid = lookupPID(fid);
                     CMDCollection pcol = new CMDCollection(pid,fid);
+                    this.completeFID(pcol);
                     col.addParentCollection(pcol);
                 }
             }
@@ -136,4 +140,26 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             }
         }
     }
+    
+    protected void completeFID(Collection col) throws DepositException {
+        try {
+            if (col!=null) {
+                URI fid = null;
+                if (col.hasFID())
+                    fid = new URI(col.getFID().toString().replaceAll("#.*",""));
+                else if (col.hasPID())
+                    fid = this.lookupFID(col.getPID());
+                else 
+                    throw new DepositException("Unknown Collection["+col+"]!");
+                Date asof = this.lookupAsOfDateTime(fid, "CMD");
+                col.setFID(fid);// will reset the FID
+                col.setFIDStream("CMD");
+                col.setFIDasOfTimeDate(asof);
+                logger.debug("Fedora Collection datastream["+col.getPID()+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
+            }
+        } catch(Exception e) {
+            throw new DepositException("Completing the FID of Collection["+col+"] failed!",e);
+        }
+   }
+
 }

@@ -108,10 +108,21 @@ abstract public class Collection {
         dirty();
     }
     
-    public URI getFID() throws DepositException {
+    public URI getFID(boolean clean) throws DepositException {
         if (this.fid==null)
             throw new DepositException("Collection["+this.uri+"] has no Fedora Commons PID yet!");
+        if (clean) {
+            try {
+                return new URI(this.fid.toString().replaceAll("#.*",""));
+            } catch (URISyntaxException ex) {
+               throw new DepositException(ex);
+            }
+        }
         return this.fid;
+    }
+    
+    public URI getFID() throws DepositException {
+        return this.getFID(false);
     }
     
     // parent collections

@@ -20,9 +20,11 @@ import com.yourmediashelf.fedora.client.FedoraClient;
 import static com.yourmediashelf.fedora.client.FedoraClient.*;
 import com.yourmediashelf.fedora.client.FedoraCredentials;
 import com.yourmediashelf.fedora.client.request.FedoraRequest;
+import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.io.File;
 import java.net.URI;
+import java.util.Date;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
@@ -97,6 +99,17 @@ abstract public class FedoraAction extends AbstractAction {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
         return pid;
+    }
+    
+    public Date lookupAsOfDateTime(URI fid, String dsid) throws DepositException {
+        try {
+            GetDatastreamResponse dsResponse = getDatastream(fid.toString(),dsid).execute();
+            if (dsResponse.getStatus()!=200)
+                throw new DepositException("Unexpected status["+dsResponse.getStatus()+"] while querying Fedora Commons!");
+            return dsResponse.getLastModifiedDate();
+        } catch(Exception e) {
+            throw new DepositException("Connecting to Fedora Commons failed!",e);
+        }
     }
     
 }

@@ -89,7 +89,7 @@ public class UpdateCollections extends FedoraAction {
                     throw new DepositException("direct cycle for FID["+col.getFID()+"]");
                 if (col.hasFID() && col.getFID().toString().startsWith("lat:")) {
                     // load the collection's CMD
-                    FedoraResponse res = getDatastreamDissemination(col.getFID().toString(),"CMD").execute();
+                    FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
                     if (res.getStatus()==200) {
                         InputStream str = res.getEntityInputStream();
                         XdmNode old = Saxon.buildDocument(new StreamSource(str));
@@ -108,7 +108,7 @@ public class UpdateCollections extends FedoraAction {
                                 URI pid = new URI(newPID);
                                 col.setPID(pid);
                                 // update the identifier in the DC
-                                updateDC(col.getFID(),pid);
+                                updateDC(col.getFID(true),pid);
                                 // TODO: use the relations instead of cmd:IsPartOfList
                                 for (XdmItem coll:Saxon.xpath(old,"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
                                     Node colNode = Saxon.unwrapNode((XdmNode)coll);
@@ -176,7 +176,7 @@ public class UpdateCollections extends FedoraAction {
                     URI pid = new URI(newPID);
                     col.setPID(pid);
                     // update the identifier in the DC
-                    updateDC(col.getFID(),pid);
+                    updateDC(col.getFID(true),pid);
                     // update the parent collection
                     for (Collection pcol:col.getParentCollections()) {
                         if (pcol.getFID().toString().startsWith("lat:")) {

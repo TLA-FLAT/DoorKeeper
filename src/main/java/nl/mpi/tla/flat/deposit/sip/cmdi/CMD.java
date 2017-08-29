@@ -164,12 +164,25 @@ public class CMD implements SIPInterface {
     }
     
     @Override
-    public URI getFID() throws DepositException {
-        if (this.fid==null) {
+    public URI getFID(boolean clean) throws DepositException {
+        if (this.fid==null)
             logger.warn("SIP["+this.base+"] has not FID yet! Derive one from the PID["+this.getPID()+"].");
+        if (clean) {
+            try {
+                return new URI(this.fid.toString().replaceAll("#.*",""));
+            } catch (URISyntaxException ex) {
+               throw new DepositException(ex);
+            }
         }
         return this.fid;
     }
+    
+    @Override
+    public URI getFID() throws DepositException {
+        return this.getFID(false);
+    }
+    
+
        
     // resources
     
