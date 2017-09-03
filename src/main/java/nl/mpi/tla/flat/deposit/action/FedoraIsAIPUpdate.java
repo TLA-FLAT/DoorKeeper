@@ -17,6 +17,7 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.net.URI;
+import java.util.Date;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
@@ -36,19 +37,34 @@ public class FedoraIsAIPUpdate extends FedoraAction {
             connect(context);
             
             SIPInterface sip = context.getSIP();
+            
+            URI pid = null;
             if (sip.hasPID()) {
-                // TODO: check if PID exists
-                // TODO: check if PID refers to URI in FC
-                // TODO: check if it refers to the latest version (lost update!)
-                URI fid = lookupFID(sip.getPID());
+                pid = sip.getPID();
+            } else if (this.getParameter("requirePID","true").equals("false") && sip.hasFID()) {
+                // we have a FID and its allowed to lookup the PID (of the last version).
+                // WARN: this might lead to lost updates!
+                pid = this.lookupFID(sip.getFID(true));
+            }
+            if (pid!=null) {
+                URI fid = lookupFID(pid);
                 if (fid!=null) {
                     // mark SIP as an update
                     sip.update();
-                    logger.info("This SIP["+sip.getPID()+"] is an update of AIP["+fid+"]!");
-                } else
-                    logger.debug("This SIP["+sip.getBase()+"]["+sip.getPID()+"] has no FID in this FC!");
+                    // complete the FID
+                    Date asof = this.lookupAsOfDateTime(fid, "CMD");
+                    sip.setFID(fid);// will reset the FID
+                    sip.setFIDStream("CMD");
+                    sip.setFIDasOfTimeDate(asof);
+                    logger.info("This SIP["+pid+"] is an update of AIP["+fid+"]!");
+                } else if (this.hasParameter("prefix") && pid.toString().startsWith("hdl:"+this.getParameter("prefix")+"/")) {
+                    logger.error("This SIP["+pid+"] has a matching handle prefix["+this.getParameter("prefix")+"], but can't be found in the repository! It might be a PID for an old version!");
+                    return false;
+                } else {
+                    logger.info("This SIP["+pid+"] doesn't exist in the repository! The PID will be overwritten!");
+                }
             } else
-                logger.debug("This SIP["+sip.getBase()+"] has no PID!");
+                logger.debug("This SIP["+sip.getBase()+"] has no PID! A PID will be generated.");
         } catch (DepositException ex) {
             throw ex;
         } catch (Exception ex) {

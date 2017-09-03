@@ -166,7 +166,7 @@ public class CMD implements SIPInterface {
     @Override
     public URI getFID(boolean clean) throws DepositException {
         if (this.fid==null)
-            logger.warn("SIP["+this.base+"] has not FID yet! Derive one from the PID["+this.getPID()+"].");
+            throw new DepositException("SIP["+this.base+"] has no FID yet!");
         if (clean) {
             try {
                 return new URI(this.fid.toString().replaceAll("#.*",""));
@@ -265,6 +265,30 @@ public class CMD implements SIPInterface {
             logger.warn("double Collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]!");
         } else {
             this.collections.add(col);
+            if (!col.hasNode()) {
+                try {
+                    Element list = null;
+                    XdmItem _list = Saxon.xpathSingle(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:IsPartOfList",null,NAMESPACES);
+                    if (_list==null) {
+                        // create IsPartOfList
+                        list = rec.createElementNS(CMD_NS, "IsPartOfList");
+                        Element resources = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(this.rec), "/cmd:CMD/cmd:Resources", null, NAMESPACES));
+                        resources.appendChild(list);
+                    } else {
+                        list = (Element)Saxon.unwrapNode((XdmNode)_list);
+                    }
+                    // create IsPartOf
+                    Element partOf = rec.createElementNS(CMD_NS, "IsPartOf");
+                    list.appendChild(partOf);
+                    // populate
+                    col.setNode(partOf);
+                    col.save(this);
+                    dirty();
+                } catch(Exception e) {
+                    throw new DepositException(e);
+                }
+
+            }
             logger.debug("Collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
         }
     }
@@ -446,6 +470,7 @@ public class CMD implements SIPInterface {
                     } else {
                         self = (Element)Saxon.unwrapNode((XdmNode)_self);
                     }
+                    self.setTextContent(this.getPID().toString());
                     if (this.hasFID()) {
                         self.setAttribute("lat:flatURI",this.getFID().toString());
                     }

@@ -136,7 +136,7 @@ public class FOXCreate extends AbstractAction {
             fox.setDestination(destination);
             fox.transform();
             
-            String fid = Saxon.xpath2string(destination.getXdmNode(),"/*/@PID").replaceAll("[^a-zA-Z0-9]", "_");
+            String fid = Saxon.xpath2string(destination.getXdmNode(),"/*/@PID").replaceAll("#.*","").replaceAll("[^a-zA-Z0-9]", "_");
             File out = new File(dir + "/"+fid+"_CMD.xml");
             if (out.exists()) {
                 // create a backup of the previous run

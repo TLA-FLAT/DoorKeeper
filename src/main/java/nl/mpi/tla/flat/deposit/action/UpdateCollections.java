@@ -59,6 +59,8 @@ public class UpdateCollections extends FedoraAction {
     
     private File dir = null;
     
+    private XsltTransformer upsert = null;
+    
     @Override
     public boolean perform(Context context) throws DepositException {       
         try {
@@ -70,14 +72,17 @@ public class UpdateCollections extends FedoraAction {
                  FileUtils.forceMkdir(dir);
 
             // prep the stylesheet
-            XsltTransformer add = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/add-to-collection.xsl")).load();
+            XsltTransformer upsert = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/upsert-collection.xsl")).load();
             SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
-            add.setMessageListener(listener);
-            add.setErrorListener(listener);            
-            add.setParameter(new QName("pid"),new XdmAtomicValue(context.getSIP().getPID()));
-            add.setParameter(new QName("fid"),new XdmAtomicValue(context.getSIP().getFID()));
-            add.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
-            add.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+            upsert.setMessageListener(listener);
+            upsert.setErrorListener(listener);            
+            upsert.setParameter(new QName("fid"),new XdmAtomicValue(context.getSIP().getFID()));
+            upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(context.getSIP().getPID()));
+            if (context.getSIP().isUpdate()) {
+                upsert.setParameter(new QName("old-pid"),new XdmAtomicValue(this.lookupPID(context.getSIP().getFID())));
+            }
+            upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
+            upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
             // loop over collections
             for (Collection col:context.getSIP().getCollections()) {
                 logger.debug("isPartOf collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
@@ -94,38 +99,28 @@ public class UpdateCollections extends FedoraAction {
                         InputStream str = res.getEntityInputStream();
                         XdmNode old = Saxon.buildDocument(new StreamSource(str));
                         String oldPID = (col.hasPID()?col.getPID().toString():Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES));
-                        add.setSource(old.asSource());
+                        upsert.setSource(old.asSource());
                         XdmDestination destination = new XdmDestination();
-                        add.setDestination(destination);
-                        add.transform();
-                        if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
-                            // write to fox dir: <fid>.CMD.xml
-                            File out = new File(dir + "/"+col.getFID().toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
-                            TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
-                            logger.info("created CMD["+out.getAbsolutePath()+"]");
-                            String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
-                            if (!newPID.equals(oldPID)) {
-                                URI pid = new URI(newPID);
-                                col.setPID(pid);
-                                // update the identifier in the DC
-                                updateDC(col.getFID(true),pid);
-                                // TODO: use the relations instead of cmd:IsPartOfList
-                                for (XdmItem coll:Saxon.xpath(old,"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
-                                    Node colNode = Saxon.unwrapNode((XdmNode)coll);
-                                    Collection par = new CMDCollection(colNode);
-                                    col.addParentCollection(par);
-                                    if (Saxon.xpath2boolean(coll,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
-                                        par.setFID(new URI(Saxon.xpath2string(coll,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
-                                    }
-                                    if (par.getFID().toString().startsWith("lat:")) {
-                                        updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, oldPID, newPID);
-                                    }
+                        upsert.setDestination(destination);
+                        upsert.transform();
+                        // write to fox dir: <fid>.CMD.xml
+                        File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
+                        TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+                        logger.info("created CMD["+out.getAbsolutePath()+"]");
+                        String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+                        if (!newPID.equals(oldPID)) {
+                            URI pid = new URI(newPID);
+                            col.setPID(pid);
+                            // update the identifier in the DC
+                            updateDC(col.getFID(true),pid);
+                            // loop over collections
+                            for (Collection par:col.getParentCollections()) {
+                                if (par.getFID().toString().startsWith("lat:")) {
+                                    updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, col.getFID(), oldPID, newPID);
                                 }
-                            } else
-                                col.setPID(new URI(oldPID));
-                        } else {
-                            logger.debug("Already a member of collection["+col.getFID()+"]!");
-                        }
+                            }
+                        } else
+                            col.setPID(new URI(oldPID));
                     } else {
                         logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
                     }
@@ -139,61 +134,49 @@ public class UpdateCollections extends FedoraAction {
         return true;
     }
     
-    private XsltTransformer upd = null;
-    
-    private void updateCollection(Deque<URI> hist, Collection col, String oldPart, String newPart) throws Exception {
+    private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart) throws Exception {
         // load the collection's CMD
-        FedoraResponse res = getDatastreamDissemination(col.getFID().toString(),"CMD").execute();
+        FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
         if (res.getStatus()==200) {
-            // prep the stylesheet
-            if (upd == null) {
-                XsltTransformer upd = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/update-collection.xsl")).load();
-                SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
-                upd.setMessageListener(listener);
-                upd.setErrorListener(listener);
-            }
-               
             // set parameters
-            upd.setParameter(new QName("old-pid"),new XdmAtomicValue(oldPart));
-            upd.setParameter(new QName("new-pid"),new XdmAtomicValue(newPart));
-            upd.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
-            upd.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+            upsert.clearParameters();
+            upsert.setParameter(new QName("fid"),new XdmAtomicValue(fidPart));
+            upsert.setParameter(new QName("old-pid"),new XdmAtomicValue(oldPart));
+            upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(newPart));
+            upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
+            upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
 
             InputStream str = res.getEntityInputStream();
             XdmNode old = Saxon.buildDocument(new StreamSource(str));
             String oldPID = Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
-            upd.setSource(old.asSource());
+            upsert.setSource(old.asSource());
             XdmDestination destination = new XdmDestination();
-            upd.setDestination(destination);
-            upd.transform();
-            if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
-                // write to fox dir: <fid>.CMD.xml
-                File out = new File(dir + "/"+col.getFID().toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
-                TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
-                logger.info("created CMD["+out.getAbsolutePath()+"]");
-                String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
-                if (!newPID.equals(oldPID)) {
-                    URI pid = new URI(newPID);
-                    col.setPID(pid);
-                    // update the identifier in the DC
-                    updateDC(col.getFID(true),pid);
-                    // update the parent collection
-                    for (Collection pcol:col.getParentCollections()) {
-                        if (pcol.getFID().toString().startsWith("lat:")) {
-                            if (!hist.contains(pcol.getFID())) {
-                                hist.push(col.getFID());
-                                updateCollection(hist, pcol, oldPID, newPID);
-                            } else {
-                                hist.push(col.getFID());
-                                throw new DepositException("(in)direct cycle["+hist+"] for FID["+pcol.getFID()+"]");
-                            }
+            upsert.setDestination(destination);
+            upsert.transform();
+            // write to fox dir: <fid>.CMD.xml
+            File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
+            TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+            logger.info("created CMD["+out.getAbsolutePath()+"]");
+            String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+            if (!newPID.equals(oldPID)) {
+                URI pid = new URI(newPID);
+                col.setPID(pid);
+                // update the identifier in the DC
+                updateDC(col.getFID(true),pid);
+                // update the parent collection
+                for (Collection par:col.getParentCollections()) {
+                    if (par.getFID().toString().startsWith("lat:")) {
+                        if (!hist.contains(par.getFID())) {
+                            hist.push(col.getFID());
+                            updateCollection(hist, par, col.getFID(), oldPID, newPID);
+                        } else {
+                            hist.push(col.getFID());
+                            throw new DepositException("(in)direct cycle["+hist+"] for FID["+par.getFID()+"]");
                         }
                     }
-                } else
-                    col.setPID(new URI(oldPID));
-            } else {
-                logger.debug("Part["+oldPart+"]["+newPart+"] is not a member of collection["+col.getFID()+"]!");
-            }
+                }
+            } else
+                col.setPID(new URI(oldPID));
         } else {
             logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
         }

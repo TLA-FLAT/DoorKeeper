@@ -57,7 +57,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             String str = node.getTextContent();
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith("lat:") || u.toString().startsWith("islandora:"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
@@ -108,6 +108,17 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             throw new DepositException(ex);
         }
         
+    }
+    
+    // node
+    public boolean hasNode() {
+        return this.node!=null;
+    }
+    
+    public void setNode(Node node) {
+        if (this.hasNode())
+            logger.warn("Collection["+this.uri+"] has already a Node!");
+        this.node = node;
     }
     
     public Node getNode() {

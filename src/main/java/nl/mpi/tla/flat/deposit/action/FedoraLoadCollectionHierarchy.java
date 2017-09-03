@@ -61,7 +61,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                             else
                                 throw new DepositException("Collection["+col.getURI()+"] is not known in the repository!");
                         } else
-                            logger.error("Collection["+col.getURI()+"] has no PID or FID!");
+                            throw new DepositException("Collection["+col.getURI()+"] has no PID or FID!");
                     } else if (!col.hasPID()) {
                         URI pid = lookupPID(col.getFID(true));
                         if (pid!=null)
@@ -71,9 +71,9 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                     }
                     this.completeFID(col);
                 }
-            } else if (sip.isUpdate()) {
+            } else if (sip.isUpdate() && sip.hasFID()) {
                 // fetch collections
-                String sparql = "SELECT ?fid WHERE { \"info:fedora/"+sip.getFID().toString()+"\" <info:fedora/fedora-system:def/relations-external#isConstituentOf> ?fid } ";
+                String sparql = "SELECT ?fid WHERE { <info:fedora/"+sip.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
                 logger.debug("SPARQL["+sparql+"]");
                 RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
                 if (resp.getStatus()==200) {
@@ -94,7 +94,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 } else
                     throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
             } else
-                logger.debug("This SIP["+sip.getBase()+"] has no Collections!");
+                logger.debug("This SIP["+sip.getBase()+"] has no Collections or FID!");
             for (Collection col:sip.getCollections()) {
                 loadParentCollections(new ArrayDeque<>(Arrays.asList(col.getFID())),col);
             }
@@ -108,7 +108,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
     
     private void loadParentCollections(Deque<URI> hist,Collection col) throws Exception {
         // fetch parent collections
-        String sparql = "SELECT ?fid WHERE { \"info:fedora/"+col.getFID().toString()+"\" <info:fedora/fedora-system:def/relations-external#isConstituentOf> ?fid } ";
+        String sparql = "SELECT ?fid WHERE { <info:fedora/"+col.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
         logger.debug("SPARQL["+sparql+"]");
         RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
         if (resp.getStatus()==200) {
@@ -151,11 +151,13 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                     fid = this.lookupFID(col.getPID());
                 else 
                     throw new DepositException("Unknown Collection["+col+"]!");
-                Date asof = this.lookupAsOfDateTime(fid, "CMD");
-                col.setFID(fid);// will reset the FID
-                col.setFIDStream("CMD");
-                col.setFIDasOfTimeDate(asof);
-                logger.debug("Fedora Collection datastream["+col.getPID()+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
+                if (fid.toString().startsWith("lat:")) {
+                    Date asof = this.lookupAsOfDateTime(fid, "CMD");
+                    col.setFID(fid);// will reset the FID
+                    col.setFIDStream("CMD");
+                    col.setFIDasOfTimeDate(asof);
+                    logger.debug("Fedora Collection datastream["+(col.hasPID()?col.getPID():"")+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
+                }
             }
         } catch(Exception e) {
             throw new DepositException("Completing the FID of Collection["+col+"] failed!",e);
