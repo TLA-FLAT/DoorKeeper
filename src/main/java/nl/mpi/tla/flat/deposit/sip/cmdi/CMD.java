@@ -243,7 +243,18 @@ public class CMD implements SIPInterface {
             for (XdmItem collection:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
                 Node colNode = Saxon.unwrapNode((XdmNode)collection);
                 Collection col = new CMDCollection(base.toURI(), colNode);
-                if (collections.contains(col)) {
+                if (!col.hasPID() && !col.hasFID()) {
+                    URI uri = col.getURI();
+                    if (uri==null) {
+                        logger.debug("Skipped empty IsPartOf!");
+                    } else if (uri.toString().equals("islandora:compound_collection")) {
+                        logger.debug("Skipped islandora:compound_collection IsPartOf! Should be resurrected by default!");
+                    } else if (uri.toString().startsWith("islandora:")) {
+                        logger.warn("Relationship with collection["+uri+"] might not survive!");
+                    } else {
+                        logger.warn("Skipped empty IsPartOf["+uri+"]!");
+                    }
+                } else if (collections.contains(col)) {
                     logger.warn("double IsPartOf["+collection.getStringValue()+"]["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]!");
                 } else {
                     collections.add(col);

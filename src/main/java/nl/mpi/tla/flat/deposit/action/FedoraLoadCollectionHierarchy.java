@@ -84,11 +84,16 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                         String f = n.getStringValue();
                         if (f!=null && !f.isEmpty()) {
                             URI fid = new URI(f.replace("info:fedora/",""));
-                            URI pid = lookupPID(fid);
-                            CMDCollection col = new CMDCollection(pid,fid);
-                            if (sip instanceof CMD)
-                                ((CMD)sip).addCollection(col);
-                            this.completeFID(col);
+                            if (!fid.toString().startsWith("islandora:")) {
+                                URI pid = lookupPID(fid);
+                                CMDCollection col = new CMDCollection(pid,fid);
+                                if (sip instanceof CMD)
+                                    ((CMD)sip).addCollection(col);
+                                this.completeFID(col);
+                            } else if (!fid.toString().equals("islandora:compound_collection")) {
+                                logger.warn("Relationship with collection["+fid+"] might not survive!");
+                            } else
+                                logger.debug("Skipped islandora:compound_collection relationship!");
                         }
                     }
                 } else

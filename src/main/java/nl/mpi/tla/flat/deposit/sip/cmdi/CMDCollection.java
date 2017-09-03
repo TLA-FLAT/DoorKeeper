@@ -57,7 +57,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             String str = node.getTextContent();
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:") || u.toString().startsWith("islandora:"))
+                if (u.toString().startsWith("lat:"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
