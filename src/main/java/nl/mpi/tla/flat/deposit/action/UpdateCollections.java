@@ -72,7 +72,7 @@ public class UpdateCollections extends FedoraAction {
                  FileUtils.forceMkdir(dir);
 
             // prep the stylesheet
-            XsltTransformer upsert = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/upsert-collection.xsl")).load();
+            upsert = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/upsert-collection.xsl")).load();
             SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
             upsert.setMessageListener(listener);
             upsert.setErrorListener(listener);            

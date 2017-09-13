@@ -21,7 +21,6 @@ import com.yourmediashelf.fedora.client.response.FedoraResponse;
 import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.io.InputStream;
-import java.io.StringWriter;
 import java.net.URI;
 import java.util.Iterator;
 import javax.xml.transform.stream.StreamSource;
