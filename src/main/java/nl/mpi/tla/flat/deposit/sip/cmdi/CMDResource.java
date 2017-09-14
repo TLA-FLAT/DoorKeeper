@@ -107,17 +107,17 @@ public class CMDResource extends Resource {
             }
 
             // determine file 
-            if (this.uri!=null) {
+            if (this.uri!=null && this.uri.toString().startsWith("file:")) {
                 File resFile = new File(this.uri);
                 if (resFile.exists()) {
                     if (resFile.canRead()) {
                         setFile(resFile);
                     } else
-                        logger.warn("local file for ResourceProxy["+uri+"]["+resFile.getPath()+"] isn't readable!");
+                        logger.error("local file for ResourceProxy["+this.uri+"]["+resFile.getPath()+"] isn't readable!");
                 } else
-                        logger.warn("local file for ResourceProxy["+uri+"]["+resFile.getPath()+"] doesn't exist!");
+                    logger.error("local file for ResourceProxy["+this.uri+"]["+resFile.getPath()+"] doesn't exist!");
             } else
-                logger.warn("unknown local file for ResourceProxy["+uri+"] doesn't exist!");
+                logger.debug("no local file for ResourceProxy["+this.uri+"] known!");
         } catch (URISyntaxException|SaxonApiException ex) {
             throw new DepositException(ex);
         }
