@@ -61,7 +61,7 @@
         </xsl:copy>
     </xsl:template>
     
-    <xsl:template match="cmd:ResourceRef[replace(.,'http(s)?://hdl.handle.net/','hdl:')=$old-pid]" mode="update">
+    <xsl:template match="cmd:ResourceRef[replace(.,'http(s)?://hdl.handle.net/','hdl:')=replace($old-pid,'http(s)?://hdl.handle.net/','hdl:')]" mode="update">
         <xsl:message>DBG: = update ResourceProxy[<xsl:value-of select="$old-pid"/>] -> [<xsl:value-of select="$new-pid"/>]</xsl:message>
         <xsl:if test="normalize-space($fid)!='' and normalize-space(@lat:flatURI)!='' and normalize-space(replace($fid,'#.*',''))!=normalize-space(replace(@lat:flatURI,'#.*',''))">
             <xsl:message terminate="yes">ERR: existing Resource[<xsl:value-of select="$old-pid"/>] has different FID[<xsl:value-of select="replace(@lat:flatURI,'#.*','')"/>] (expected FID[<xsl:value-of select="replace($fid,'#.*','')"/>])!</xsl:message>
@@ -91,7 +91,7 @@
             <xsl:when test="exists(key('rp',$new-pid))">
                 <xsl:message>DBG: [<xsl:value-of select="$new-pid"/>] is already a member of this collection!</xsl:message>
             </xsl:when>
-            <xsl:when test="normalize-space($old-pid)!='' and exists(key('rp',$old-pid))">
+            <xsl:when test="normalize-space($old-pid)!='' and exists(key('rp',replace($old-pid,'http(s)?://hdl.handle.net/','hdl:')))">
                 <xsl:message>DBG: > update [<xsl:value-of select="$old-pid"/>] -> [<xsl:value-of select="$new-pid"/>]</xsl:message>
                 <xsl:apply-templates mode="update"/>
             </xsl:when>

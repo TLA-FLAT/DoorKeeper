@@ -148,7 +148,7 @@ public class UpdateCollections extends FedoraAction {
 
             InputStream str = res.getEntityInputStream();
             XdmNode old = Saxon.buildDocument(new StreamSource(str));
-            String oldPID = Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+            String oldPID = Saxon.xpath2string(old, "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
             upsert.setSource(old.asSource());
             XdmDestination destination = new XdmDestination();
             upsert.setDestination(destination);
@@ -157,7 +157,7 @@ public class UpdateCollections extends FedoraAction {
             File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
             TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
             logger.info("created CMD["+out.getAbsolutePath()+"]");
-            String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+            String newPID = Saxon.xpath2string(destination.getXdmNode(), "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
             if (!newPID.equals(oldPID)) {
                 URI pid = new URI(newPID);
                 col.setPID(pid);
