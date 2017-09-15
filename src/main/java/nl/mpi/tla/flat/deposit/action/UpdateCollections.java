@@ -84,7 +84,7 @@ public class UpdateCollections extends FedoraAction {
             upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
             upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
             // loop over collections
-            for (Collection col:context.getSIP().getCollections()) {
+            for (Collection col:context.getSIP().getCollections(false)) {
                 logger.debug("isPartOf collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
                 if (col.hasPID() && col.getPID().equals(context.getSIP().getPID()))
                     throw new DepositException("direct cycle for PID["+col.getPID()+"]");
