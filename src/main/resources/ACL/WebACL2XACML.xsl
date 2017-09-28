@@ -126,7 +126,7 @@
             <xsl:result-document href="{$href}">
                 <xsl:choose>
                     <xsl:when test="$public">
-                        <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="flat-acl-resource-policy" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+                        <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="islandora-xacml-editor-v1" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
                             <Target>
                                 <Subjects>
                                     <AnySubject/>
@@ -148,7 +148,7 @@
                                     </Action>
                                 </Actions>
                             </Target>
-                            <Rule RuleId="permit-dsid-obj" Effect="Permit"/>
+                            <Rule RuleId="permit-dsid-mime" Effect="Permit"/>
                             <Rule RuleId="also-allow-everything-else" Effect="Permit">
                                 <Target>
                                     <Subjects>
@@ -165,7 +165,7 @@
                         </Policy>
                     </xsl:when>
                     <xsl:otherwise>
-                        <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="flat-acl-resource-policy" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+                        <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="islandora-xacml-editor-v1" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
                             <Target>
                                 <Subjects>
                                     <AnySubject/>
@@ -178,7 +178,7 @@
                                 </Actions>
                             </Target>
                             <!-- Deny ... -->
-                            <Rule RuleId="deny-dsid-obj" Effect="Deny">
+                            <Rule RuleId="deny-dsid-mime" Effect="Deny">
                                 <Target>
                                     <Subjects>
                                         <AnySubject/>
