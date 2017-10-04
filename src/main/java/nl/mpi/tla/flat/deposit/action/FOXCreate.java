@@ -130,6 +130,12 @@ public class FOXCreate extends AbstractAction {
             if (hasParameter("license-uri"))
                 fox.setParameter(new QName("license-uri"), params.get("license-uri"));
             
+            // additional parameters
+            for (String param:this.params.keySet()) {
+                if (param.startsWith("xsl-param-"))
+                    fox.setParameter(new QName(param.replaceFirst("^xsl-param-","")), params.get(param));
+            }
+            
             // go
             fox.setSource(new DOMSource(context.getSIP().getRecord(),context.getSIP().getBase().toURI().toString()));
             XdmDestination destination = new XdmDestination();
