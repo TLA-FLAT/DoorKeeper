@@ -2,7 +2,7 @@
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:xs="http://www.w3.org/2001/XMLSchema"
     xmlns:sx="java:nl.mpi.tla.saxon"
-    exclude-result-prefixes="xs"
+    exclude-result-prefixes="xs sx"
     version="2.0">
     
     <xsl:param name="user"/>

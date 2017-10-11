@@ -4,7 +4,7 @@
     xmlns:cmd="http://www.clarin.eu/cmd/"
     xmlns:lat="http://lat.mpi.nl/"
     xmlns:sx="java:nl.mpi.tla.saxon"
-    exclude-result-prefixes="xs"
+    exclude-result-prefixes="xs sx"
     version="2.0">
     
     <xsl:param name="fid"/>
