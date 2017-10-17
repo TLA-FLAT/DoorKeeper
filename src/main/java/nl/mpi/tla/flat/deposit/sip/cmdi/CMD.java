@@ -415,7 +415,7 @@ public class CMD implements SIPInterface {
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
             }
-            logger.debug("MdSelfLink["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasPID()?getPID():"NONE")+"]");
+            logger.debug("MdSelfLink["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasFID()?getFID():"NONE")+"]");
                 
             // MdSelfLink @lat:flatURI
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI",null,NAMESPACES);
@@ -426,7 +426,7 @@ public class CMD implements SIPInterface {
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
             }
-            logger.debug("MdSelfLink/@lat:flatURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasPID()?getPID():"NONE")+"]");
+            logger.debug("MdSelfLink/@lat:flatURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasFID()?getFID():"NONE")+"]");
 
             // MdSelfLink @lat:localURI
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:localURI",null,NAMESPACES);
@@ -437,7 +437,7 @@ public class CMD implements SIPInterface {
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
             }
-            logger.debug("MdSelfLink/@lat:localURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasPID()?getPID():"NONE")+"]");
+            logger.debug("MdSelfLink/@lat:localURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasFID()?getFID():"NONE")+"]");
         } catch(Exception e) {
             throw new DepositException(e);
         }
