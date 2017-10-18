@@ -20,7 +20,9 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -262,6 +264,18 @@ public class Saxon  extends Transform {
         return xpathIterator(ctxt,xp,null);
     }
 
+    static public List<XdmItem> xpathList(XdmItem ctxt,String xp,Map<String,XdmValue> vars,Map<String,String> nss) throws SaxonApiException {
+        return iterator2List(xpathIterator(ctxt,xp,vars,nss));
+    }
+
+    static public List<XdmItem> xpathList(XdmItem ctxt,String xp,Map<String,XdmValue> vars) throws SaxonApiException {
+        return xpathList(ctxt,xp,vars,null);
+    }
+
+    static public List<XdmItem> xpathList(XdmItem ctxt,String xp) throws SaxonApiException {
+        return xpathList(ctxt,xp,null);
+    }
+
     static public XdmItem xpathSingle(XdmItem ctxt,String xp,Map<String,XdmValue> vars,Map<String,String> nss) throws SaxonApiException {
         return xpathCompile(ctxt,xp,vars,nss).evaluateSingle();
     }
@@ -380,8 +394,15 @@ public class Saxon  extends Transform {
             throw new SaxonApiException(ex);
         }
     }
-    // Extension of default Saxon CLI with our extension functions
     
+    // Turn an XdmItem Iterator into a List
+    static public List<XdmItem> iterator2List(Iterator<XdmItem> iter) {
+        List<XdmItem> list = new ArrayList<>();
+        iter.forEachRemaining(list::add);
+        return list;
+    }
+    
+    // Extension of default Saxon CLI with our extension functions   
     protected void initializeConfiguration(Configuration config) {
         SaxonExtensionFunctions.registerAll(config);
     }
