@@ -13,12 +13,18 @@
     <xsl:param name="split" select="()"/>
     <xsl:param name="skip" select="()"/>
     
+    <xsl:param name="asof" select="round(
+        ( current-dateTime() - xs:dateTime('1970-01-01T00:00:00') )
+        div
+        xs:dayTimeDuration('PT1S')
+    )"/>
+    
     <xsl:template match="foxml:datastream/foxml:datastreamVersion[empty(following-sibling::foxml:datastreamVersion)]/foxml:xmlContent">
         <xsl:variable name="ds" select="replace(ancestor::foxml:datastream/@ID,'\.[0-9]+','')"/>
         <!-- either explicitly split off or explcitily skip from splitting of -->
         <xsl:variable name="do" select="$ds=$split or not($ds=$skip)"/>
         <xsl:if test="$do">
-            <xsl:variable name="out" select="replace(base-uri(),'.xml$',concat('.',$ds,'.xml'))"/> 
+            <xsl:variable name="out" select="replace(base-uri(),'.xml$',concat('.',$ds,'.',$asof,'.xml'))"/>
             <xsl:message>split fox[<xsl:value-of select="base-uri()"/>][<xsl:value-of select="replace($out,'.*/','.../')"/>]</xsl:message>
             <xsl:result-document href="{$out}">
                 <xsl:copy-of select="*"/>
@@ -31,7 +37,7 @@
         <!-- either explicitly split off or explcitily skip from splitting of -->
         <xsl:variable name="do" select="$ds=$split or not($ds=$skip)"/>
         <xsl:if test="$do">
-            <xsl:variable name="out" select="replace(base-uri(),'.xml$',concat('.',$ds,'.file'))"/> 
+            <xsl:variable name="out" select="replace(base-uri(),'.xml$',concat('.',$ds,'.',$asof,'.file'))"/>
             <xsl:message>split fox[<xsl:value-of select="base-uri()"/>][<xsl:value-of select="replace($out,'.*/','.../')"/>]</xsl:message>
             <xsl:result-document href="{$out}" method="text" encoding="UTF-8">
                 <xsl:value-of select="@REF"/>

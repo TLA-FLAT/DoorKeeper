@@ -17,13 +17,17 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
+import java.util.Date;
 import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.QName;
+import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
+import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import nl.mpi.tla.flat.deposit.util.SaxonListener;
 import org.apache.jena.ext.com.google.common.io.Files;
@@ -71,6 +75,10 @@ public class FOXUpdate extends AbstractAction {
                 split.setSource(new StreamSource(fox));
                 XdmDestination destination = new XdmDestination();
                 split.setDestination(destination);
+                if (sip.getFID().toString().contains("@")) {
+                    long asof = Global.asOfDateTime(sip.getFID().toString().replaceFirst(".*@","")).getTime();;
+                    split.setParameter(new QName("asof"), new XdmAtomicValue(asof));
+                }
                 split.transform();
                 
                 if (debug)
@@ -99,6 +107,11 @@ public class FOXUpdate extends AbstractAction {
                         split.setSource(new StreamSource(fox));
                         destination = new XdmDestination();
                         split.setDestination(destination);
+                        split.clearParameters();
+                        if (res.getFID().toString().contains("@")) {
+                            long asof = Global.asOfDateTime(res.getFID().toString().replaceFirst(".*@","")).getTime();
+                            split.setParameter(new QName("asof"), new XdmAtomicValue(asof));
+                        }
                         split.transform();
                         if (debug)
                             Files.copy(fox, new File(fox.toString().replace(".xml", ".bak")));

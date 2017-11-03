@@ -71,22 +71,25 @@ public class FedoraInteract extends FedoraAction {
             // - <fid>.prop (props -> modify (some) properties)
             // TODO
             
-            // - <fid>.<dsid>.file ... (DS -> modifyDatastream.dsLocation)
-            // - <fid>.<dsid>.<ext>... (DS -> modifyDatastream.content)
-            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z\\-]+\\.[A-Za-z0-9_]+")));
+            // - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
+            // - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
+            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z\\-]+\\.[0-9]+\\.[A-Za-z0-9_]+")));
             for (File fox:foxs) {
                 String fid  = fox.getName().replaceFirst("\\..*$","").replace(pre+"_",pre+":").replace("_CMD","");
-                String dsid =  fox.getName().replaceFirst("^.*\\.([A-Z\\-]+)\\..*$","$1");
-                String ext  =  fox.getName().replaceFirst("^.*\\.(.*)$","$1");
-                logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]["+ext+"]");
+                String dsid = fox.getName().replaceFirst("^.*\\.([A-Z\\-]+)\\..*$","$1");
+                String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$","$1");
+                Date asof = new Date(Long.parseLong(epoch));
+                String ext  = fox.getName().replaceFirst("^.*\\.(.*)$","$1");
+                logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]["+epoch+"="+asof+"]["+ext+"]");
                 ModifyDatastreamResponse mdsResponse = null;
                 if (ext.equals("file")) {
                     List<String> lines = Files.readAllLines(fox.toPath(),StandardCharsets.UTF_8);
                     if (lines.size()!=1)
                         throw new DepositException("Datastream location file["+fox+"] should contain exactly one line!");
-                    mdsResponse = modifyDatastream(fid,dsid).dsLocation(lines.get(0)).logMessage("Updated "+dsid).execute();
-                } else
-                    mdsResponse = modifyDatastream(fid,dsid).content(fox).logMessage("Updated "+dsid).execute();
+                    mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).dsLocation(lines.get(0)).logMessage("Updated "+dsid).execute();
+                } else {
+                    mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).content(fox).logMessage("Updated "+dsid).execute();
+                }
                 if (mdsResponse.getStatus()!=200)
                     throw new DepositException("Unexpected status["+mdsResponse.getStatus()+"] while interacting with Fedora Commons!");
                 logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+mdsResponse.getLastModifiedDate()+"]");
@@ -94,7 +97,6 @@ public class FedoraInteract extends FedoraAction {
                 if (dsid.equals("CMD") || dsid.equals("OBJ"))
                     completeFID(sip,new URI(fid),dsid,mdsResponse.getLastModifiedDate());
             }
-            
         } catch(Exception e) {
             throw new DepositException("The actual deposit in Fedora failed!",e);
         }

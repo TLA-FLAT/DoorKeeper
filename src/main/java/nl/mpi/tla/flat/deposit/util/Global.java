@@ -16,6 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.util;
 
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -28,7 +29,7 @@ import static nl.mpi.tla.flat.deposit.sip.cmdi.CMD.LAT_NS;
  * @author menzowi
  */
 public class Global {
-    final static protected SimpleDateFormat ASOF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+    final static protected SimpleDateFormat ASOF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
     final static public Map<String,String> NAMESPACES = new LinkedHashMap<>();
     
     static {
@@ -40,5 +41,9 @@ public class Global {
     
     static public String asOfDateTime(Date date) {
         return ASOF.format(date)+"Z";
+    }
+
+    static public Date asOfDateTime(String date) throws ParseException {
+        return ASOF.parse(date.replaceFirst("Z$",""));
     }
 }
