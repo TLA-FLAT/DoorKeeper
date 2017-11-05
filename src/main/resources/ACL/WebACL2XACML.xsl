@@ -31,6 +31,7 @@
     <xsl:variable name="acl-agentClass" select="'http://www.w3.org/ns/auth/acl#agentClass'"/>
     <xsl:variable name="acl-mode" select="'http://www.w3.org/ns/auth/acl#mode'"/>
     <xsl:variable name="acl-read" select="'http://www.w3.org/ns/auth/acl#Read'"/>
+    <xsl:variable name="acl-hide" select="'http://lat.mpi.nl/ns/auth/acl#Hide'"/>
     <xsl:variable name="foaf-agent" select="'http://xmlns.com/foaf/0.1/Agent'"/>
     <xsl:variable name="foaf-service" select="'http://xmlns.com/foaf/0.1/accountServiceHomepage'"/>
     <xsl:variable name="foaf-account" select="'http://xmlns.com/foaf/0.1/account'"/>
@@ -55,6 +56,74 @@
         <xsl:sequence select="concat($prefix, substring($suffix, string-length($suffix) - $length + 1))"/>
     </xsl:function>
     
+    <xsl:function name="cmd:accountsWithAccess" as="xs:string*">
+        <xsl:param name="objects"/>
+        <xsl:param name="mode"/>
+        <xsl:for-each select="($objects)[sem:predicate=$acl-accessTo]/sem:subject">
+            <xsl:variable name="rule" select="."/>
+            <xsl:message use-when="$debug">DBG: rule[<xsl:value-of select="$rule"/>]</xsl:message>
+            <!-- does the rule give read access? -->
+            <xsl:if test="exists(key('t-subject',$rule,$t)[sem:predicate=$acl-mode][sem:object=$mode])">
+                <!-- go to the agents -->
+                <xsl:for-each select="key('t-subject',$rule,$t)[sem:predicate=$acl-agent]/sem:object">
+                    <xsl:variable name="agent" select="."/>
+                    <xsl:message use-when="$debug">DBG: agent[<xsl:value-of select="$agent"/>]</xsl:message>
+                    <!-- go to their accounts -->
+                    <xsl:for-each select="key('t-subject',$agent,$t)[sem:predicate=$foaf-account]/sem:object">
+                        <xsl:variable name="account" select="."/>
+                        <xsl:message use-when="$debug">DBG: account[<xsl:value-of select="$account"/>]</xsl:message>
+                        <!-- does the agent have a FLAT account? -->
+                        <xsl:if test="key('t-subject',$account,$t)[sem:predicate=$foaf-service]/sem:object=$flat">
+                            <xsl:for-each select="key('t-subject',$account,$t)[sem:predicate=$foaf-accountName]/sem:object">
+                                <xsl:variable name="eppn" select="."/>
+                                <xsl:message>DBG: access[<xsl:value-of select="$mode"/>] for account[<xsl:value-of select="$eppn"/>]!</xsl:message>
+                                <xsl:sequence select="$eppn"/>
+                            </xsl:for-each>
+                        </xsl:if>
+                    </xsl:for-each>
+                </xsl:for-each>
+            </xsl:if>
+        </xsl:for-each>
+    </xsl:function>
+    
+    <xsl:function name="cmd:rolesWithAccess" as="xs:string*">
+        <xsl:param name="objects"/>
+        <xsl:param name="mode"/>
+        <xsl:for-each select="($objects)[sem:predicate=$acl-accessTo]/sem:subject">
+            <xsl:variable name="rule" select="."/>
+            <xsl:message use-when="$debug">DBG: rule[<xsl:value-of select="$rule"/>]</xsl:message>
+            <!-- does the rule give read access? -->
+            <xsl:if test="exists(key('t-subject',$rule,$t)[sem:predicate=$acl-mode][sem:object=$mode])">
+                <xsl:for-each select="key('t-subject',$rule,$t)[sem:predicate=$acl-agentClass]/sem:object">
+                    <xsl:variable name="agent" select="."/>
+                    <xsl:message use-when="$debug">DBG: agent class[<xsl:value-of select="$agent"/>]</xsl:message>
+                    <xsl:choose>
+                        <!-- if the AgentClass is foaf:Agent the resource should be public, as foaf:Agent represents everyone -->
+                        <xsl:when test="$agent=$foaf-agent">
+                            <!-- should have been handled above, if we use the 'anonymous user' Drupal role the FC API-A will still require a login --> 
+                            <xsl:message terminate="yes">ERR: read access for everyone, but processing is now handling specific user(s| groups)!</xsl:message>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <!-- go to their accounts -->
+                            <xsl:for-each select="key('t-subject',$agent,$t)[sem:predicate=$foaf-account]/sem:object">
+                                <xsl:variable name="account" select="."/>
+                                <xsl:message use-when="$debug">DBG: account[<xsl:value-of select="$account"/>]</xsl:message>
+                                <!-- does the agent have a FLAT account? -->
+                                <xsl:if test="key('t-subject',$account,$t)[sem:predicate=$foaf-service]/sem:object=$flat">
+                                    <xsl:for-each select="key('t-subject',$account,$t)[sem:predicate=$foaf-accountName]/sem:object">
+                                        <xsl:variable name="role" select="."/>
+                                        <xsl:message>DBG: access[<xsl:value-of select="$mode"/>] for role[<xsl:value-of select="$role"/>]!</xsl:message>
+                                        <xsl:sequence select="$role"/>
+                                    </xsl:for-each>
+                                </xsl:if>
+                            </xsl:for-each>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:for-each>
+            </xsl:if>
+        </xsl:for-each>
+    </xsl:function>
+    
     <xsl:template match="/">
         <xsl:message use-when="$debug">DBG: sip[<xsl:value-of select="$sip"/>]</xsl:message>
         <xsl:message use-when="$debug">DBG: flat[<xsl:value-of select="$flat"/>]</xsl:message>
@@ -77,6 +146,262 @@
                 </xsl:for-each>
             </user>
         </xsl:result-document>
+        <xsl:variable name="sipPID">
+            <xsl:choose>
+                <xsl:when test="starts-with(cmd:hdl($record/cmd:CMD/cmd:Header/cmd:MdSelfLink), 'hdl:')">
+                    <xsl:sequence select="cmd:hdl($record/cmd:CMD/cmd:Header/cmd:MdSelfLink)"/>
+                </xsl:when>
+                <xsl:otherwise>
+                    <xsl:sequence select="resolve-uri($record/cmd:CMD/cmd:Header/cmd:MdSelfLink, base-uri($record))"/>
+                </xsl:otherwise>
+            </xsl:choose>
+        </xsl:variable>
+        <xsl:variable name="sipID">
+            <xsl:choose>
+                <xsl:when test="normalize-space($record/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI) != ''">
+                    <xsl:sequence select="normalize-space($record/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI)"/>
+                </xsl:when>
+                <xsl:otherwise>
+                    <xsl:sequence select="cmd:lat('lat:', $sipPID)"/>
+                </xsl:otherwise>
+            </xsl:choose>
+        </xsl:variable>
+        <xsl:for-each select="(key('t-object',$sip,$t))[sem:predicate=$acl-accessTo]/sem:subject">
+            <xsl:variable name="rule" select="."/>
+            <xsl:message use-when="$debug">DBG: SIP rule[<xsl:value-of select="$rule"/>]</xsl:message>
+            <xsl:for-each select="key('t-subject',$rule,$t)">
+                <xsl:message use-when="$debug">DBG: s[<xsl:value-of select="sem:subject"/>]p[<xsl:value-of select="sem:predicate"/>]o[<xsl:value-of select="sem:object"/>]</xsl:message>
+            </xsl:for-each>
+            <!-- does the rule hide access? -->
+            <xsl:if test="exists(key('t-subject',$rule,$t)[sem:predicate=$acl-mode][sem:object=$acl-hide])">
+                <xsl:message>INF: hidden SIP[<xsl:value-of select="$record/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:localURI"/>][<xsl:value-of select="$record/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI"/>][<xsl:value-of select="$record/cmd:CMD/cmd:Header/cmd:MdSelfLink"/>]</xsl:message>
+                <xsl:variable name="href-base" select="concat($acl-base,'/',replace($sipID, '[^a-zA-Z0-9]', '_'))"/>
+                <xsl:message>INF: SIP policy[<xsl:value-of select="$href-base"/>.xm;]</xsl:message>
+                <xsl:result-document href="{$href-base}.xml">
+                    <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="islandora-xacml-editor-v1" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
+                        <Target>
+                            <Subjects>
+                                <AnySubject/>
+                            </Subjects>
+                            <Resources>
+                                <AnyResource/>
+                            </Resources>
+                            <Actions>
+                                <AnyAction/>
+                            </Actions>
+                        </Target>
+                        <xsl:variable name="management-functions" select="(
+                            'id-addDatastream',
+                            'id-addDisseminator',
+                            'id-adminPing',
+                            'id-getDisseminatorHistory',
+                            'id-getNextPid',
+                            'id-ingest',
+                            'id-modifyDatastreamByReference',
+                            'id-modifyDatastreamByValue',
+                            'id-modifyDisseminator',
+                            'id-modifyObject',
+                            'id-purgeObject',
+                            'id-purgeDatastream',
+                            'id-purgeDisseminator',
+                            'id-setDatastreamState',
+                            'id-setDisseminatorState',
+                            'id-setDatastreamVersionable',
+                            'id-compareDatastreamChecksum',
+                            'id-serverShutdown',
+                            'id-serverStatus',
+                            'id-upload',
+                            'id-dsstate',
+                            'id-resolveDatastream',
+                            'id-reloadPolicies'
+                        )"/>
+                        <Rule RuleId="deny-management-functions" Effect="Deny">
+                            <Target>
+                                <Subjects>
+                                    <AnySubject/>
+                                </Subjects>
+                                <Resources>
+                                    <AnyResource/>
+                                </Resources>
+                                <Actions>
+                                    <xsl:for-each select="$management-functions">
+                                        <Action>
+                                            <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
+                                                    <xsl:value-of select="."/>
+                                                </AttributeValue>
+                                                <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
+                                            </ActionMatch>
+                                        </Action>
+                                    </xsl:for-each>
+                                </Actions>
+                            </Target>
+                            <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+                                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+                                    <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+                                        <SubjectAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false" AttributeId="urn:fedora:names:fedora:2.1:subject:loginId"/>
+                                        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                                            <!-- ... the default accounts ... -->
+                                            <xsl:for-each select="$default-accounts">
+                                                <xsl:variable name="account" select="."/>
+                                                <xsl:message>INF: SIP read access for account[<xsl:value-of select="$account"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$account"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                            <!-- DYNAMIC: add any other specific user needing access -->
+                                            <!-- find all agents with access to the SIP -->
+                                            <xsl:for-each select="cmd:accountsWithAccess(key('t-object',$sip,$t),$acl-read)">
+                                                <xsl:variable name="account" select="."/>
+                                                <xsl:message>INF: SIP read access for account[<xsl:value-of select="$account"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$account"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                        </Apply>
+                                    </Apply>
+                                    <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+                                        <SubjectAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false" AttributeId="fedoraRole"/>
+                                        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                                            <!-- ... the default roles ... -->
+                                            <xsl:for-each select="$default-roles">
+                                                <xsl:variable name="role" select="."/>
+                                                <xsl:message>INF: SIP read access for any [<xsl:value-of select="$role"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$role"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                            <!-- DYNAMIC: add groups or even everyone if public access is allowed -->
+                                            <xsl:for-each select="cmd:rolesWithAccess(key('t-object',$sip,$t),$acl-read)">
+                                                <xsl:variable name="role" select="."/>
+                                                <xsl:message>INF: SIP read access for any [<xsl:value-of select="$role"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$role"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                        </Apply>
+                                    </Apply>
+                                </Apply>
+                            </Condition>
+                        </Rule>
+                        <xsl:variable name="access-functions" select="(
+                            'api-a',
+                            'id-getDatastreamHistory',
+                            'id-listObjectInResourceIndexResults'
+                        )"/>
+                        <Rule RuleId="deny-access-functions" Effect="Deny">
+                            <Target>
+                                <Subjects>
+                                    <AnySubject/>
+                                </Subjects>
+                                <Resources>
+                                    <AnyResource/>
+                                </Resources>
+                                <Actions>
+                                    <xsl:for-each select="$access-functions">
+                                        <Action>
+                                            <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
+                                                    <xsl:value-of select="."/>
+                                                </AttributeValue>
+                                                <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
+                                            </ActionMatch>
+                                        </Action>
+                                    </xsl:for-each>
+                                </Actions>
+                            </Target>
+                            <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+                                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+                                    <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+                                        <SubjectAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false" AttributeId="urn:fedora:names:fedora:2.1:subject:loginId"/>
+                                        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                                            <!-- ... the default accounts ... -->
+                                            <xsl:for-each select="$default-accounts">
+                                                <xsl:variable name="account" select="."/>
+                                                <xsl:message>INF: SIP read access for account[<xsl:value-of select="$account"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$account"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                            <!-- DYNAMIC: add any other specific user needing access -->
+                                            <!-- find all agents with access to the SIP -->
+                                            <xsl:for-each select="cmd:accountsWithAccess(key('t-object',$sip,$t),$acl-read)">
+                                                <xsl:variable name="account" select="."/>
+                                                <xsl:message>INF: SIP read access for account[<xsl:value-of select="$account"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$account"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                        </Apply>
+                                    </Apply>
+                                    <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+                                        <SubjectAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false" AttributeId="fedoraRole"/>
+                                        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                                            <!-- ... the default roles ... -->
+                                            <xsl:for-each select="$default-roles">
+                                                <xsl:variable name="role" select="."/>
+                                                <xsl:message>INF: SIP read access for any [<xsl:value-of select="$role"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$role"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                            <!-- DYNAMIC: add groups or even everyone if public access is allowed -->
+                                            <xsl:for-each select="cmd:rolesWithAccess(key('t-object',$sip,$t),$acl-read)">
+                                                <xsl:variable name="role" select="."/>
+                                                <xsl:message>INF: SIP read access for any [<xsl:value-of select="$role"/>]!</xsl:message>
+                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                    <xsl:value-of select="$role"/>
+                                                </AttributeValue>
+                                            </xsl:for-each>
+                                        </Apply>
+                                    </Apply>
+                                </Apply>
+                            </Condition>
+                        </Rule>
+                        <Rule RuleId="allow-everything-else" Effect="Permit">
+                            <Target>
+                                <Subjects>
+                                    <AnySubject/>
+                                </Subjects>
+                                <Resources>
+                                    <AnyResource/>
+                                </Resources>
+                                <Actions>
+                                    <AnyAction/>
+                                </Actions>
+                            </Target>
+                        </Rule>
+                    </Policy>
+                </xsl:result-document>
+                <xsl:message>INF: SIP RELS-EXT[<xsl:value-of select="$href-base"/>.RELS-EXT.xml]</xsl:message>
+                <xsl:result-document href="{$href-base}.RELS-EXT.xml">
+                    <rdf:RDF xmlns:fedora="info:fedora/fedora-system:def/relations-external#" xmlns:fedora-model="info:fedora/fedora-system:def/model#" xmlns:islandora="http://islandora.ca/ontology/relsext#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+                        <rdf:Description rdf:about="info:fedora/{$sipID}">
+                            <xsl:for-each select="($default-accounts,cmd:accountsWithAccess(key('t-object',$sip,$t),$acl-read))">
+                                <xsl:variable name="account" select="."/>
+                                <islandora:isViewableByUser>
+                                    <xsl:value-of select="$account"/>
+                                </islandora:isViewableByUser>
+                                <islandora:isManageableByUser>
+                                    <xsl:value-of select="$account"/>
+                                </islandora:isManageableByUser>
+                            </xsl:for-each>
+                            <xsl:for-each select="($default-roles,cmd:rolesWithAccess(key('t-object',$sip,$t),$acl-read))">
+                                <xsl:variable name="role" select="."/>
+                                <islandora:isViewableByRole>
+                                    <xsl:value-of select="$role"/>
+                                </islandora:isViewableByRole>
+                                <islandora:isManageableByRole>
+                                    <xsl:value-of select="$role"/>
+                                </islandora:isManageableByRole>
+                            </xsl:for-each>
+                        </rdf:Description>
+                    </rdf:RDF>
+                </xsl:result-document>
+            </xsl:if>
+        </xsl:for-each>
         <xsl:for-each select="$record/cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType = 'Resource']">
             <xsl:variable name="resource" select="."/>
             <xsl:variable name="rid" select="concat($sip,'#',$resource/@id)"/>
@@ -85,7 +410,7 @@
             <xsl:variable name="public" as="xs:boolean*">
                 <xsl:for-each select="(key('t-object',$rid,$t),key('t-object',$sip,$t))[sem:predicate=$acl-accessTo]/sem:subject">
                     <xsl:variable name="rule" select="."/>
-                    <xsl:message use-when="$debug">DBG: rule[<xsl:value-of select="$rule"/>]</xsl:message>
+                    <xsl:message use-when="$debug">DBG: SIP or resource rule[<xsl:value-of select="$rule"/>]</xsl:message>
                     <!-- does the rule give read access? -->
                     <xsl:if test="exists(key('t-subject',$rule,$t)[sem:predicate=$acl-mode][sem:object=$acl-read])">
                         <xsl:for-each select="key('t-subject',$rule,$t)[sem:predicate=$acl-agentClass]/sem:object">
@@ -218,32 +543,12 @@
                                                 </xsl:for-each>
                                                 <!-- DYNAMIC: add any other specific user needing access -->
                                                 <!-- find all agents with access to the resource or the SIP -->
-                                                <xsl:for-each select="(key('t-object',$rid,$t),key('t-object',$sip,$t))[sem:predicate=$acl-accessTo]/sem:subject">
-                                                    <xsl:variable name="rule" select="."/>
-                                                    <xsl:message use-when="$debug">DBG: rule[<xsl:value-of select="$rule"/>]</xsl:message>
-                                                    <!-- does the rule give read access? -->
-                                                    <xsl:if test="exists(key('t-subject',$rule,$t)[sem:predicate=$acl-mode][sem:object=$acl-read])">
-                                                        <!-- go to the agents -->
-                                                        <xsl:for-each select="key('t-subject',$rule,$t)[sem:predicate=$acl-agent]/sem:object">
-                                                            <xsl:variable name="agent" select="."/>
-                                                            <xsl:message use-when="$debug">DBG: agent[<xsl:value-of select="$agent"/>]</xsl:message>
-                                                            <!-- go to their accounts -->
-                                                            <xsl:for-each select="key('t-subject',$agent,$t)[sem:predicate=$foaf-account]/sem:object">
-                                                                <xsl:variable name="account" select="."/>
-                                                                <xsl:message use-when="$debug">DBG: account[<xsl:value-of select="$account"/>]</xsl:message>
-                                                                <!-- does the agent have a FLAT account? -->
-                                                                <xsl:if test="key('t-subject',$account,$t)[sem:predicate=$foaf-service]/sem:object=$flat">
-                                                                    <xsl:for-each select="key('t-subject',$account,$t)[sem:predicate=$foaf-accountName]/sem:object">
-                                                                        <xsl:variable name="eppn" select="."/>
-                                                                        <xsl:message>INF: read access for account[<xsl:value-of select="$eppn"/>]!</xsl:message>
-                                                                        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
-                                                                            <xsl:value-of select="$eppn"/>
-                                                                        </AttributeValue>
-                                                                    </xsl:for-each>
-                                                                </xsl:if>
-                                                            </xsl:for-each>
-                                                        </xsl:for-each>
-                                                    </xsl:if>
+                                                <xsl:for-each select="cmd:accountsWithAccess((key('t-object',$rid,$t),key('t-object',$sip,$t)),$acl-read)">
+                                                    <xsl:variable name="account" select="."/>
+                                                    <xsl:message>INF: read access for account[<xsl:value-of select="$account"/>]!</xsl:message>
+                                                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                        <xsl:value-of select="$account"/>
+                                                    </AttributeValue>
                                                 </xsl:for-each>
                                             </Apply>
                                         </Apply>
@@ -259,40 +564,12 @@
                                                     </AttributeValue>
                                                 </xsl:for-each>
                                                 <!-- DYNAMIC: add groups or even everyone if public access is allowed -->
-                                                <xsl:for-each select="(key('t-object',$rid,$t),key('t-object',$sip,$t))[sem:predicate=$acl-accessTo]/sem:subject">
-                                                    <xsl:variable name="rule" select="."/>
-                                                    <xsl:message use-when="$debug">DBG: rule[<xsl:value-of select="$rule"/>]</xsl:message>
-                                                    <!-- does the rule give read access? -->
-                                                    <xsl:if test="exists(key('t-subject',$rule,$t)[sem:predicate=$acl-mode][sem:object=$acl-read])">
-                                                        <xsl:for-each select="key('t-subject',$rule,$t)[sem:predicate=$acl-agentClass]/sem:object">
-                                                            <xsl:variable name="agent" select="."/>
-                                                            <xsl:message use-when="$debug">DBG: agent class[<xsl:value-of select="$agent"/>]</xsl:message>
-                                                            <xsl:choose>
-                                                                <!-- if the AgentClass is foaf:Agent the resource should be public, as foaf:Agent represents everyone -->
-                                                                <xsl:when test="$agent=$foaf-agent">
-                                                                    <!-- should have been handled above, if we use the 'anonymous user' Drupal role the FC API-A will still require a login --> 
-                                                                    <xsl:message terminate="yes">ERR: read access for everyone, but processing is now handling specific user(s| groups)!</xsl:message>
-                                                                </xsl:when>
-                                                                <xsl:otherwise>
-                                                                    <!-- go to their accounts -->
-                                                                    <xsl:for-each select="key('t-subject',$agent,$t)[sem:predicate=$foaf-account]/sem:object">
-                                                                        <xsl:variable name="account" select="."/>
-                                                                        <xsl:message use-when="$debug">DBG: account[<xsl:value-of select="$account"/>]</xsl:message>
-                                                                        <!-- does the agent have a FLAT account? -->
-                                                                        <xsl:if test="key('t-subject',$account,$t)[sem:predicate=$foaf-service]/sem:object=$flat">
-                                                                            <xsl:for-each select="key('t-subject',$account,$t)[sem:predicate=$foaf-accountName]/sem:object">
-                                                                                <xsl:variable name="role" select="."/>
-                                                                                <xsl:message>INF: read access for role[<xsl:value-of select="$role"/>]!</xsl:message>
-                                                                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
-                                                                                    <xsl:value-of select="$role"/>
-                                                                                </AttributeValue>
-                                                                            </xsl:for-each>
-                                                                        </xsl:if>
-                                                                    </xsl:for-each>
-                                                                </xsl:otherwise>
-                                                            </xsl:choose>
-                                                        </xsl:for-each>
-                                                    </xsl:if>
+                                                <xsl:for-each select="cmd:rolesWithAccess((key('t-object',$rid,$t),key('t-object',$sip,$t)),$acl-read)">
+                                                    <xsl:variable name="role" select="."/>
+                                                    <xsl:message>INF: read access for any [<xsl:value-of select="$role"/>]!</xsl:message>
+                                                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                                        <xsl:value-of select="$role"/>
+                                                    </AttributeValue>
                                                 </xsl:for-each>
                                             </Apply>
                                         </Apply>
