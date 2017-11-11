@@ -16,8 +16,6 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import java.net.URI;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
