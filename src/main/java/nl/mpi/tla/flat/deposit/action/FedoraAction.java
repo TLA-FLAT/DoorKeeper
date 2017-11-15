@@ -101,12 +101,9 @@ abstract public class FedoraAction extends AbstractAction {
         return pid;
     }
     
-    public Date lookupAsOfDateTime(URI fid, String dsid) throws DepositException {
+    public Date lookupAsOfDateTime(URI fid) throws DepositException {
         try {
-            GetDatastreamResponse dsResponse = getDatastream(fid.toString(),dsid).execute();
-            if (dsResponse.getStatus()!=200)
-                throw new DepositException("Unexpected status["+dsResponse.getStatus()+"] while querying Fedora Commons!");
-            return dsResponse.getLastModifiedDate();
+            return getObjectProfile(fid.toString()).execute().getLastModifiedDate();
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }

@@ -61,11 +61,11 @@ public class FedoraInteract extends FedoraAction {
                 String dsid = (fox.getName().endsWith("_CMD.xml")?"CMD":"OBJ");
                 logger.debug("FOXML["+fox+"] -> ["+fid+"]");
                 IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
-                GetDatastreamResponse dsResponse = getDatastream(fid,dsid).execute();
-                if (dsResponse.getStatus()!=200)
-                    throw new DepositException("Unexpected status["+dsResponse.getStatus()+"] while interacting with Fedora Commons!");
-                logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]["+dsid+"]["+dsResponse.getLastModifiedDate()+"]");
-                completeFID(sip,new URI(fid),dsid,dsResponse.getLastModifiedDate());
+                if (iResponse.getStatus()!=201)
+                    throw new DepositException("Unexpected status["+iResponse.getStatus()+"] while interacting with Fedora Commons!");
+                Date asof = getObjectProfile(fid).execute().getLastModifiedDate();
+                completeFID(sip,new URI(fid),asof);
+                logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]["+dsid+"]["+asof+"]");
             }
 
             // - <fid>.prop (props -> modify (some) properties)
@@ -93,9 +93,8 @@ public class FedoraInteract extends FedoraAction {
                 if (mdsResponse.getStatus()!=200)
                     throw new DepositException("Unexpected status["+mdsResponse.getStatus()+"] while interacting with Fedora Commons!");
                 logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+mdsResponse.getLastModifiedDate()+"]");
-                // we should update the PID if this is the "main" datastream
-                if (dsid.equals("CMD") || dsid.equals("OBJ"))
-                    completeFID(sip,new URI(fid),dsid,mdsResponse.getLastModifiedDate());
+                // we should update the PID asOfDateTime
+                completeFID(sip,new URI(fid),mdsResponse.getLastModifiedDate());
             }
         } catch(Exception e) {
             throw new DepositException("The actual deposit in Fedora failed!",e);
@@ -103,31 +102,25 @@ public class FedoraInteract extends FedoraAction {
         return true;
     }
     
-    protected boolean completeFID(SIPInterface sip, URI fid, String dsid, Date date) throws DepositException {
+    protected boolean completeFID(SIPInterface sip, URI fid, Date date) throws DepositException {
         if (sip.hasFID() && sip.getFID().toString().startsWith(fid.toString())) {
-            sip.setFID(fid);// will reset the FID
-            sip.setFIDStream(dsid);
-            sip.setFIDasOfTimeDate(date);
-            logger.debug("Fedora SIP datastream["+sip.getPID()+"]->["+sip.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
+            sip.setFIDasOfTimeDate(date); // will keep the latest asOfDateTime
+            logger.debug("Fedora SIP datastream["+sip.getPID()+"]->["+sip.getFID()+"]=["+fid+"]["+date+"] completed!");
             return true;
         }
         Collection col = sip.getCollectionByFID(fid);
         if (col!=null) {
-            col.setFID(fid);// will reset the FID
-            col.setFIDStream(dsid);
-            col.setFIDasOfTimeDate(date);
-            logger.debug("Fedora Collection datastream["+col.getPID()+"]->["+col.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
+            col.setFIDasOfTimeDate(date); // will keep the latest asOfDateTime
+            logger.debug("Fedora Collection datastream["+col.getPID()+"]->["+col.getFID()+"]=["+fid+"]["+date+"] completed!");
             return true;
         }
         Resource res = sip.getResourceByFID(fid);
         if (res!=null) {
-            res.setFID(fid);// will reset the FID
-            res.setFIDStream(dsid);
-            res.setFIDasOfTimeDate(date);
-            logger.debug("Fedora Resource datastream["+res.getPID()+"]->["+res.getFID()+"]=["+fid+"]["+dsid+"]["+date+"] completed!");
+            res.setFIDasOfTimeDate(date); // will keep the latest asOfDateTime
+            logger.debug("Fedora Resource datastream["+res.getPID()+"]->["+res.getFID()+"]=["+fid+"]["+date+"] completed!");
             return true;
         }
-        logger.debug("Fedora datastream["+fid+"]["+dsid+"]["+date+"] couldn't be associated with a PID!");
+        logger.debug("Fedora datastream["+fid+"]["+date+"] couldn't be associated with a PID!");
         return false;
     }
     

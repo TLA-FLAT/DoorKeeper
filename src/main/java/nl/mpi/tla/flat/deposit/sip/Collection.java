@@ -18,6 +18,7 @@ package nl.mpi.tla.flat.deposit.sip;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.text.ParseException;
 import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -91,7 +92,16 @@ abstract public class Collection {
         if (this.fid==null)
             throw new DepositException("Collection["+this.uri+"] has no Fedora Commons PID yet!");
         try {
-            this.fid = new URI(this.fid.toString()+"#"+dsid);
+            String _fid = this.fid.toString().replaceAll("#.*","");
+            String _asof = this.fid.getRawFragment();
+            String _dsid = null;
+            if (_asof!=null && _asof.contains("@")) {
+                _dsid = _asof.replaceAll("@.*","");
+                _asof = _asof.replaceAll(".*@","");
+            }
+            if (_dsid!=null && _dsid.equals(dsid))
+                logger.warn("FID["+this.fid+"] changing the DSID to ["+dsid+"]");
+            this.fid = new URI(_fid+"#"+dsid+(_asof!=null?"@"+_asof:""));
         } catch (URISyntaxException ex) {
            throw new DepositException(ex);
         }
@@ -101,7 +111,29 @@ abstract public class Collection {
         if (this.fid==null)
             throw new DepositException("Collection["+this.uri+"] has no Fedora Commons PID yet!");
         try {
-            this.fid = new URI(this.fid.toString()+"@"+Global.asOfDateTime(date));
+            String _fid = this.fid.toString().replaceAll("#.*","");
+            String _asof = this.fid.getRawFragment();
+            String _dsid = null;
+            if (_asof!=null && _asof.contains("@")) {
+                _dsid = _asof.replaceAll("@.*","");
+                _asof = _asof.replaceAll(".*@","");
+            } else
+                _dsid = "CMD";
+            try {
+                if (_asof!=null) {
+                    if (Global.asOfDateTime(_asof).after(date)) {
+                        logger.warn("FID["+this.fid+"] keeping the later asOfDateTime, ignoring earlier ["+date+"]");
+                    } else {
+                        logger.debug("FID["+this.fid+"] changing the asOfDateTime to later ["+date+"]");
+                        _asof = Global.asOfDateTime(date);
+                    }
+                } else
+                    _asof = Global.asOfDateTime(date);
+            } catch (ParseException ex) {
+                logger.error("FID["+this.fid+"] invalid asOfDateTime["+_asof+"], changing to ["+date+"]");
+                        _asof = Global.asOfDateTime(date);
+            }
+            this.fid = new URI(_fid+"#"+_dsid+"@"+_asof);
         } catch (URISyntaxException ex) {
            throw new DepositException(ex);
         }

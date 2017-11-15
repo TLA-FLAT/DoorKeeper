@@ -16,6 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
+import static com.yourmediashelf.fedora.client.FedoraClient.getObjectProfile;
 import static com.yourmediashelf.fedora.client.FedoraClient.riSearch;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.net.URI;
@@ -151,15 +152,13 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             if (col!=null) {
                 URI fid = null;
                 if (col.hasFID())
-                    fid = new URI(col.getFID().toString().replaceAll("#.*",""));
+                    fid = col.getFID(true);
                 else if (col.hasPID())
                     fid = this.lookupFID(col.getPID());
                 else 
                     throw new DepositException("Unknown Collection["+col+"]!");
                 if (fid.toString().startsWith("lat:")) {
-                    Date asof = this.lookupAsOfDateTime(fid, "CMD");
-                    col.setFID(fid);// will reset the FID
-                    col.setFIDStream("CMD");
+                    Date asof = getObjectProfile(fid.toString()).execute().getLastModifiedDate();
                     col.setFIDasOfTimeDate(asof);
                     logger.debug("Fedora Collection datastream["+(col.hasPID()?col.getPID():"")+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
                 }
