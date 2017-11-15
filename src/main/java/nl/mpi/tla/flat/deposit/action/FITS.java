@@ -15,48 +15,38 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package nl.mpi.tla.flat.deposit.action;
-
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import org.apache.commons.io.FileUtils;
-
 /**
  *
  * @author menzowi
  */
 public class FITS extends AbstractAction {
-	
     private static final Logger logger = LoggerFactory.getLogger(FITS.class);
     
-	
+    private static final String MIMETYPE_XPATH = "zero-or-one(distinct-values(/fits:fits/fits:identification/fits:identity/@mimetype))=$mime";
+    
     @Override
     public boolean perform(Context context) throws DepositException {
-    	
-    	boolean allAcceptable = true;
-        
+        boolean allAcceptable = true;
         File dir = null;
         if (hasParameter("dir")) {
             dir = new File(getParameter("dir"));
@@ -68,8 +58,7 @@ public class FITS extends AbstractAction {
                 }
             }
         }
-    	
-    	String fitsService = getParameter("fitsService");
+        String fitsService = getParameter("fitsService");
         if (fitsService == null)
             throw new DepositException("Missing fitsService parameter!");
         if (!fitsService.endsWith("/")) {
@@ -81,99 +70,173 @@ public class FITS extends AbstractAction {
         } catch (MalformedURLException ex) {
             throw new DepositException(ex);
         }
-        
-    	String mimetypesFileLocation = getParameter("mimetypes");
+        String mimetypesFileLocation = getParameter("mimetypes");
         if (mimetypesFileLocation == null)
             throw new DepositException("Missing mimetypes parameter!");
-        
         XdmNode mimetypes = null;
         try {
             mimetypes = Saxon.buildDocument(new StreamSource(mimetypesFileLocation));
         } catch (SaxonApiException ex) {
             throw new DepositException(ex);
         }
-    	
-    	for(Resource resource : context.getSIP().getResources()) {
-            if(resource.hasFile()) {
+        for (Resource resource : context.getSIP().getResources()) {
+            if (resource.hasFile()) {
                 File file = resource.getFile();
-    			
-                XdmNode result;
+                logger.debug("resource["+file+"] mimetype?");
+                XdmNode result = null;
                 try {
-                    URL call = new URL(fitsURL,"examine?file="+file.getAbsolutePath());
+                    URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath());
                     result = Saxon.buildDocument(new StreamSource(call.toString()));
                 } catch (Exception ex) {
                     throw new DepositException(ex);
                 }
-                
                 if (dir != null) {
                     // save the FITS report for this resource
                     String name = file.getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
                     if (resource instanceof CMDResource)
-                        name = ((CMDResource)resource).getID();
-                    File out = new File(dir + "/"+name+".FITS.xml");
+                        name = ((CMDResource) resource).getID();
+                    File out = new File(dir + "/" + name + ".FITS.xml");
                     try {
-                        Saxon.save(result.asSource(),out);
+                        Saxon.save(result.asSource(), out);
                     } catch (SaxonApiException ex) {
                         throw new DepositException(ex);
                     }
+                    logger.debug(". FITS["+out+"]");
                 }
-    			
+                // try-catch code
                 try {
-                    String xp = Saxon.xpath2string(mimetypes,"normalize-space(/mimetypes/@xpath)");
-                    if (xp.equals(""))
-                        xp = "distinct-values(/fits:fits/fits:identification/fits:identity/@mimetype)";
-                    List<XdmItem> mimes = Saxon.xpathList(result,xp,null,NAMESPACES);
-                    logger.debug("FITS has detected {} mimetypes for resource[{}]:",mimes.size(),file);
-                    for (XdmItem m:mimes)
-                        logger.debug("- '{}'",m.getStringValue());
-                    if(mimes.size()==0) {
-                        logger.error("No mimetype found for resource[{}]",file);
-                        String fallback = Saxon.xpath2string(mimetypes,"normalize-space(/mimetypes/@fallback)");
-                        if (!fallback.equals("")) {
-                            logger.error("Use fallback mimetype[{}] found for resource[{}]",fallback,file);
-                            if(resource.hasMime() && !resource.getMime().equals(fallback)) {
-                                logger.warn("Resource mimetype changed from '{}' to '{}'",resource.getMime(),fallback);
+                    // loop over /mimetypes/mimetype
+                    boolean bCheck1 = false; // tells if a mimetype was found for the resource
+                    for (Iterator<XdmItem> iter = Saxon.xpathIterator(mimetypes, "/mimetypes/mimetype",null, NAMESPACES); iter.hasNext();) {
+                        XdmItem mt = iter.next();
+                        String mime = Saxon.xpath2string(mt, "normalize-space(@value)");
+                        logger.debug(". . mimetype["+mime+"] check");
+                        Boolean bCheck2 = new Boolean(true); // tells if all assertion groups succeeded
+                        if (Saxon.xpath2boolean(mt, "exists(assertions)")) {
+                            for (Iterator<XdmItem> iter2 = Saxon.xpathIterator(mt, "assertions", null,NAMESPACES); iter2.hasNext();) {
+                                XdmItem assertions = iter2.next();
+                                // get the xpath
+                                String xp = Saxon.xpath2string(assertions, "normalize-space(@xpath)");
+                                if(xp.equals("")) {
+                                    // no xpath, so fall back to the default xpath
+                                    xp = MIMETYPE_XPATH;
+                                }
+                                logger.debug(". . . assertions["+xp+"] check");
+                                // evaluate xpath
+                                Map vars = new HashMap();
+                                vars.put("mime",new XdmAtomicValue(mime));
+                                if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
+                                    // the assertions XPath failed, continue to the next /mimetypes/mimetype
+                                    logger.debug(". . . assertions["+xp+"] check failed");
+                                    bCheck2 = null;
+                                    break;
+                                }
+                                logger.debug(". . . assertions["+xp+"] check succeeded");
+                                // the assertions XPath succeeded, check the assertions for this mimetype
+                                Boolean bCheck3 = true; // tells if all mimetype assertions succeeded for the resource
+                                for (Iterator<XdmItem> iter3 = Saxon.xpathIterator(assertions, "assert", null,NAMESPACES); iter3.hasNext();) {
+                                    XdmItem a = iter3.next();
+                                    String axp = Saxon.xpath2string(a, "normalize-space(@xpath)");
+                                    if (!axp.isEmpty()) {
+                                        // evaluate the assertion xpath
+                                        bCheck3 = Saxon.xpath2boolean(result, axp, null, NAMESPACES);
+                                        if (!bCheck3) {
+                                            // assertion fails, print the AVT log message
+                                            logger.debug(". . . . assert["+axp+"] check failed");
+                                            logger.error("File '{}' has a mimetype '{}' which is ALLOWED in this repository, but fails an assertion!", file, mime);
+                                            logger.error("Message from FITS file: "+Saxon.avt(Saxon.xpath2string(a,"@message"),result, context.getProperties(), NAMESPACES));
+                                            // break out of the assertion loop
+                                            break;
+                                        }
+                                        // assertion is positive, go to next
+                                        logger.debug(". . . . assert["+axp+"] check succeeded");
+                                    } else {
+                                        //the assertion xpath does not exist
+                                        throw new DepositException("The verification of the FITS report for resource["+file+"] failed due to a configuration mismatch!");
+                                    }
+                                }
+                                if (!bCheck3) {
+                                    // some assertion of this assertions failed 
+                                    logger.debug(". . . assertions["+xp+"] failed");
+                                    bCheck2 = new Boolean(false);
+                                    break;
+                                } else
+                                    logger.debug(". . . assertions["+xp+"] succeeded");
                             }
-                            logger.debug("Setting resource mimetype to '{}'", fallback);
-                            resource.setMime(fallback);
                         } else {
-                            allAcceptable = false;
+                            // no assertions, use just the path
+                            String xp = Saxon.xpath2string(mt, "normalize-space(@xpath)");
+                            if(xp.equals("")) {
+                                // no xpath, so fall back to the default xpath
+                                xp = MIMETYPE_XPATH;
+                            }
+                            // evaluate xpath
+                            Map vars = new HashMap();
+                            vars.put("mime",new XdmAtomicValue(mime));
+                            if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
+                                // the assertions XPath failed, continue to the next /mimetypes/mimetype
+                                logger.debug(". . . assertions["+xp+"] check failed");
+                                bCheck2 = null;
+                                continue;
+                            }
+                            logger.debug(". . . assertions["+xp+"] check succeeded");
                         }
-                        continue;
+                        if (bCheck2 == null) {
+                            logger.debug(". . continue to next mimetype");
+                            continue;
+                        }
+                        if (bCheck2.booleanValue()) {
+                            // all assertions succeeded
+                            logger.debug(". . mimetype["+mime+"] succeeded");
+                            bCheck1 = true;
+                            logger.info("Resource[{}] has a mimetype which is ALLOWED in this repository and satisfies all assertions: '{}'", file, mime);
+                            if (resource.hasMime() && !resource.getMime().equals(mime)) {
+                                logger.warn("Resource mimetype changed from '{}' to '{}'", resource.getMime(), mime);
+                            }
+                            logger.debug("Setting resource mimetype to '{}'", mime);
+                            resource.setMime(mime);
+                        } else
+                            logger.debug(". . mimetype["+mime+"] failed");
+                        break;
                     }
-                    if(mimes.size() > 1) {
-                        logger.error("More than one mimetype for resource[{}]",file);
-                        allAcceptable = false;
-                        continue;
-                    }
-                    String mime = mimes.get(0).getStringValue();
                     
-                    Map vars = new HashMap();
-                    vars.put("mime",new XdmAtomicValue(mime));
-                    XdmItem mimetype = Saxon.xpathSingle(mimetypes,"/mimetypes/mimetype[@value=$mime]",vars);
-                    if (mimetype == null) {
-                        logger.error("Resource[{}] has a mimetype which is NOT ALLOWED in this repository: '{}'!",file,mime);
-                        allAcceptable = false;
-                        continue;
+                    if (!bCheck1) {
+                        // no mimetype was found, look for the otherwise 
+                        logger.debug(". mimetypes failed, checking otherwise");
+                        XdmItem o = Saxon.xpathSingle(mimetypes, "/mimetypes/otherwise");
+                        if(o!= null) {
+                            // check for an xpath
+                            String oxp = Saxon.xpath2string(o, "normalize-space(@xpath)");
+                            if (oxp.equals("") || Saxon.xpath2boolean(result, oxp, null, NAMESPACES)) {
+                                // no xpath or succesfull xpath, use fallback value as mimetype
+                                String fallback = Saxon.xpath2string(o, "normalize-space(@value)");
+                                if (!fallback.equals("")) {
+                                    // use the non-empty fallback value as mimetype for the resource
+                                    bCheck1 = true;
+                                    logger.error("Use fallback mimetype[{}] for resource[{}]", fallback, file);
+                                    if (resource.hasMime() && !resource.getMime().equals(fallback)) {
+                                        logger.warn("Resource mimetype changed from '{}' to '{}'", resource.getMime(),fallback);
+                                    }
+                                    logger.debug("Setting resource mimetype to '{}'", fallback);
+                                    resource.setMime(fallback);
+                                }
+                            }
+                        } else
+                            logger.debug(". mimetypes failed, no otherwise");
+                            
+                        if (!bCheck1) {
+                            // no allowed or fallback mimetype was found for this resource
+                            logger.debug(". mimetypes failed");
+                            logger.error("No mimetype found for resource[{}]", file);
+                            allAcceptable = false;
+                        } else
+                            logger.debug(". mimetypes succeeded");
                     }
-                    // TODO: evaluate additional mimetype/check/@xpath 
-                    // TODO: use Saxon.xpathIterator(mimetype,"check/@xpath",null,NAMESPACES) to loop over the check XPaths
-                    // TODO: evaluate each check XPath using Saxon.xpath2boolean(result,<check XPath>,null,NAMESPACES)
-                    // TODO: if one fails the type is NOT ALLOWED, tell the user why not
-                    // TODO: if all succeeds the mimetype is ALLOWED
-                    logger.info("Resource[{}] has a mimetype which is ALLOWED in this repository: '{}'",file,mime);
-                    
-                    if(resource.hasMime() && !resource.getMime().equals(mime)) {
-                        logger.warn("Resource mimetype changed from '{}' to '{}'",resource.getMime(),mime);
-                    }
-                    logger.debug("Setting resource mimetype to '{}'", mime);
-                    resource.setMime(mime);
-
                 } catch (Exception ex) {
                     throw new DepositException(ex);
                 }
             }
-    	}
-    	return allAcceptable;
+        }
+        return allAcceptable;
     }
 }
