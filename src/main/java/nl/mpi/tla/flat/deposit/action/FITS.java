@@ -42,7 +42,7 @@ import org.apache.commons.io.FileUtils;
 public class FITS extends AbstractAction {
     private static final Logger logger = LoggerFactory.getLogger(FITS.class);
     
-    private static final String MIMETYPE_XPATH = "zero-or-one(distinct-values(/fits:fits/fits:identification/fits:identity/@mimetype))=$mime";
+    private static final String MIMETYPE_XPATH = "zero-or-one(distinct-values(/fits:fits/fits:identification/fits:identity/@mimetype)[.!='TBD'])=$mime";
     
     @Override
     public boolean perform(Context context) throws DepositException {
