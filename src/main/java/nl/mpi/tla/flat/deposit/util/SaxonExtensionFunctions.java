@@ -17,6 +17,7 @@
 package nl.mpi.tla.flat.deposit.util;
 
 import com.twmacinta.util.MD5;
+import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -73,6 +74,7 @@ public final class SaxonExtensionFunctions {
         config.registerExtensionFunction(new EvaluateDefinition());
         config.registerExtensionFunction(new FindBagBaseDefinition());
         config.registerExtensionFunction(new MD5Definition());
+        config.registerExtensionFunction(new FileSizeDefinition());
     }
 
     // -----------------------------------------------------------------------
@@ -365,7 +367,7 @@ public final class SaxonExtensionFunctions {
     }
     
     // -----------------------------------------------------------------------
-    // sx:fileExists
+    // sx:md5
     // -----------------------------------------------------------------------
 
     public static final class MD5Definition 
@@ -405,6 +407,57 @@ public final class SaxonExtensionFunctions {
                         URI uri = new URI(((StringValue) arguments[0].head()).getStringValue());
                         String hash = MD5.asHex(MD5.getHash(new java.io.File(uri)));
                         seq = (new XdmAtomicValue(hash)).getUnderlyingValue();
+                    } catch(Exception e) {
+                        System.err.println("ERR: ["+((StringValue) arguments[0].head()).getStringValue()+"]:"+e.getMessage());
+                        e.printStackTrace(System.err);
+                    }
+                    return seq;
+                }
+            };
+        }
+    }
+    
+    // -----------------------------------------------------------------------
+    // sx:fileSize
+    // -----------------------------------------------------------------------
+
+    public static final class FileSizeDefinition 
+                        extends ExtensionFunctionDefinition {
+        public StructuredQName getFunctionQName() {
+            return new StructuredQName("sx", 
+                                       "java:nl.mpi.tla.saxon", 
+                                       "fileSize");
+        }
+
+        public int getMinimumNumberOfArguments() {
+            return 1;
+        }
+
+        public int getMaximumNumberOfArguments() {
+            return 1;
+        }
+
+        public SequenceType[] getArgumentTypes() {
+            return new SequenceType[] { SequenceType.SINGLE_ANY_URI };
+        }
+
+        public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
+            return SequenceType.SINGLE_INTEGER;
+        }
+        
+        public boolean dependsOnFocus() {
+           return false;
+        }
+
+        public ExtensionFunctionCall makeCallExpression() {
+            return new ExtensionFunctionCall() {
+                @Override
+                public Sequence call(XPathContext context, Sequence[] arguments) throws XPathException {
+                    Sequence seq = null;
+                    try {
+                        URI uri = new URI(((StringValue) arguments[0].head()).getStringValue());
+                        File file = new java.io.File(uri);
+                        seq = (new XdmAtomicValue(file.length())).getUnderlyingValue();
                     } catch(Exception e) {
                         System.err.println("ERR: ["+((StringValue) arguments[0].head()).getStringValue()+"]:"+e.getMessage());
                         e.printStackTrace(System.err);
