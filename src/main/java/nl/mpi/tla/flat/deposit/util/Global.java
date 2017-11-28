@@ -37,6 +37,7 @@ public class Global {
         NAMESPACES.put("lat", LAT_NS);
         NAMESPACES.put("fits", "http://hul.harvard.edu/ois/xml/ns/fits/fits_output");
         NAMESPACES.put("flat", "java:nl.mpi.tla.flat");
+        NAMESPACES.put("foxml", "info:fedora/fedora-system:def/foxml#");
     };
     
     static public String asOfDateTime(Date date) {

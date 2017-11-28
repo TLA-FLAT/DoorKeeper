@@ -13,11 +13,20 @@
     <xsl:param name="split" select="()"/>
     <xsl:param name="skip" select="()"/>
     
-    <xsl:param name="asof" select="round(
-        ( current-dateTime() - xs:dateTime('1970-01-01T00:00:00') )
-        div
-        xs:dayTimeDuration('PT1S')
-    )"/>
+    <xsl:param name="asof" select="
+        round(
+            ( current-dateTime() - xs:dateTime('1970-01-01T00:00:00') )
+            div
+            xs:dayTimeDuration('PT0.001S')
+        )"/>
+    
+    <xsl:template match="foxml:objectProperties">
+        <xsl:variable name="out" select="replace(base-uri(),'.xml$',concat('.',$asof,'.props'))"/>
+        <xsl:message>split fox[<xsl:value-of select="base-uri()"/>][<xsl:value-of select="replace($out,'.*/','.../')"/>]</xsl:message>
+        <xsl:result-document href="{$out}">
+            <xsl:copy-of select="."/>
+        </xsl:result-document>
+    </xsl:template>
     
     <xsl:template match="foxml:datastream/foxml:datastreamVersion[empty(following-sibling::foxml:datastreamVersion)]/foxml:xmlContent">
         <xsl:variable name="ds" select="replace(ancestor::foxml:datastream/@ID,'\.[0-9]+','')"/>

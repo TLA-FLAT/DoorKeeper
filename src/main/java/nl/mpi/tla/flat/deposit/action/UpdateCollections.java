@@ -87,7 +87,7 @@ public class UpdateCollections extends FedoraAction {
             upsert.setParameter(new QName("fid"),new XdmAtomicValue(context.getSIP().getFID()));
             upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(context.getSIP().getPID()));
             if (context.getSIP().isUpdate()) {
-                upsert.setParameter(new QName("old-pid"),new XdmAtomicValue(this.lookupPID(context.getSIP().getFID())));
+                upsert.setParameter(new QName("old-pid"),new XdmAtomicValue(this.lookupPID(context.getSIP().getFID(true))));
             }
             upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
             upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));

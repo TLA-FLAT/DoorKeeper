@@ -131,8 +131,13 @@ public class CMD implements SIPInterface {
     
     @Override
     public void setFID(URI fid) throws DepositException {
-        if (this.fid!=null)
+        if (this.fid!=null) {
+            if (this.getFID(true).toString().equals(fid.toString())) {
+                logger.warn("SIP["+this.base+"] has already this Fedora Commons PID["+this.fid+"], retaining it!");
+                return;
+            }
             logger.warn("SIP["+this.base+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
+        }
         if (fid.toString().startsWith("lat:")) {
             this.fid = fid;
         } else {

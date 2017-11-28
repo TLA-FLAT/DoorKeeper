@@ -17,6 +17,7 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import static com.yourmediashelf.fedora.client.FedoraClient.*;
+import com.yourmediashelf.fedora.client.response.FedoraResponse;
 import com.yourmediashelf.fedora.client.response.IngestResponse;
 import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
@@ -26,12 +27,18 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
+import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.XdmItem;
+import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
+import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
+import nl.mpi.tla.flat.deposit.util.Saxon;
 import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,9 +75,26 @@ public class FedoraInteract extends FedoraAction {
                 logger.info("Created FedoraObject["+iResponse.getPid()+"]["+iResponse.getLocation()+"]["+dsid+"]["+asof+"]");
             }
 
-            // - <fid>.prop (props -> modify (some) properties)
-            // TODO
-            
+            // - <fid>.<asof>.props (props -> modify (some) properties)
+            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[0-9]+\\.props")));
+            for (File fox:foxs) {
+                String fid  = fox.getName().replaceFirst("\\..*$","").replace(pre+"_",pre+":").replace("_CMD","");
+                String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\.props$","$1");
+                Date asof = new Date(Long.parseLong(epoch));
+                logger.debug("Properties["+fox+"] -> ["+fid+"]["+epoch+"="+asof+"]");
+                XdmNode props = Saxon.buildDocument(new StreamSource(fox));
+                for (Iterator<XdmItem> iter=Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES);iter.hasNext();) {
+                    XdmItem prop = iter.next();
+                    String name  = Saxon.xpath2string(prop, "@NAME");
+                    String value  = Saxon.xpath2string(prop, "@VALUE");
+                    if (name.equals("info:fedora/fedora-system:def/model#label")) {
+                        FedoraResponse res = modifyObject(fid).lastModifiedDate(asof).label(value).execute();
+                        if (res.getStatus()!=200)
+                            throw new DepositException("Unexpected status["+res.getStatus()+"] while interacting with Fedora Commons!");
+                    }
+                }
+            }
+                        
             // - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
             // - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
             foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z\\-]+\\.[0-9]+\\.[A-Za-z0-9_]+")));
