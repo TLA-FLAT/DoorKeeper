@@ -84,7 +84,7 @@ abstract public class FedoraAction extends AbstractAction {
     public URI lookupPID(URI fid) throws DepositException {
         URI pid = null;
         try {
-            String sparql = "SELECT ?pid WHERE { <info:fedora/"+fid.toString()+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
+            String sparql = "SELECT ?pid WHERE { <info:fedora/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             logger.debug("SPARQL["+sparql+"]");
             RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
             if (resp.getStatus()==200) {
@@ -103,7 +103,7 @@ abstract public class FedoraAction extends AbstractAction {
     
     public Date lookupAsOfDateTime(URI fid) throws DepositException {
         try {
-            return getObjectProfile(fid.toString()).execute().getLastModifiedDate();
+            return getObjectProfile(fid.toString().replaceAll("#.*","")).execute().getLastModifiedDate();
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
