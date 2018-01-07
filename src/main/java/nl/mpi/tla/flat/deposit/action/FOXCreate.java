@@ -107,7 +107,6 @@ public class FOXCreate extends AbstractAction {
             fox.setParameter(new QName("owner"), new XdmAtomicValue(profile.getString("name")));
             fox.setParameter(new QName("fox-base"), new XdmAtomicValue(dir.toString()));
             fox.setParameter(new QName("rels-doc"), Saxon.buildDocument(new StreamSource(FOXCreate.class.getResource("/FOXCreate/relations.xml").toString())));
-            fox.setParameter(new QName("create-cmd-object"), new XdmAtomicValue(false));
             fox.setParameter(new QName("repository"), new XdmAtomicValue((new XMLConfiguration(fedora)).getString("publicServer")));
             
             // optional parameters
