@@ -217,7 +217,7 @@
         <rdf:RDF xmlns:fedora="info:fedora/fedora-system:def/relations-external#" xmlns:fedora-model="info:fedora/fedora-system:def/model#" xmlns:islandora="http://islandora.ca/ontology/relsext#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
             <rdf:Description rdf:about="info:fedora/{@id}">
                 <!-- read -->
-                <!--<xsl:if test="empty(read[role='anonymous user'])">-->
+                <xsl:if test="empty(read[role='anonymous user'])">
                     <xsl:for-each select="read/user">
                         <xsl:variable name="user" select="."/>
                         <islandora:isViewableByUser>
@@ -230,7 +230,7 @@
                             <xsl:value-of select="$role"/>
                         </islandora:isViewableByRole>
                     </xsl:for-each>
-                <!--</xsl:if>-->
+                </xsl:if>
                 <!-- write -->
                 <xsl:for-each select="write/user">
                     <xsl:variable name="user" select="."/>
