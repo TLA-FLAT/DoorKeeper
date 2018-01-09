@@ -131,8 +131,10 @@ public class UpdateCollections extends FedoraAction {
                             }
                         } else
                             col.setPID(new URI(oldPID));
-                    } else {
+                    } else if (res.getStatus()==404) {
                         logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
+                    } else {
+                        throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
                     }
                 } else {
                     logger.debug("Collection["+col.getURI()+"] skipped: "+(col.hasFID()?"no lat FID":"unknown FID")+"!");
@@ -166,7 +168,7 @@ public class UpdateCollections extends FedoraAction {
             // write to fox dir: <fid>.CMD.<asof>.xml
             long asof = Global.asOfDateTime(col.getFID().toString().replaceFirst(".*@","")).getTime();
             File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+asof+".xml");
-            TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+            Saxon.save(destination,out);
             logger.info("created CMD["+out.getAbsolutePath()+"]");
             String newPID = Saxon.xpath2string(destination.getXdmNode(), "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
             if (!newPID.equals(oldPID)) {
@@ -188,14 +190,16 @@ public class UpdateCollections extends FedoraAction {
                 }
             } else
                 col.setPID(new URI(oldPID));
-        } else {
+        } else if (res.getStatus()==404) {
             logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
+        } else {
+            throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
         }
     }
     
     private XsltTransformer dc = null;
     
-    private void updateDC(File fox, URI fid, long asof, URI pid) throws FedoraClientException, SaxonApiException, TransformerConfigurationException, TransformerException {
+    private void updateDC(File fox, URI fid, long asof, URI pid) throws FedoraClientException, SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
         FedoraResponse res = getDatastreamDissemination(fid.toString(),"DC").execute();
         if (res.getStatus()==200) {
             InputStream str = res.getEntityInputStream();
@@ -216,7 +220,8 @@ public class UpdateCollections extends FedoraAction {
                 File out = new File(fox + "/"+fid.toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".DC."+asof+".xml");
                 TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
             }
-        }
+        } else
+            throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
     }
     
 }

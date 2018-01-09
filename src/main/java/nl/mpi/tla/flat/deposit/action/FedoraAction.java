@@ -20,7 +20,6 @@ import com.yourmediashelf.fedora.client.FedoraClient;
 import static com.yourmediashelf.fedora.client.FedoraClient.*;
 import com.yourmediashelf.fedora.client.FedoraCredentials;
 import com.yourmediashelf.fedora.client.request.FedoraRequest;
-import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.io.File;
 import java.net.URI;
@@ -59,6 +58,10 @@ abstract public class FedoraAction extends AbstractAction {
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
+    }
+    
+    public String getFedoraUser() {
+        return this.user;
     }
     
     public URI lookupFID(URI pid) throws DepositException {
