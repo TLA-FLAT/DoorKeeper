@@ -69,6 +69,7 @@ public final class SaxonExtensionFunctions {
      */
     public static void registerAll(Configuration config) {
         config.registerExtensionFunction(new FileExistsDefinition());
+        config.registerExtensionFunction(new FindFirstFileDefinition());
         config.registerExtensionFunction(new CheckURLDefinition());
         config.registerExtensionFunction(new UUIDDefinition());
         config.registerExtensionFunction(new EvaluateDefinition());
@@ -128,7 +129,79 @@ public final class SaxonExtensionFunctions {
     }
 
     // -----------------------------------------------------------------------
-    // sx:fileExists
+    // sx:findFirstFile
+    // -----------------------------------------------------------------------
+
+    public static final class FindFirstFileDefinition
+                        extends ExtensionFunctionDefinition {
+        public StructuredQName getFunctionQName() {
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
+                                       "findFirstFile");
+        }
+
+        public int getMinimumNumberOfArguments() {
+            return 2;
+        }
+
+        public int getMaximumNumberOfArguments() {
+            return 2;
+        }
+
+        public SequenceType[] getArgumentTypes() {
+            return new SequenceType[] { SequenceType.SINGLE_STRING, SequenceType.SINGLE_STRING };
+        }
+
+        public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
+            return SequenceType.OPTIONAL_STRING;
+        }
+        
+        public boolean dependsOnFocus() {
+           return false;
+        }
+        
+        protected Optional<Path> findFirstFile(Path dir,String fle) {
+            try (Stream<Path> stream = Files.find(dir,Integer.MAX_VALUE, new BiPredicate<Path, BasicFileAttributes>() {
+                @Override
+                public boolean test(Path path, BasicFileAttributes attr) {
+                    return path.toString().endsWith(fle);
+                }
+            })) {
+                return stream.findFirst();
+            } catch (Exception e) {
+                logger.error("sx:findFirstFile failed!",e);
+            }
+            return null;
+        }
+
+        public ExtensionFunctionCall makeCallExpression() {
+            return new ExtensionFunctionCall() {
+                @Override
+                public Sequence call(XPathContext context, Sequence[] arguments) throws XPathException {
+                    Sequence seq = EmptySequence.getInstance();
+                    try {
+                        String dir = arguments[0].head().getStringValue();
+                        Path p = Paths.get(dir);
+                        if (Files.isDirectory(p)) {
+                            String fle = arguments[1].head().getStringValue();
+                            // look for: bag/???/metadata/record.cmdi
+                            Optional<Path> r = findFirstFile(p,fle);
+                            if (r!= null && r.isPresent()) {
+                                p = r.get();
+                                seq = new XdmAtomicValue(p.toString()).getUnderlyingValue();
+                            }
+                        }
+                    } catch(Exception e) {
+                        logger.error("sx:findFirstFile failed!",e);
+                    }
+                    return seq;
+                }
+            };
+        }
+    }
+    
+    // -----------------------------------------------------------------------
+    // sx:uuid
     // -----------------------------------------------------------------------
 
     public static final class UUIDDefinition 

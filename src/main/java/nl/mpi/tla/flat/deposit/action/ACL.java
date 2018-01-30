@@ -26,7 +26,6 @@ import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
-import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;

@@ -84,7 +84,7 @@ public class FOXCreate extends AbstractAction {
             
             File dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
-                 FileUtils.forceMkdir(dir);
+                FileUtils.forceMkdir(dir);
 
             URIResolver org = Saxon.getXsltCompiler().getURIResolver();
             if (hasParameter("jar_cmd2fox")) {
