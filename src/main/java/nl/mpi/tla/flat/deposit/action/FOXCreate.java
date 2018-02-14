@@ -154,13 +154,16 @@ public class FOXCreate extends AbstractAction {
             if (self!=null) {
                 if (Saxon.xpath2boolean(self,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
                     context.getSIP().setFID(new URI(Saxon.xpath2string(self,"@lat:flatURI",null,NAMESPACES)));
-                }
-            }
+                } else
+                    throw new DepositException("No FID found in this FOX["+dir+"/"+fid+"_CMD.xml]!");
+            } else
+                throw new DepositException("No MdSelfLink found in this FOX["+dir+"/"+fid+"_CMD.xml]!");
             for (XdmItem resource:Saxon.xpath(cmd,"//cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType='Resource']",null,NAMESPACES)) {
                 URI pid = new URI(Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES));
                 if (Saxon.xpath2boolean(resource,"normalize-space(cmd:ResourceRef/@lat:flatURI)!=''",null,NAMESPACES)) {
                     context.getSIP().getResource(pid).setFID(new URI(Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
-                }
+                } else
+                    throw new DepositException("No FID found for this resource["+pid+"]!");
             }
         } catch(Exception e) {
             throw new DepositException("The creation of FOX files failed!",e);

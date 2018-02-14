@@ -101,40 +101,44 @@ public class UpdateCollections extends FedoraAction {
                 else if (col.hasFID() && col.getFID().equals(context.getSIP().getFID()))
                     throw new DepositException("direct cycle for FID["+col.getFID()+"]");
                 if (col.hasFID() && col.getFID().toString().startsWith("lat:")) {
-                    // load the collection's CMD
-                    FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
-                    if (res.getStatus()==200) {
-                        InputStream str = res.getEntityInputStream();
-                        XdmNode old = Saxon.buildDocument(new StreamSource(str));
-                        String oldPID = (col.hasPID()?col.getPID().toString():Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES));
-                        upsert.setSource(old.asSource());
-                        XdmDestination destination = new XdmDestination();
-                        upsert.setDestination(destination);
-                        upsert.transform();
-                        // write to fox dir: <fid>.CMD.<asof>.xml
-                        long asof = Global.asOfDateTime(col.getFID().toString().replaceFirst(".*@","")).getTime();
-                        logger.debug("collection["+col.getFID()+"]["+asof+"]["+new Date(asof)+"]");
-                        File out = new File(first + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+asof+".xml");
-                        TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
-                        logger.info("created CMD["+out.getAbsolutePath()+"]");
-                        String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
-                        if (!newPID.equals(oldPID)) {
-                            URI pid = new URI(newPID);
-                            col.setPID(pid);
-                            // update the identifier in the DC
-                            updateDC(first,col.getFID(true),asof,pid);
-                            // loop over collections
-                            for (Collection par:col.getParentCollections()) {
-                                if (par.getFID().toString().startsWith("lat:")) {
-                                    updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, col.getFID(), oldPID, newPID);
+                    try {
+                        // load the collection's CMD
+                        FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
+                        if (res.getStatus()==200) {
+                            InputStream str = res.getEntityInputStream();
+                            XdmNode old = Saxon.buildDocument(new StreamSource(str));
+                            String oldPID = (col.hasPID()?col.getPID().toString():Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES));
+                            upsert.setSource(old.asSource());
+                            XdmDestination destination = new XdmDestination();
+                            upsert.setDestination(destination);
+                            upsert.transform();
+                            // write to fox dir: <fid>.CMD.<asof>.xml
+                            long asof = Global.asOfDateTime(col.getFID().toString().replaceFirst(".*@","")).getTime();
+                            logger.debug("collection["+col.getFID()+"]["+asof+"]["+new Date(asof)+"]");
+                            File out = new File(first + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+asof+".xml");
+                            TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+                            logger.info("created CMD["+out.getAbsolutePath()+"]");
+                            String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
+                            if (!newPID.equals(oldPID)) {
+                                URI pid = new URI(newPID);
+                                col.setPID(pid);
+                                // update the identifier in the DC
+                                updateDC(first,col.getFID(true),asof,pid);
+                                // loop over collections
+                                for (Collection par:col.getParentCollections()) {
+                                    if (par.getFID().toString().startsWith("lat:")) {
+                                        updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, col.getFID(), oldPID, newPID);
+                                    }
                                 }
-                            }
+                            } else
+                                col.setPID(new URI(oldPID));
                         } else
-                            col.setPID(new URI(oldPID));
-                    } else if (res.getStatus()==404) {
-                        logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
-                    } else {
-                        throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+                            throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+                    } catch(FedoraClientException e) {
+                        if (e.getStatus()==404) {
+                            logger.debug("Collection["+col.getFID()+"] status["+e.getStatus()+"] has no CMD datastream.");                            
+                        } else
+                            throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
                     }
                 } else {
                     logger.debug("Collection["+col.getURI()+"] skipped: "+(col.hasFID()?"no lat FID":"unknown FID")+"!");
@@ -147,53 +151,58 @@ public class UpdateCollections extends FedoraAction {
     }
     
     private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart) throws Exception {
-        // load the collection's CMD
-        FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
-        if (res.getStatus()==200) {
-            // set parameters
-            upsert.clearParameters();
-            upsert.setParameter(new QName("fid"),new XdmAtomicValue(fidPart));
-            upsert.setParameter(new QName("old-pid"),new XdmAtomicValue(oldPart));
-            upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(newPart));
-            upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
-            upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+        try {
+            // load the collection's CMD
+            FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
+            if (res.getStatus()==200) {
+                // set parameters
+                upsert.clearParameters();
+                upsert.setParameter(new QName("fid"),new XdmAtomicValue(fidPart));
+                upsert.setParameter(new QName("old-pid"),new XdmAtomicValue(oldPart));
+                upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(newPart));
+                upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
+                upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
 
-            InputStream str = res.getEntityInputStream();
-            XdmNode old = Saxon.buildDocument(new StreamSource(str));
-            String oldPID = Saxon.xpath2string(old, "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
-            upsert.setSource(old.asSource());
-            XdmDestination destination = new XdmDestination();
-            upsert.setDestination(destination);
-            upsert.transform();
-            // write to fox dir: <fid>.CMD.<asof>.xml
-            long asof = Global.asOfDateTime(col.getFID().toString().replaceFirst(".*@","")).getTime();
-            File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+asof+".xml");
-            Saxon.save(destination,out);
-            logger.info("created CMD["+out.getAbsolutePath()+"]");
-            String newPID = Saxon.xpath2string(destination.getXdmNode(), "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
-            if (!newPID.equals(oldPID)) {
-                URI pid = new URI(newPID);
-                col.setPID(pid);
-                // update the identifier in the DC
-                updateDC(dir,col.getFID(true),asof,pid);
-                // update the parent collection
-                for (Collection par:col.getParentCollections()) {
-                    if (par.getFID().toString().startsWith("lat:")) {
-                        if (!hist.contains(par.getFID())) {
-                            hist.push(col.getFID());
-                            updateCollection(hist, par, col.getFID(), oldPID, newPID);
-                        } else {
-                            hist.push(col.getFID());
-                            throw new DepositException("(in)direct cycle["+hist+"] for FID["+par.getFID()+"]");
+                InputStream str = res.getEntityInputStream();
+                XdmNode old = Saxon.buildDocument(new StreamSource(str));
+                String oldPID = Saxon.xpath2string(old, "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
+                upsert.setSource(old.asSource());
+                XdmDestination destination = new XdmDestination();
+                upsert.setDestination(destination);
+                upsert.transform();
+                // write to fox dir: <fid>.CMD.<asof>.xml
+                long asof = Global.asOfDateTime(col.getFID().toString().replaceFirst(".*@","")).getTime();
+                File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+asof+".xml");
+                Saxon.save(destination,out);
+                logger.info("created CMD["+out.getAbsolutePath()+"]");
+                String newPID = Saxon.xpath2string(destination.getXdmNode(), "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
+                if (!newPID.equals(oldPID)) {
+                    URI pid = new URI(newPID);
+                    col.setPID(pid);
+                    // update the identifier in the DC
+                    updateDC(dir,col.getFID(true),asof,pid);
+                    // update the parent collection
+                    for (Collection par:col.getParentCollections()) {
+                        if (par.getFID().toString().startsWith("lat:")) {
+                            if (!hist.contains(par.getFID())) {
+                                hist.push(col.getFID());
+                                updateCollection(hist, par, col.getFID(), oldPID, newPID);
+                            } else {
+                                hist.push(col.getFID());
+                                throw new DepositException("(in)direct cycle["+hist+"] for FID["+par.getFID()+"]");
+                            }
                         }
                     }
-                }
-            } else
-                col.setPID(new URI(oldPID));
-        } else if (res.getStatus()==404) {
-            logger.debug("Collection["+col.getFID()+"] status["+res.getStatus()+"] has no CMD datastream.");
-        } else {
-            throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+                } else
+                    col.setPID(new URI(oldPID));
+            } else {
+                throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+            }
+        } catch(FedoraClientException e) {
+            if (e.getStatus()==404)
+                logger.debug("Collection["+col.getFID()+"] status["+e.getStatus()+"] has no CMD datastream.");
+            else
+                throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
         }
     }
     

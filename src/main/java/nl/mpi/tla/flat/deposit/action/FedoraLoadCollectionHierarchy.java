@@ -16,9 +16,11 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
+import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreams;
 import static com.yourmediashelf.fedora.client.FedoraClient.getObjectProfile;
 import static com.yourmediashelf.fedora.client.FedoraClient.riSearch;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
+import com.yourmediashelf.fedora.generated.management.DatastreamProfile;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -125,17 +127,19 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 String f = n.getStringValue();
                 if (f!=null && !f.isEmpty()) {
                     URI fid = new URI(f.replace("info:fedora/","").replaceAll("#.*",""));
-                    URI pid = lookupPID(fid);
-                    CMDCollection pcol = new CMDCollection(pid,fid);
-                    this.completeFID(pcol);
-                    col.addParentCollection(pcol);
+                    if (hasCMDDatastream(fid)) {
+                        URI pid = lookupPID(fid);
+                        CMDCollection pcol = new CMDCollection(pid,fid);
+                        this.completeFID(pcol);
+                        col.addParentCollection(pcol);
+                    }
                 }
             }
         } else
             throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
         // fetch ancestor collections
         for (Collection pcol:col.getParentCollections()) {
-            if (pcol.getFID().toString().startsWith("lat:")) {
+            if (hasCMDDatastream(pcol.getFID(true))) {
                 if (!hist.contains(pcol.getFID())) {
                     hist.push(col.getFID());
                     loadParentCollections(hist, pcol);
@@ -157,7 +161,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                     fid = this.lookupFID(col.getPID());
                 else 
                     throw new DepositException("Unknown Collection["+col+"]!");
-                if (fid.toString().startsWith("lat:")) {
+                if (hasCMDDatastream(fid)) {
                     Date asof = getObjectProfile(fid.toString()).execute().getLastModifiedDate();
                     col.setFIDasOfTimeDate(asof);
                     logger.debug("Fedora Collection datastream["+(col.hasPID()?col.getPID():"")+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
@@ -166,6 +170,18 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
         } catch(Exception e) {
             throw new DepositException("Completing the FID of Collection["+col+"] failed!",e);
         }
-   }
+    }
+    
+    protected boolean hasCMDDatastream(URI fid) throws DepositException {
+        try {
+            for(DatastreamProfile p:getDatastreams(fid.toString()).execute().getDatastreamProfiles()) {
+                if (p.getDsID().equals("CMD"))
+                    return true;
+            }
+            return false;
+        } catch(Exception e) {
+            throw new DepositException("Looking for the CMD datastream of Collection["+fid+"] failed!",e);
+        }
+    }
 
 }

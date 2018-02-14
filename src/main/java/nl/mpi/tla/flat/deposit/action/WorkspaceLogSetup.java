@@ -52,7 +52,11 @@ public class WorkspaceLogSetup extends AbstractAction {
             File logback = dir.toPath().resolve("./logback.xml").toFile();
             
             if (!logback.exists()) {
-                // create {$work}/logs/logback.xml
+                // create {$work}/logs/logback-dk.xml
+                logback = dir.toPath().resolve("./logback-dk.xml").toFile();
+                if (logback.exists())
+                    logback.delete();
+                
                 PrintWriter out = new PrintWriter(logback);
                 out.print(
                     "<configuration>\n" +
@@ -111,13 +115,9 @@ public class WorkspaceLogSetup extends AbstractAction {
             
             Logger logger = LoggerFactory.getLogger(nl.mpi.tla.flat.deposit.Flow.class);
             LoggerContext logctxt = (LoggerContext) LoggerFactory.getILoggerFactory();
-            try {
-                JoranConfigurator configurator = new JoranConfigurator();
-                configurator.setContext(logctxt);
-                configurator.doConfigure(logback.toString());
-            } catch (JoranException je) {
-                // StatusPrinter will handle this
-            }
+            JoranConfigurator configurator = new JoranConfigurator();
+            configurator.setContext(logctxt);
+            configurator.doConfigure(logback.toString());
             StatusPrinter.printInCaseOfErrorsOrWarnings(logctxt);
             logger.debug("\n\n" +
                 "\"Relax,\" said the DoorKeeper,\n" +
@@ -125,7 +125,7 @@ public class WorkspaceLogSetup extends AbstractAction {
                 "You can check-out any time you like,\n" +
                 "But you can never leave!\"\n"
             );
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             this.logger.error("Couldn't setup the deposit log!",ex);
             return false;
         }

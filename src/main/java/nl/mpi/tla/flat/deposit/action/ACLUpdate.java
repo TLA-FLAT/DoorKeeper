@@ -18,6 +18,7 @@ package nl.mpi.tla.flat.deposit.action;
 
 import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreamDissemination;
 import static com.yourmediashelf.fedora.client.FedoraClient.getObjectProfile;
+import com.yourmediashelf.fedora.client.FedoraClientException;
 import com.yourmediashelf.fedora.client.response.FedoraResponse;
 import com.yourmediashelf.fedora.client.response.GetObjectProfileResponse;
 import java.io.File;
@@ -111,37 +112,47 @@ public class ACLUpdate extends FedoraAction {
         File policy = new File(dir + "/"+fid.replaceAll("[^a-zA-Z0-9]", "_")+".xml");
         if (!policy.exists()) {
             logger.debug("No new POLICY for this "+tpe+"["+fid+"], get existing!");
-            FedoraResponse res = getDatastreamDissemination(fid,"POLICY").execute();
-            if (res.getStatus()==200) {
-                InputStream str = res.getEntityInputStream();
-                Saxon.save(new StreamSource(str),policy);
-            } else if (res.getStatus()==404) {
-                logger.debug("But there is no existing POLICY for this "+tpe+"["+fid+"]!");
-            } else
-                throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+            try {
+                FedoraResponse res = getDatastreamDissemination(fid,"POLICY").execute();
+                if (res.getStatus()==200) {
+                    InputStream str = res.getEntityInputStream();
+                    Saxon.save(new StreamSource(str),policy);
+                } else
+                    throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+            } catch(FedoraClientException e) {
+                if (e.getStatus()==404) {
+                    logger.debug("But there is no existing POLICY for this "+tpe+"["+fid+"]!");
+                } else
+                    throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
+            }
         }
 
         // RELS-EXT
         File rels = new File(dir + "/"+fid.replaceAll("[^a-zA-Z0-9]", "_")+".RELS-EXT.xml");
         if (!rels.exists()) {
             logger.debug("No new RELS-EXT for this "+tpe+"["+fid+"], get existing!");
-            FedoraResponse res = getDatastreamDissemination(fid,"RELS-EXT").execute();
-            if (res.getStatus()==200) {
-                InputStream str = res.getEntityInputStream();
-                if (strip == null)
-                    strip = Saxon.buildTransformer(FOXUpdate.class.getResource("/ACLUpdate/stripRELS-EXT.xsl")).load();
-                SaxonListener listener = new SaxonListener("ACLUpdate",MDC.get("sip"));
-                strip.setMessageListener(listener);
-                strip.setErrorListener(listener);
-                strip.setSource(new StreamSource(str));
-                XdmDestination destination = new XdmDestination();
-                strip.setDestination(destination);
-                strip.transform();
-                Saxon.save(destination,rels);
-            } else if (res.getStatus()==404) {
-                logger.debug("But there is no existing RELS-EXT for this "+tpe+"["+fid+"]!");
-            } else
-                throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+            try {
+                FedoraResponse res = getDatastreamDissemination(fid,"RELS-EXT").execute();
+                if (res.getStatus()==200) {
+                    InputStream str = res.getEntityInputStream();
+                    if (strip == null)
+                        strip = Saxon.buildTransformer(FOXUpdate.class.getResource("/ACLUpdate/stripRELS-EXT.xsl")).load();
+                    SaxonListener listener = new SaxonListener("ACLUpdate",MDC.get("sip"));
+                    strip.setMessageListener(listener);
+                    strip.setErrorListener(listener);
+                    strip.setSource(new StreamSource(str));
+                    XdmDestination destination = new XdmDestination();
+                    strip.setDestination(destination);
+                    strip.transform();
+                    Saxon.save(destination,rels);
+                } else
+                    throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+            } catch(FedoraClientException e) {
+                if (e.getStatus()==404) {
+                    logger.debug("But there is no existing RELS-EXT for this "+tpe+"["+fid+"]!");
+                } else
+                    throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
+            }
         }
     }
     
