@@ -94,9 +94,16 @@ public class ACLUpdate extends FedoraAction {
                 this.check(dir,sip.getFID(true).toString(),"AIP");
                 for (Resource res:sip.getResources()) {
                     if (res.isInsert()) {
-                        File policy = new File(dir + "/"+res.getFID(true).toString().replaceAll("[^a-zA-Z0-9]", "_")+".xml");
-                        if (!policy.exists())
-                            logger.warn("new Resource["+res.getFID()+"] for AIP["+sip.getFID()+"] has no access policy, will use the default one!");
+                        String fid = null;
+                        if (res.hasFID())
+                            fid = res.getFID(true).toString();
+                        else if (res.hasPID())
+                            fid = res.getPID().toString().replace("^http(s?)://hdl.handle.net/","hdl:").replace("@format=[a-z]+","").replace("[^a-zA-Z0-9]","_").replace("^hdl_","lat:");
+                        File policy = null;
+                        if (fid!=null)
+                            policy = new File(dir + "/"+fid.replaceAll("[^a-zA-Z0-9]", "_")+".xml");
+                        if (policy==null || !policy.exists())
+                            logger.warn("new Resource["+res.getPID()+"]["+res.getFID()+"]["+res.getURI()+"] for AIP["+sip.getFID()+"] has no access policy, will use the default one!");
                     } else if (res.isUpdate())
                         this.check(dir,res.getFID(true).toString(),"existing Resource");
                 }
