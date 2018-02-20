@@ -50,6 +50,7 @@ public class ACL extends AbstractAction {
 
     @Override
     public boolean perform(Context context) throws DepositException {
+        URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
             // check for the policy
             File policy = new File(getParameter("policy", "./metadata/policy.n3"));
@@ -69,13 +70,10 @@ public class ACL extends AbstractAction {
                 FileUtils.forceMkdir(dir);
             }
 
-            URIResolver org = Saxon.getXsltCompiler().getURIResolver();
             if (hasParameter("jar_acl2xacml")) {
                 Saxon.getXsltCompiler().setURIResolver(new ACL.JarURIResolver(org,new File(getParameter("jar_acl2xacml"))));
-            }
-            
-            if (org!=null) {
-                Saxon.getXsltCompiler().setURIResolver(org);
+            } else {
+                Saxon.getXsltCompiler().setURIResolver(new ACL.JarURIResolver(org));
             }
             
             // convert policy N3 to TriX
@@ -97,16 +95,27 @@ public class ACL extends AbstractAction {
             wacl2acl.setErrorListener(listener);
             wacl2acl.setParameter(new QName("record"), Saxon.wrapNode(context.getSIP().getRecord()));
             wacl2acl.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
-            if (this.hasParameter("default-accounts"))
-                wacl2acl.setParameter(new QName("default-accounts"),  this.params.get("default-accounts"));
-            if (this.hasParameter("default-roles"))
-                wacl2acl.setParameter(new QName("default-roles"),  this.params.get("default-roles"));
+            if (this.hasParameter("default-account"))
+                wacl2acl.setParameter(new QName("default-accounts"),  this.params.get("default-account"));
+            if (this.hasParameter("default-role"))
+                wacl2acl.setParameter(new QName("default-roles"),  this.params.get("default-role"));
             // convert intermediate ACl to XACM using ACL/ACL2XACML.xsl or an override
             XsltTransformer acl2xacml = null;
-            if (this.hasParameter("acl2xacml"))
-                acl2xacml =  Saxon.buildTransformer(new File(getParameter("acl2xacml"))).load();
-            else
+            if (this.hasParameter("acl2xacml")) {
+                File x = new File(this.getParameter("acl2xacml"));
+                logger.debug("acl2xacml["+x+"]");
+                if (!x.exists()) {
+                    logger.error("The stylesheet["+x+"] doesn't exist!");
+                    return false;
+                }
+                if (!x.canRead()) {
+                    logger.error("The stylesheet["+x+"] can't be read!");
+                    return false;
+                }
+                acl2xacml =  Saxon.buildTransformer(x).load();
+            } else {
                 acl2xacml =  Saxon.buildTransformer(ACL.class.getResource("/ACL/ACL2XACML.xsl")).load();
+            }
             acl2xacml.setMessageListener(listener);
             acl2xacml.setErrorListener(listener);
             acl2xacml.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
@@ -123,6 +132,10 @@ public class ACL extends AbstractAction {
             trix2sem.transform();
         } catch (Exception e) {
             throw new DepositException("The creation of ACL files failed!", e);
+        } finally {
+            // restore the URL 
+            if (org!=null)
+                Saxon.getXsltCompiler().setURIResolver(org);
         }
         return true;
     }
@@ -132,14 +145,25 @@ public class ACL extends AbstractAction {
         private URIResolver resolver = null;
         private File xsl = null;
         
+        public JarURIResolver(URIResolver resolver) {
+            this(resolver,null);
+        }
+        
         public JarURIResolver(URIResolver resolver, File xsl) {
             this.resolver = resolver;
             this.xsl = xsl;
         }
         
         public Source resolve(String href,String base) throws TransformerException {
+            logger.debug("resolve["+href+"]["+base+"]");
             if (href.equals("jar:acl2xacml.xsl")) {
-                return new javax.xml.transform.stream.StreamSource(xsl);
+                if (this.xsl!=null) {
+                    logger.debug("resolve["+href+"]["+base+"] return file["+this.xsl+"]");
+                    return new javax.xml.transform.stream.StreamSource(this.xsl);
+                } else {
+                    logger.debug("resolve["+href+"]["+base+"] return resource["+ACL.class.getResource("/ACL/ACL2XACML.xsl").toString()+"]");
+                    return new javax.xml.transform.stream.StreamSource(ACL.class.getResource("/ACL/ACL2XACML.xsl").toString());
+                }
             } else {
                 return resolver.resolve(href,base);
             }

@@ -111,6 +111,8 @@ public class FedoraInteract extends FedoraAction {
                     if (lines.size()!=1)
                         throw new DepositException("Datastream location file["+fox+"] should contain exactly one line!");
                     mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).dsLocation(lines.get(0)).logMessage("Updated "+dsid).execute();
+                } else if (dsid.equals("CMD")) {
+                    mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).content(fox).mimeType("application/x-cmdi+xml").logMessage("Updated "+dsid).execute();
                 } else {
                     mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).content(fox).logMessage("Updated "+dsid).execute();
                 }
