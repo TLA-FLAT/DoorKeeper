@@ -103,7 +103,7 @@ public class ACLUpdate extends FedoraAction {
                         if (fid!=null)
                             policy = new File(dir + "/"+fid.replaceAll("[^a-zA-Z0-9]", "_")+".xml");
                         if (policy==null || !policy.exists())
-                            logger.warn("new Resource["+res.getPID()+"]["+res.getFID()+"]["+res.getURI()+"] for AIP["+sip.getFID()+"] has no access policy, will use the default one!");
+                            logger.warn("new Resource"+(res.hasPID()?"["+res.getPID()+"]":"")+(res.hasFID()?"["+res.getFID()+"]":"")+"["+res.getURI()+"] for AIP["+sip.getFID()+"] has no access policy, will use the default one!");
                     } else if (res.isUpdate())
                         this.check(dir,res.getFID(true).toString(),"existing Resource");
                 }
