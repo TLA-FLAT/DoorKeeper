@@ -104,7 +104,7 @@ abstract public class Collection {
                 _dsid = _asof.replaceAll("@.*","");
                 _asof = _asof.replaceAll(".*@","");
             }
-            if (_dsid!=null && _dsid.equals(dsid))
+            if (_dsid!=null && !_dsid.equals(dsid))
                 logger.warn("FID["+this.fid+"] changing the DSID to ["+dsid+"]");
             this.fid = new URI(_fid+"#"+dsid+(_asof!=null?"@"+_asof:""));
         } catch (URISyntaxException ex) {

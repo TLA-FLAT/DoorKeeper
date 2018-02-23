@@ -142,7 +142,7 @@ abstract public class Resource {
                 _dsid = _asof.replaceAll("@.*","");
                 _asof = _asof.replaceAll(".*@","");
             }
-            if (_dsid!=null && _dsid.equals(dsid))
+            if (_dsid!=null && !_dsid.equals(dsid))
                 logger.warn("FID["+this.fid+"] changing the DSID to ["+dsid+"]");
             this.fid = new URI(_fid+"#"+dsid+(_asof!=null?"@"+_asof:""));
         } catch (URISyntaxException ex) {
@@ -162,7 +162,7 @@ abstract public class Resource {
                 _dsid = _asof.replaceAll("@.*","");
                 _asof = _asof.replaceAll(".*@","");
             } else
-                _dsid = "CMD";
+                _dsid = "OBJ";
             try {
                 if (_asof!=null) {
                     if (Global.asOfDateTime(_asof).after(date)) {
