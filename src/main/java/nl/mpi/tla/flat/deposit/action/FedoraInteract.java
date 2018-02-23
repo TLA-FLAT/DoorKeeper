@@ -17,6 +17,7 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import static com.yourmediashelf.fedora.client.FedoraClient.*;
+import com.yourmediashelf.fedora.client.request.ModifyDatastream;
 import com.yourmediashelf.fedora.client.response.FedoraResponse;
 import com.yourmediashelf.fedora.client.response.IngestResponse;
 import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
@@ -108,10 +109,18 @@ public class FedoraInteract extends FedoraAction {
                 logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]["+epoch+"="+asof+"]["+ext+"]");
                 ModifyDatastreamResponse mdsResponse = null;
                 if (ext.equals("file")) {
-                    List<String> lines = Files.readAllLines(fox.toPath(),StandardCharsets.UTF_8);
-                    if (lines.size()!=1)
-                        throw new DepositException("Datastream location file["+fox+"] should contain exactly one line!");
-                    mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).dsLocation(lines.get(0)).logMessage("Updated "+dsid).execute();
+                    XdmNode f = Saxon.buildDocument(new StreamSource(fox));
+                    String loc = Saxon.xpath2string(f, "/foxml:datastreamVersion/foxml:contentLocation/@REF", null, NAMESPACES);
+                    if (loc == null)
+                        throw new DepositException("Resource FOX["+fox+"] without DS location!");
+                    String mime = Saxon.xpath2string(f, "/foxml:datastreamVersion/@MIMETYPE", null, NAMESPACES);
+                    String lbl = Saxon.xpath2string(f, "/foxml:datastreamVersion/@LABEL", null, NAMESPACES);
+                    ModifyDatastream md = modifyDatastream(fid,dsid).lastModifiedDate(asof).dsLocation(loc);
+                    if (mime!=null)
+                        md.mimeType(mime);
+                    if (lbl!=null)
+                        md.dsLabel(lbl);
+                    mdsResponse = md.logMessage("Updated "+dsid).execute();
                 } else if (dsid.equals("CMD")) {
                     mdsResponse = modifyDatastream(fid,dsid).lastModifiedDate(asof).content(fox).mimeType("application/x-cmdi+xml").logMessage("Updated "+dsid).execute();
                 } else {

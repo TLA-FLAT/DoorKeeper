@@ -48,8 +48,8 @@
         <xsl:if test="$do">
             <xsl:variable name="out" select="replace(base-uri(),'.xml$',concat('.',$ds,'.',$asof,'.file'))"/>
             <xsl:message>split fox[<xsl:value-of select="base-uri()"/>][<xsl:value-of select="replace($out,'.*/','.../')"/>]</xsl:message>
-            <xsl:result-document href="{$out}" method="text" encoding="UTF-8">
-                <xsl:value-of select="@REF"/>
+            <xsl:result-document href="{$out}">
+                <xsl:copy-of select="parent::foxml:datastreamVersion"/>
             </xsl:result-document>
         </xsl:if>
     </xsl:template>
