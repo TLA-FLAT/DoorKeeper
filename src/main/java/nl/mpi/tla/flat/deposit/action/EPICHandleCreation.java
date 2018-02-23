@@ -109,9 +109,9 @@ public class EPICHandleCreation extends AbstractAction {
                     String dsid   = col.getFID().getRawFragment().replaceAll("@.*","");
                     String asof   = col.getFID().getRawFragment().replaceAll(".*@","");
 
-                    URI pid       = col.getPID();
-                    String prefix = pid.toString().replaceAll(".*/([^/]*)/.*","$1");
-                    String uuid   = pid.toString().replaceAll(".*/","");
+                    String pid    = col.getPID().toString().replace("^http(s?)://hdl.handle.net/","hdl:");
+                    String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
+                    String uuid   = pid.replaceAll(".*/","");
                     
                     String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
@@ -144,8 +144,9 @@ public class EPICHandleCreation extends AbstractAction {
                         String dsid = res.getFID().getRawFragment().replaceAll("@.*","");
                         String asof = res.getFID().getRawFragment().replaceAll(".*@","");
 
-                        URI pid     = res.getPID();
-                        String uuid = pid.toString().replaceAll(".*/","");
+                        String pid    = res.getPID().toString().replace("^http(s?)://hdl.handle.net/","hdl:");
+                        String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
+                        String uuid   = pid.replaceAll(".*/","");
                         String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
                         logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
@@ -173,8 +174,9 @@ public class EPICHandleCreation extends AbstractAction {
                     red           = new URI(loc);
                 }
 
-                String prefix = pid.toString().replaceAll(".*/([^/]*)/.*","$1");
-                String uuid   = pid.toString().replaceAll(".*/","");
+                String pidStr = pid.toString().replace("^http(s?)://hdl.handle.net/","hdl:");
+                String prefix = pidStr.replaceAll("hdl:([^/]*)/.*","$1");
+                String uuid   = pidStr.replaceAll(".*/","");
 
                 logger.info("Lookup handle["+prefix+"/"+uuid+"]");
                 String cur    = (isTest?null:ps.getPIDLocation(prefix+"/"+uuid));
