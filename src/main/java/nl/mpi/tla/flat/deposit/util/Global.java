@@ -39,6 +39,7 @@ public class Global {
         NAMESPACES.put("flat", "java:nl.mpi.tla.flat");
         NAMESPACES.put("foxml", "info:fedora/fedora-system:def/foxml#");
         NAMESPACES.put("sx", "java:nl.mpi.tla.saxon");
+        NAMESPACES.put("xs", "http://www.w3.org/2001/XMLSchema");
     };
     
     static public String asOfDateTime(Date date) {
