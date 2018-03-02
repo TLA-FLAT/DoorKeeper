@@ -62,7 +62,7 @@ public class FOXUpdate extends AbstractAction {
                 // - update
                 //   -> split
                 //   -> delete FOXML
-                File fox = new File(dir + "/"+sip.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+"_CMD.xml");
+                File fox = new File(dir + "/"+sip.getFID(true).toString().replaceAll("[^a-zA-Z0-9]", "_")+"_CMD.xml");
                 if (!fox.exists())
                     throw new DepositException("The FOX file["+fox.getAbsolutePath()+"] for the SIP doesn't exist!");
                 if (!fox.canRead())
@@ -78,7 +78,8 @@ public class FOXUpdate extends AbstractAction {
                 if (sip.getFID().toString().contains("@")) {
                     long asof = Global.asOfDateTime(sip.getFID().toString().replaceFirst(".*@","")).getTime();;
                     split.setParameter(new QName("asof"), new XdmAtomicValue(asof));
-                }
+                } else
+                    logger.warn("No asOfDateTime known for this SIP["+sip.getFID()+"]!");
                 split.transform();
                 
                 if (debug)
@@ -96,7 +97,7 @@ public class FOXUpdate extends AbstractAction {
                     //   -> delete FOXML
                     // - noop
                     //   -> delete FOXML
-                    fox = new File(dir + "/"+res.getFID().toString().replaceAll("[^a-zA-Z0-9]", "_")+".xml");
+                    fox = new File(dir + "/"+res.getFID(true).toString().replaceAll("[^a-zA-Z0-9]", "_")+".xml");
                     if (!fox.exists()) {
                         if  (res.isInsert() || res.isUpdate())
                             throw new DepositException("The FOX file["+fox.getAbsolutePath()+"] for the Resource["+res.getURI()+"] doesn't exist!");
@@ -111,7 +112,8 @@ public class FOXUpdate extends AbstractAction {
                         if (res.getFID().toString().contains("@")) {
                             long asof = Global.asOfDateTime(res.getFID().toString().replaceFirst(".*@","")).getTime();
                             split.setParameter(new QName("asof"), new XdmAtomicValue(asof));
-                        }
+                        } else
+                            logger.warn("No asOfDateTime known for this Resource["+res.getFID()+"]!");
                         split.transform();
                         if (debug)
                             Files.copy(fox, new File(fox.toString().replace(".xml", ".bak")));

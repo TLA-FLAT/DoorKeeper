@@ -44,16 +44,18 @@ public class FedoraIsAIPUpdate extends FedoraAction {
             } else if (this.getParameter("requirePID","true").equals("false") && sip.hasFID()) {
                 // we have a FID and its allowed to lookup the PID (of the last version).
                 // WARN: this might lead to lost updates!
-                pid = this.lookupFID(sip.getFID(true));
+                pid = this.lookupPID(sip.getFID(true));
+                sip.setPID(pid);
             }
             if (pid!=null) {
-                URI fid = lookupFID(pid);
+                URI fid = this.lookupFID(pid);
                 if (fid!=null) {
                     // mark SIP as an update
                     sip.update();
                     // complete the FID
+                    sip.setFID(fid);
                     sip.setFIDasOfTimeDate(this.lookupAsOfDateTime(fid));
-                    logger.info("This SIP["+pid+"] is an update of AIP["+fid+"]!");
+                    logger.info("This SIP["+pid+"] is an update of AIP["+sip.getFID()+"]!");
                 } else if (this.hasParameter("prefix") && pid.toString().startsWith("hdl:"+this.getParameter("prefix")+"/")) {
                     logger.error("This SIP["+pid+"] has a matching handle prefix["+this.getParameter("prefix")+"], but can't be found in the repository! It might be a PID for an old version!");
                     return false;
@@ -61,7 +63,7 @@ public class FedoraIsAIPUpdate extends FedoraAction {
                     logger.info("This SIP["+pid+"] doesn't exist in the repository! The PID will be overwritten!");
                 }
             } else
-                logger.debug("This SIP["+sip.getBase()+"] has no PID! A PID will be generated.");
+                logger.debug("This SIP["+sip.getBase()+"] has no PID (yet)! A PID will be generated.");
         } catch (DepositException ex) {
             throw ex;
         } catch (Exception ex) {

@@ -19,6 +19,9 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import javax.xml.transform.Source;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.URIResolver;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -47,6 +50,7 @@ public class ACL extends AbstractAction {
 
     @Override
     public boolean perform(Context context) throws DepositException {
+        URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
             // check for the policy
             File policy = new File(getParameter("policy", "./metadata/policy.n3"));
@@ -66,6 +70,12 @@ public class ACL extends AbstractAction {
                 FileUtils.forceMkdir(dir);
             }
 
+            if (hasParameter("jar_acl2xacml")) {
+                Saxon.getXsltCompiler().setURIResolver(new ACL.JarURIResolver(org,new File(getParameter("jar_acl2xacml"))));
+            } else {
+                Saxon.getXsltCompiler().setURIResolver(new ACL.JarURIResolver(org));
+            }
+            
             // convert policy N3 to TriX
             // https://jena.apache.org/documentation/io/
             Model model = ModelFactory.createDefaultModel() ;
@@ -79,21 +89,84 @@ public class ACL extends AbstractAction {
             trix2sem.setMessageListener(listener);
             trix2sem.setErrorListener(listener);
             trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
-            // convert sem triples to XACML policies using ACL/WebACL2XACML.xsl
-            XsltTransformer wacl2xacml = Saxon.buildTransformer(ACL.class.getResource("/ACL/WebACL2XACML.xsl")).load();
-            wacl2xacml.setMessageListener(listener);
-            wacl2xacml.setErrorListener(listener);
-            wacl2xacml.setParameter(new QName("record"), Saxon.wrapNode(context.getSIP().getRecord()));
-            wacl2xacml.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
-            XdmDestination destination = new XdmDestination();
-            wacl2xacml.setDestination(destination);
+            // convert sem triples to an intermediate ACL using ACL/WebACL2ACL.xsl
+            XsltTransformer wacl2acl = Saxon.buildTransformer(ACL.class.getResource("/ACL/WebACL2ACL.xsl")).load();
+            wacl2acl.setMessageListener(listener);
+            wacl2acl.setErrorListener(listener);
+            wacl2acl.setParameter(new QName("record"), Saxon.wrapNode(context.getSIP().getRecord()));
+            wacl2acl.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+            if (this.hasParameter("default-account"))
+                wacl2acl.setParameter(new QName("default-accounts"),  this.params.get("default-account"));
+            if (this.hasParameter("default-role"))
+                wacl2acl.setParameter(new QName("default-roles"),  this.params.get("default-role"));
+            // convert intermediate ACl to XACM using ACL/ACL2XACML.xsl or an override
+            XsltTransformer acl2xacml = null;
+            if (this.hasParameter("acl2xacml")) {
+                File x = new File(this.getParameter("acl2xacml"));
+                logger.debug("acl2xacml["+x+"]");
+                if (!x.exists()) {
+                    logger.error("The stylesheet["+x+"] doesn't exist!");
+                    return false;
+                }
+                if (!x.canRead()) {
+                    logger.error("The stylesheet["+x+"] can't be read!");
+                    return false;
+                }
+                acl2xacml =  Saxon.buildTransformer(x).load();
+            } else {
+                acl2xacml =  Saxon.buildTransformer(ACL.class.getResource("/ACL/ACL2XACML.xsl")).load();
+            }
+            acl2xacml.setMessageListener(listener);
+            acl2xacml.setErrorListener(listener);
+            acl2xacml.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+            // additional parameters
+            for (String param:this.params.keySet()) {
+                if (param.startsWith("xsl-param-"))
+                    acl2xacml.setParameter(new QName(param.replaceFirst("^xsl-param-","")), params.get(param));
+            }
             // pipe
-            trix2sem.setDestination(wacl2xacml);
+            XdmDestination destination = new XdmDestination();
+            trix2sem.setDestination(wacl2acl);
+            wacl2acl.setDestination(acl2xacml);
+            acl2xacml.setDestination(destination);
             trix2sem.transform();
         } catch (Exception e) {
             throw new DepositException("The creation of ACL files failed!", e);
+        } finally {
+            // restore the URL 
+            if (org!=null)
+                Saxon.getXsltCompiler().setURIResolver(org);
         }
         return true;
     }
 
+    static class JarURIResolver implements URIResolver {
+        
+        private URIResolver resolver = null;
+        private File xsl = null;
+        
+        public JarURIResolver(URIResolver resolver) {
+            this(resolver,null);
+        }
+        
+        public JarURIResolver(URIResolver resolver, File xsl) {
+            this.resolver = resolver;
+            this.xsl = xsl;
+        }
+        
+        public Source resolve(String href,String base) throws TransformerException {
+            logger.debug("resolve["+href+"]["+base+"]");
+            if (href.equals("jar:acl2xacml.xsl")) {
+                if (this.xsl!=null) {
+                    logger.debug("resolve["+href+"]["+base+"] return file["+this.xsl+"]");
+                    return new javax.xml.transform.stream.StreamSource(this.xsl);
+                } else {
+                    logger.debug("resolve["+href+"]["+base+"] return resource["+ACL.class.getResource("/ACL/ACL2XACML.xsl").toString()+"]");
+                    return new javax.xml.transform.stream.StreamSource(ACL.class.getResource("/ACL/ACL2XACML.xsl").toString());
+                }
+            } else {
+                return resolver.resolve(href,base);
+            }
+        }        
+    }
 }
