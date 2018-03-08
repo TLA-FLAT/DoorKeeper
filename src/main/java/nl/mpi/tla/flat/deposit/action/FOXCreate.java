@@ -125,6 +125,8 @@ public class FOXCreate extends AbstractAction {
                 fox.setParameter(new QName("always-compound-eval"), params.get("always-compound-eval"));
             if (hasParameter("license-uri"))
                 fox.setParameter(new QName("license-uri"), params.get("license-uri"));
+            if (hasParameter("overwrite-resource-label"))
+                fox.setParameter(new QName("overwrite-resource-label"),new XdmAtomicValue(getParameter("overwrite-resource-label").toLowerCase().contains("t")));
             
             // additional parameters
             for (String param:this.params.keySet()) {
