@@ -250,8 +250,7 @@ public class Flow {
     private boolean exceptionFlow(Exception e) throws DepositException {
         Flow.logger.debug("BEGIN  exception flow");
         boolean next = true;
-        if (exceptionActions.isEmpty())
-            Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
+        Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
         for (ActionInterface action:exceptionActions) {
             Flow.logger.debug("ACTION exception flow["+action.getName()+"]");
             next = action.perform(context);
