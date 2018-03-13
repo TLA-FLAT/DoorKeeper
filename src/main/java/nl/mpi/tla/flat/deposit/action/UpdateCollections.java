@@ -91,6 +91,10 @@ public class UpdateCollections extends FedoraAction {
             }
             upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
             upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+            if (this.hasParameter("try-fix-pid")) {
+                logger.warn("Enabled 'trying to fix a broken PID in a collection', never do this in production!");
+                upsert.setParameter(new QName("try-fix-pid"),new XdmAtomicValue(this.getParameter("try-fix-pid").toLowerCase().contains("t")));
+            }
             // loop over collections
             for (Collection col:context.getSIP().getCollections(false)) {
                 logger.debug("isPartOf collection["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]");
@@ -162,6 +166,8 @@ public class UpdateCollections extends FedoraAction {
                 upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(newPart));
                 upsert.setParameter(new QName("prefix"),new XdmAtomicValue(getParameter("prefix")));
                 upsert.setParameter(new QName("new-pid-eval"),new XdmAtomicValue(getParameter("new-pid-eval","true()")));
+                if (this.hasParameter("try-fix-pid"))
+                    upsert.setParameter(new QName("try-fix-pid"),new XdmAtomicValue(this.getParameter("try-fix-pid").toLowerCase().contains("t")));
 
                 InputStream str = res.getEntityInputStream();
                 XdmNode old = Saxon.buildDocument(new StreamSource(str));

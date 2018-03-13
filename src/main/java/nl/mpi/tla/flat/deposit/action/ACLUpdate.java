@@ -67,6 +67,8 @@ public class ACLUpdate extends FedoraAction {
             File owner = new File(dir + "/owner.xml");
             if (!owner.exists()) {
                 String oid = this.getFedoraUser();
+                if (this.hasParameter("owner"))
+                    oid = this.getParameter("owner");
                 String tpe = "SIP";
                 if (sip.isUpdate()) {
                     tpe = "AIP";
@@ -76,7 +78,7 @@ public class ACLUpdate extends FedoraAction {
                     } else
                         throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
                 }
-                logger.debug("found user["+oid+"] as owner of "+tpe+"["+sip.getFID()+"]");
+                logger.debug("found user["+oid+"] as owner of "+tpe+"["+(sip.hasPID()?"["+sip.getPID()+"]":"")+(sip.hasFID()?"["+sip.getFID()+"]":"")+"["+sip.getBase()+"]");
                 XsltTransformer own = Saxon.buildTransformer(FOXUpdate.class.getResource("/ACLUpdate/owner.xsl")).load();
                 SaxonListener listener = new SaxonListener("ACLUpdate",MDC.get("sip"));
                 own.setMessageListener(listener);
