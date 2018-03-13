@@ -118,6 +118,7 @@ public final class SaxonExtensionFunctions {
                     try {
                         URI uri = new URI(((StringValue) arguments[0].head()).getStringValue());
                         boolean exists = (new java.io.File(uri)).exists();
+                        //logger.debug("sx:fileExists("+uri+"):"+exists);
                         seq = (new XdmAtomicValue(exists)).getUnderlyingValue();
                     } catch(Exception e) {
                         logger.error("sx:fileExists failed!",e);
