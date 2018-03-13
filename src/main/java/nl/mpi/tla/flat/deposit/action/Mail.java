@@ -1,5 +1,5 @@
 /* 
- * Copyright (C) 2015-2017 The Language Archive
+ * Copyright (C) 2018 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import java.io.File;
 import java.util.Date;
 import java.util.Properties;
 
@@ -26,19 +25,8 @@ import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamSource;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 
 import javax.xml.transform.stream.StreamSource;
 
@@ -50,21 +38,18 @@ import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.Resource;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
-import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import nl.mpi.tla.flat.deposit.util.SaxonListener;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.jena.ext.com.google.common.base.Throwables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 /**
  *
- * @author menzowi
+ * @author pavi
  */
 public class Mail extends FedoraAction {
 
@@ -89,7 +74,7 @@ public class Mail extends FedoraAction {
 
 			XdmNode mailNodeConfig = Saxon.buildDocument(new StreamSource(mailConfig));
 			XdmNode mailNode = (XdmNode) Saxon.xpathSingle(mailNodeConfig, "/mailConfig");
-			;
+
 			String server = Saxon.xpath2string(mailNode, "./server");
 			logger.debug("Server[" + server + "]");
 			String port = Saxon.xpath2string(mailNode, "./port");
@@ -99,9 +84,13 @@ public class Mail extends FedoraAction {
 			String from = Saxon.xpath2string(mailNode, "./from");
 			logger.debug("from[" + from + "]");
 			String to = Saxon.xpath2string(mailNode, "./to");
+			if (hasParameter("to"))
+				to = getParameter("to");
 			logger.debug("to[" + to + "]");
 
-			String subject = getParameter("subject");
+			String subject = Saxon.xpath2string(mailNode, "./subject");
+			if (hasParameter("subject"))
+				subject = getParameter("subject");
 			logger.debug("Subject[" + subject + "]");
 
 			File xsl = new File(getParameter("template"));
@@ -114,47 +103,50 @@ public class Mail extends FedoraAction {
 
 			for (String param : this.params.keySet()) {
 				if (param.startsWith("tmpl-"))
-					logger.debug("Params: " + params.get(param));
+					logger.debug("param[" + param + "]: " + params.get(param));
 				fox.setParameter(new QName(param.replaceFirst("^tmpl-", "")), params.get(param));
 			}
 
+			String stackTrace;
+			
 			fox.setParameter(new QName("sip"), new XdmAtomicValue(context.getSIP().getBase().toURI().toString()));
-			if (context.hasException())
+			if (context.hasException()) {
 				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
+				stackTrace = ExceptionUtils.getFullStackTrace(context.getException()) ;
+				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
+			}
 
 			fox.setSource(new DOMSource(context.getSIP().getRecord(), context.getSIP().getBase().toURI().toString()));
 			XdmDestination destination = new XdmDestination();
 			fox.setDestination(destination);
 			fox.transform();
 
-			StringBuffer sBuff = new StringBuffer(destination.getXdmNode().toString());
-			;
-
 			// sets SMTP server properties
 			Properties properties = new Properties();
 			properties.put("mail.smtp.host", server);
 			properties.put("mail.smtp.port", port);
-			
-			//creates new session for the with or without authenticator
-			javax.mail.Session session; 
+
+			// creates new session for the with or without authenticator
+			javax.mail.Session session;
 			if (!user.isEmpty() && !pswd.isEmpty()) {
 				properties.put("mail.smtp.auth", "true");
 				properties.put("mail.smtp.ssl.enable", "true");
-				logger.debug("Authenticator for the session required as username and password are present"); 
+				logger.debug("Authenticator for the session required as username and password are present");
 				Authenticator auth = new Authenticator() {
+					@Override
 					public javax.mail.PasswordAuthentication getPasswordAuthentication() {
 						return new javax.mail.PasswordAuthentication(user, pswd);
 					}
 				};
-				 session = javax.mail.Session.getInstance(properties, auth);
+				session = javax.mail.Session.getInstance(properties, auth);
 			} else {
 				properties.put("mail.smtp.auth", "false");
 				logger.debug("Authenticator for the session not required");
 				session = javax.mail.Session.getInstance(properties, null);
 			}
 
-			logger.debug("Create new msg");
 			// creates a new e-mail message
+			logger.debug("Create new msg");
 			javax.mail.Message msg = new MimeMessage(session);
 			InternetAddress fromAddress = new InternetAddress(from);
 			InternetAddress toAddress = new InternetAddress(to);
@@ -164,7 +156,7 @@ public class Mail extends FedoraAction {
 			msg.setSubject(subject);
 			msg.setSentDate(new Date());
 
-			msg.setContent(sBuff.toString(), "text/html");
+			msg.setContent(destination.getXdmNode().toString(), "text/html");
 			msg.saveChanges();
 
 			try {
@@ -175,7 +167,7 @@ public class Mail extends FedoraAction {
 			} catch (MessagingException ex) {
 				logger.error("Error while trying to send mail message to the user!!", ex);
 			}
-			
+
 		} catch (Exception e) {
 			throw new DepositException("The creation of Mail failed!", e);
 		}
