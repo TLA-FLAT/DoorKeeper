@@ -167,7 +167,7 @@ public class Context {
     
     // Utilities: general method to load properties or parameters
     
-    public void loadParameters(Map<String,XdmValue> map,XdmValue params,String type) throws SaxonApiException, DepositException {
+    public Map<String,XdmValue> loadParameters(Map<String,XdmValue> map,XdmValue params,String type) throws SaxonApiException, DepositException {
         for (XdmItem param : params) {
             String name = Saxon.xpath2string(param,"@name");
             if (Saxon.hasAttribute(param,"when")) {
@@ -237,6 +237,7 @@ public class Context {
             }
             map.put(name,nvals);
         }
+        return map;
     }
-    
+
 }
