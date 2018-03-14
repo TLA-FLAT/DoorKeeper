@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -49,15 +50,15 @@ public class Flow {
     
     protected Context context = null;
     
-    protected List<ActionInterface> noActions = new LinkedList<>();
+    protected List<Action> noActions = new LinkedList<>();
     
-    protected List<ActionInterface> initActions = noActions;
+    protected List<Action> initActions = noActions;
     
-    protected List<ActionInterface> mainActions =  noActions;
+    protected List<Action> mainActions = noActions;
     
-    protected List<ActionInterface> exceptionActions = noActions;
+    protected List<Action> exceptionActions = noActions;
     
-    protected List<ActionInterface> finalActions = noActions;
+    protected List<Action> finalActions = noActions;
     
     protected String start = null;
     
@@ -104,8 +105,8 @@ public class Flow {
         }
     }
     
-    private List<ActionInterface> loadFlow(XdmValue actions) throws DepositException {
-        List<ActionInterface> flow = new LinkedList<>();
+    private List<Action> loadFlow(XdmValue actions) throws DepositException {
+        List<Action> flow = new LinkedList<>();
         for (XdmItem action:actions) {
             try {
                 String name = Saxon.xpath2string(action,"@name");
@@ -115,17 +116,13 @@ public class Flow {
                         continue;
                     }
                 }
-                // get parameters
-                Map<String,XdmValue> params = new LinkedHashMap();
-                context.loadParameters(params,Saxon.xpath(action, "parameter"),"parameter");
                 try {
                     // use the regular class loader to load the action class
                     Class<ActionInterface> face = (Class<ActionInterface>) Class.forName(clazz);
                     // instantiate the class and add it to the workflow
                     ActionInterface actionImpl = face.newInstance();
                     actionImpl.setName(name!=null?name:clazz);
-                    actionImpl.setParameters(params);
-                    flow.add(actionImpl);
+                    flow.add(new Action(actionImpl,Saxon.xpath(action, "parameter")));
                 } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
                     Flow.logger.error(" couldn't load action["+name+"]["+clazz+"]! "+e.getMessage());
                     throw new DepositException(e);
@@ -208,7 +205,7 @@ public class Flow {
     private boolean initFlow() throws DepositException {
         Flow.logger.debug("BEGIN  init flow");
         boolean next = true;
-        for (ActionInterface action:initActions) {
+        for (Action action:initActions) {
             Flow.logger.debug("ACTION init flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
@@ -225,7 +222,7 @@ public class Flow {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
         boolean next = true;
         boolean run  = (start==null);
-        for (ActionInterface action:mainActions) {
+        for (Action action:mainActions) {
             if (!run && start!=null && action.getName().equals(start))
                 run = true;
             if (run) {
@@ -251,7 +248,7 @@ public class Flow {
         Flow.logger.debug("BEGIN  exception flow");
         boolean next = true;
         Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
-        for (ActionInterface action:exceptionActions) {
+        for (Action action:exceptionActions) {
             Flow.logger.debug("ACTION exception flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
@@ -267,7 +264,7 @@ public class Flow {
     private boolean finalFlow() throws DepositException {
         Flow.logger.debug("BEGIN  final flow");
         boolean next = true;
-        for (ActionInterface action:finalActions) {
+        for (Action action:finalActions) {
             Flow.logger.debug("ACTION final flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
@@ -278,6 +275,37 @@ public class Flow {
         }
         Flow.logger.debug(" END   final flow["+next+"]");
         return next;
+    }
+    
+    class Action {
+        
+        private ActionInterface action = null;
+        private XdmValue params = null;
+        
+        public Action(ActionInterface action,XdmValue params) {
+            this.action = action;
+            this.params = params;
+        }
+        
+        public String getName() {
+            if (this.action==null)
+                return null;
+            return this.action.getName();
+        }
+        
+        public boolean perform(Context context) throws DepositException {
+            if (this.action==null)
+                throw new DepositException("Action is unknown!");
+            if (this.params==null)
+                throw new DepositException("Action["+this.action.getName()+"] parameters are unknown!");
+            try {
+                this.action.setParameters(context.loadParameters(new LinkedHashMap<String,XdmValue>(),this.params,"parameter"));
+            } catch (SaxonApiException e) {
+                throw new DepositException("JIT loading and expanding parameters for action["+this.action.getName()+"] failed!",e);
+            }
+            return this.action.perform(context);
+        }
+        
     }
 
 }
