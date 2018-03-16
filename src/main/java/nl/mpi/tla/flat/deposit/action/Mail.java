@@ -88,9 +88,10 @@ public class Mail extends FedoraAction {
 				to = getParameter("to");
 			logger.debug("to[" + to + "]");
 
-			String subject = Saxon.xpath2string(mailNode, "./subject");
+			String repo = Saxon.xpath2string(mailNode, "./repo");
+			String subject = null;
 			if (hasParameter("subject"))
-				subject = getParameter("subject");
+				subject =repo+getParameter("subject");
 			logger.debug("Subject[" + subject + "]");
 
 			File xsl = new File(getParameter("template"));
