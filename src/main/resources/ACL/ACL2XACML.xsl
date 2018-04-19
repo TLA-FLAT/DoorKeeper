@@ -6,6 +6,7 @@
     version="3.0">
     
     <xsl:param name="acl-base" select="'.'"/>
+    <xsl:param name="roles" select="()"/>
     
     <xsl:variable name="debug" select="false()" static="yes"/>
     
@@ -58,7 +59,31 @@
         </Apply>
     </xsl:template>
 
-    <xsl:template match="read|write" mode="role">
+    <xsl:template match="read" mode="role">
+        <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
+            <SubjectAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false" AttributeId="fedoraRole"/>
+            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
+                <xsl:variable name="all" as="xs:string*">
+                    <xsl:for-each select="role">
+                        <xsl:variable name="role" select="."/>
+                        <xsl:sequence select="$role"/>
+                        <xsl:if test="exists($roles)">
+                            <xsl:sequence select="$roles//role[.=$role]/following-sibling::role"/>
+                        </xsl:if>
+                    </xsl:for-each>
+                </xsl:variable>
+                <xsl:for-each select="distinct-values($all)">
+                    <xsl:variable name="role" select="."/>
+                    <xsl:message>INF: read access for any [<xsl:value-of select="$role"/>]!</xsl:message>
+                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                        <xsl:value-of select="$role"/>
+                    </AttributeValue>
+                </xsl:for-each>
+            </Apply>
+        </Apply>
+    </xsl:template>
+    
+    <xsl:template match="write" mode="role">
         <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-at-least-one-member-of">
             <SubjectAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" MustBePresent="false" AttributeId="fedoraRole"/>
             <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:string-bag">
@@ -88,75 +113,45 @@
             </Target>
             <xsl:apply-templates mode="xacml" select="."/>
             <!-- read -->
-            <xsl:choose>
-                <xsl:when test="exists(read[role='anonymous user'])">
-                    <xsl:message>INF: public access for anyone!</xsl:message>
-                    <Rule RuleId="permit-access-functions" Effect="Permit">
-                        <Target>
-                            <Subjects>
-                                <AnySubject/>
-                            </Subjects>
-                            <Resources>
-                                <AnyResource/>
-                            </Resources>
-                            <Actions>
-                                <xsl:for-each select="$access-functions">
-                                    <Action>
-                                        <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
-                                            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
-                                                <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
-                                                <xsl:value-of select="."/>
-                                            </AttributeValue>
-                                            <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
-                                        </ActionMatch>
-                                    </Action>
-                                </xsl:for-each>
-                            </Actions>
-                        </Target>
-                    </Rule>
-                </xsl:when>
-                <xsl:otherwise>
-                    <Rule RuleId="deny-access-functions" Effect="Deny">
-                        <Target>
-                            <Subjects>
-                                <AnySubject/>
-                            </Subjects>
-                            <Resources>
-                                <AnyResource/>
-                            </Resources>
-                            <Actions>
-                                <xsl:for-each select="$access-functions">
-                                    <Action>
-                                        <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
-                                            <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
-                                                <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
-                                                <xsl:value-of select="."/>
-                                            </AttributeValue>
-                                            <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
-                                        </ActionMatch>
-                                    </Action>
-                                </xsl:for-each>
-                            </Actions>
-                        </Target>
-                        <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
-                            <xsl:choose>
-                                <xsl:when test="exists(read/user) and exists(read/role)">
-                                    <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
-                                        <xsl:apply-templates select="read" mode="user"/>
-                                        <xsl:apply-templates select="read" mode="role"/>
-                                    </Apply>
-                                </xsl:when>
-                                <xsl:when test="exists(read/user)">
-                                    <xsl:apply-templates select="read" mode="user"/>
-                                </xsl:when>
-                                <xsl:when test="exists(read/role)">
-                                    <xsl:apply-templates select="read" mode="role"/>
-                                </xsl:when>
-                            </xsl:choose>
-                        </Condition>
-                    </Rule>
-                </xsl:otherwise>
-            </xsl:choose>
+            <Rule RuleId="deny-access-functions" Effect="Deny">
+                <Target>
+                    <Subjects>
+                        <AnySubject/>
+                    </Subjects>
+                    <Resources>
+                        <AnyResource/>
+                    </Resources>
+                    <Actions>
+                        <xsl:for-each select="$access-functions">
+                            <Action>
+                                <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                        <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
+                                        <xsl:value-of select="."/>
+                                    </AttributeValue>
+                                    <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
+                                </ActionMatch>
+                            </Action>
+                        </xsl:for-each>
+                    </Actions>
+                </Target>
+                <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+                    <xsl:choose>
+                        <xsl:when test="exists(read/user) and exists(read/role)">
+                            <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+                                <xsl:apply-templates select="read" mode="user"/>
+                                <xsl:apply-templates select="read" mode="role"/>
+                            </Apply>
+                        </xsl:when>
+                        <xsl:when test="exists(read/user)">
+                            <xsl:apply-templates select="read" mode="user"/>
+                        </xsl:when>
+                        <xsl:when test="exists(read/role)">
+                            <xsl:apply-templates select="read" mode="role"/>
+                        </xsl:when>
+                    </xsl:choose>
+                </Condition>
+            </Rule>
             <!-- write -->
             <Rule RuleId="deny-management-functions" Effect="Deny">
                 <Target>
@@ -217,20 +212,27 @@
         <rdf:RDF xmlns:fedora="info:fedora/fedora-system:def/relations-external#" xmlns:fedora-model="info:fedora/fedora-system:def/model#" xmlns:islandora="http://islandora.ca/ontology/relsext#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
             <rdf:Description rdf:about="info:fedora/{@id}">
                 <!-- read -->
-                <xsl:if test="empty(read[role='anonymous user'])">
-                    <xsl:for-each select="read/user">
-                        <xsl:variable name="user" select="."/>
-                        <islandora:isViewableByUser>
-                            <xsl:value-of select="$user"/>
-                        </islandora:isViewableByUser>
-                    </xsl:for-each>
+                <xsl:for-each select="read/user">
+                    <xsl:variable name="user" select="."/>
+                    <islandora:isViewableByUser>
+                        <xsl:value-of select="$user"/>
+                    </islandora:isViewableByUser>
+                </xsl:for-each>
+                <xsl:variable name="all" as="xs:string*">
                     <xsl:for-each select="read/role">
                         <xsl:variable name="role" select="."/>
-                        <islandora:isViewableByRole>
-                            <xsl:value-of select="$role"/>
-                        </islandora:isViewableByRole>
+                        <xsl:sequence select="$role"/>
+                        <xsl:if test="exists($roles)">
+                            <xsl:sequence select="$roles//role[.=$role]/following-sibling::role"/>
+                        </xsl:if>
                     </xsl:for-each>
-                </xsl:if>
+                </xsl:variable>
+                <xsl:for-each select="distinct-values($all)">
+                    <xsl:variable name="role" select="."/>
+                    <islandora:isViewableByRole>
+                        <xsl:value-of select="$role"/>
+                    </islandora:isViewableByRole>
+                </xsl:for-each>
                 <!-- write -->
                 <xsl:for-each select="write/user">
                     <xsl:variable name="user" select="."/>

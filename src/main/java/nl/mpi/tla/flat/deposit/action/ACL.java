@@ -64,6 +64,21 @@ public class ACL extends AbstractAction {
                 logger.error("The access policy can't be read!");
                 return false;
             }
+            // check for the roles
+            File roles = null;
+            if (this.hasParameter("roles")) {
+                roles = new File(getParameter("roles"));
+                if (!roles.exists()) {
+                    logger.info("The roles policy doesn't exist!");
+                    return true;
+                } else if (!roles.isFile()) {
+                    logger.error("The roles policy isn't a file!");
+                    return false;
+                } else if (!roles.canRead()) {
+                    logger.error("The roles policy can't be read!");
+                    return false;
+                }
+            }
             // create the dir
             File dir = new File(getParameter("dir", "./acl"));
             if (!dir.exists()) {
@@ -96,9 +111,10 @@ public class ACL extends AbstractAction {
             wacl2acl.setParameter(new QName("record"), Saxon.wrapNode(context.getSIP().getRecord()));
             wacl2acl.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
             if (this.hasParameter("default-account"))
-                wacl2acl.setParameter(new QName("default-accounts"),  this.params.get("default-account"));
+                wacl2acl.setParameter(new QName("default-accounts"), this.params.get("default-account"));
             if (this.hasParameter("default-role"))
-                wacl2acl.setParameter(new QName("default-roles"),  this.params.get("default-role"));
+                wacl2acl.setParameter(new QName("default-roles"), this.params.get("default-role"));
+                
             // convert intermediate ACl to XACM using ACL/ACL2XACML.xsl or an override
             XsltTransformer acl2xacml = null;
             if (this.hasParameter("acl2xacml")) {
@@ -119,6 +135,8 @@ public class ACL extends AbstractAction {
             acl2xacml.setMessageListener(listener);
             acl2xacml.setErrorListener(listener);
             acl2xacml.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+            if (roles != null)
+                acl2xacml.setParameter(new QName("roles"), Saxon.buildDocument(new StreamSource(roles)));
             // additional parameters
             for (String param:this.params.keySet()) {
                 if (param.startsWith("xsl-param-"))
