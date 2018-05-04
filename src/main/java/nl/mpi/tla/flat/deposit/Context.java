@@ -16,15 +16,22 @@
  */
 package nl.mpi.tla.flat.deposit;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringReader;
 import java.net.URI;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmValue;
+import nl.mpi.tla.flat.deposit.action.ActionInterface;
 import nl.mpi.tla.flat.deposit.context.ImportPropertiesInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
@@ -52,6 +59,10 @@ public class Context {
     protected SIPInterface sip = null;
     
     protected Exception ex = null;
+    
+    protected PrintWriter rollbackLog = null;
+    
+    // constructor
         
     public Context(Flow flow,XdmNode spec,Map<String,XdmValue> params)  throws DepositException {
         this.flow = flow;
@@ -163,6 +174,57 @@ public class Context {
     
     public Exception getException() {
         return this.ex;
+    }
+    
+    // Rollback
+    
+    protected void initRollbackLog() {
+        if (rollbackLog == null) {
+            try {
+                rollbackLog = new PrintWriter(new FileWriter(this.getProperty("dk-rollbackLog", "rollback.log").toString(),true),true);
+            } catch (IOException ex) {
+                this.logger.error("Couldn't create/open rollback log file["+this.getProperty("dk-rollbackLog", "rollback.log").toString()+"]",ex);
+                System.exit(1);
+            }
+        }
+    }
+    
+    protected String escXML(String s) {
+        return s.replaceAll("&","&amp;").replaceAll("\"","&quot;").replaceAll("'","&apos;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+    }
+    
+    public void registerRollbackEvent(ActionInterface action, String event, String... params) {
+        initRollbackLog();
+        if (params.length % 2 != 0) {
+            this.logger.warn("uneven param list for action["+action.getName()+"] event["+event+"]!");
+        }
+        rollbackLog.format("<event action=\"%s\" type=\"%s\">", escXML(action.getName()), escXML(event));
+        for (int p=0;p<params.length;p++) {
+            if ((p+1) < params.length)
+                rollbackLog.format("<param name=\"%s\" value=\"%s\"/>",escXML(params[p]),escXML(params[++p]));
+            else
+                rollbackLog.format("<param name=\"%s\"/>",escXML(params[p]));
+        }
+        rollbackLog.format("</event>");
+        rollbackLog.flush();
+    }
+    
+    public XdmNode getRollbackLog() {
+        try {
+            initRollbackLog();
+            rollbackLog.flush();
+            rollbackLog.close();
+            rollbackLog = null; // force reopening if needed
+            String xml = "<?xml version=\"1.0\" ?>\n" +
+                    "<!DOCTYPE rollback [<!ENTITY data SYSTEM \"rollback.log\">]>\n" +
+                    "<rollback>&data;</rollback>";
+            xml = xml.replaceAll("rollback.log",this.getProperty("dk-rollbackLog", "rollback.log").toString());
+            return Saxon.buildDocument(new StreamSource(new StringReader(xml)));
+        } catch (SaxonApiException ex) {
+            this.logger.error("Couldn't read rollback log file["+this.getProperty("dk-rollbackLog", "rollback.log").toString()+"]",ex);
+            System.exit(1);
+        }
+        return null;
     }
     
     // Utilities: general method to load properties or parameters

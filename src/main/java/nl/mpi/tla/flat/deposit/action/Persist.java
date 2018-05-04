@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Set;
+import java.util.logging.Level;
 
 import javax.xml.transform.stream.StreamSource;
 
@@ -36,6 +37,7 @@ import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicies;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicy;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicyLoader;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicyMatcher;
+import nl.mpi.tla.flat.deposit.util.Saxon;
 
 /**
  *
@@ -78,6 +80,7 @@ public class Persist extends AbstractAction {
                 File newResourceDir = matchedPolicy.getTarget();
                 File newResourceFile = new File(newResourceDir, res.getFile().getName());
                 try {
+                    context.registerRollbackEvent(this, "mkdir", "dir", newResourceDir.toPath().toString());
                     Files.createDirectories(newResourceDir.toPath());
                     // add version number (if needed)
                     // 0 is used for the initial ingest (cf FC version numbers)
@@ -85,6 +88,7 @@ public class Persist extends AbstractAction {
                     while (newResourceFile.exists())
                         newResourceFile = new File(newResourceFile.toString()+"."+(v++));
                     // move the file to its persistent place
+                    context.registerRollbackEvent(this, "mv", "src", res.getFile().toPath().toString(),"dst",newResourceFile.toPath().toString());
                     Files.move(res.getFile().toPath(), newResourceFile.toPath());
                 } catch (IOException ex) {
                     String message = "Error moving resource from " + res.getFile() + " to " + newResourceFile; 
