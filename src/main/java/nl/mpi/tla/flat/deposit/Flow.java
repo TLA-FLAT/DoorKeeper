@@ -21,11 +21,13 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.logging.Level;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
+import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmValue;
@@ -59,6 +61,8 @@ public class Flow {
     protected List<Action> exceptionActions = noActions;
     
     protected List<Action> finalActions = noActions;
+    
+    protected boolean rollback = false;
     
     protected String start = null;
     
@@ -100,6 +104,7 @@ public class Flow {
             mainActions = loadFlow(Saxon.xpath(spec, "/flow/main/action"));
             exceptionActions = loadFlow(Saxon.xpath(spec, "/flow/exception/action"));
             finalActions = loadFlow(Saxon.xpath(spec, "/flow/final/action"));
+            rollback = Saxon.xpath2boolean(spec, "exists(/flow/rollback)");
         } catch (SaxonApiException ex) {
             throw new DepositException(ex);
         }
@@ -187,6 +192,12 @@ public class Flow {
                 t = x;
                 Flow.logger.error(" exception during the exception handling flow! "+x.getMessage(),x);
             }
+            try {
+                if (rollback)
+                    rollback();
+            } catch(Exception x) {
+                Flow.logger.error(" exception during the rollback! "+x.getMessage(),x);
+            }
         } finally {
             try {
                 finalFlow();
@@ -260,6 +271,20 @@ public class Flow {
         Flow.logger.debug(" END   exception flow["+next+"]");
         return next;
     }
+    
+    private void rollback() {
+        XdmNode log = context.getRollbackLog();
+        for (int a=mainActions.size();a>0;a--) {
+            Action action = mainActions.get((a - 1));
+            try {
+                Map vars = new HashMap();
+                vars.put("action",new XdmAtomicValue(action.getName()));
+                action.rollback(context,Saxon.xpathList(log, "/rollback/event[@action=$action]",vars));
+            } catch (SaxonApiException ex) {
+                Flow.logger.error("error during rollback action["+action.getName()+"]",ex);
+            }
+        }
+    }
 
     private boolean finalFlow() throws DepositException {
         Flow.logger.debug("BEGIN  final flow");
@@ -306,6 +331,19 @@ public class Flow {
             return this.action.perform(context);
         }
         
+        public void rollback(Context context,List<XdmItem> events) {
+            Flow.logger.debug("rollback action["+this.action.getName()+"]["+this.action.getClass().getName()+"]");
+            for (ListIterator<XdmItem> iter = events.listIterator(events.size());iter.hasPrevious();) {
+                try {
+                    XdmItem x = iter.previous();
+                    Flow.logger.debug("- rollback event["+Saxon.xpath2string(x,"@type")+"]");
+                    for (XdmItem p:Saxon.xpath(x, "./param"))
+                        Flow.logger.debug("- - param["+Saxon.xpath2string(p, "@name")+"="+Saxon.xpath2string(p, "@value")+"]");
+                } catch (SaxonApiException ex) {
+                }
+            }
+            this.action.rollback(context, events);
+        }
     }
 
 }

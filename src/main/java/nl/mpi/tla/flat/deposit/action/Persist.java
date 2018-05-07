@@ -19,6 +19,8 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.Set;
 import java.util.logging.Level;
 
@@ -28,8 +30,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.sf.saxon.s9api.SaxonApiException;
+import net.sf.saxon.s9api.XdmItem;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.Flow;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistDatasetNameRetriever;
@@ -114,4 +118,30 @@ public class Persist extends AbstractAction {
     PersistDatasetNameRetriever newPersistDatasetNameRetriever() {
     	return new PersistDatasetNameRetriever();
     }
+    
+    public void rollback(Context context,List<XdmItem> events) {
+        for (ListIterator<XdmItem> iter = events.listIterator(events.size());iter.hasPrevious();) {
+            XdmItem event = iter.previous();
+            try {
+                String tpe = Saxon.xpath2string(event, "@type");
+                if (tpe.equals("mv")) {
+                    File src = new File(Saxon.xpath2string(event, "param[@name='src']/@value"));
+                    File dst = new File(Saxon.xpath2string(event, "param[@name='dst']/@value"));
+                    if (dst.exists() && dst.isFile() && dst.canWrite() && !src.exists()) {
+                        Files.move(dst.toPath(), src.toPath());
+                        logger.debug("rollback action["+this.getName()+"] event["+tpe+"] moved ["+dst+"] back to ["+src+"]");
+                    } else
+                        logger.error("rollback action["+this.getName()+"] event["+Saxon.xpath2string(event, "@type")+"] failed source["+src+"] and destination["+dst+"] can't be restored!");
+                } else if (tpe.equals("mkdir")) {
+                    File dir = new File(Saxon.xpath2string(event, "param[@name='dir']/@value"));
+                    Files.deleteIfExists(dir.toPath());
+                    logger.debug("rollback action["+this.getName()+"] event["+tpe+"] removed dir["+dir+"]");
+                } else
+                    logger.error("rollback action["+this.getName()+"] rollback unknown event["+tpe+"]!");
+            } catch (Exception ex) {
+                logger.error("rollback action["+this.getName()+"] event["+event+"] failed!",ex);
+            }
+        }
+    }
+    
 }
