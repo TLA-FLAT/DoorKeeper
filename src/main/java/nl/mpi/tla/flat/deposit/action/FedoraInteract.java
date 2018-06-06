@@ -105,21 +105,21 @@ public class FedoraInteract extends FedoraAction {
                         
             // - <fid>.<dsid>.file ... create/modify DS
             // - <fid>.<dsid>.<ext>... create/modify DS
-            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z\\-]+\\.[A-Za-z0-9_]+")));
+            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z0-9\\-]+\\.[A-Za-z0-9_]+")));
             for (File fox:foxs) {
                 String fid  = fox.getName().replaceFirst("\\..*$","").replace(pre+"_",pre+":").replace("_CMD","");
-                String dsid = fox.getName().replaceFirst("^.*\\.([A-Z\\-]+)\\..*$","$1");
+                String dsid = fox.getName().replaceFirst("^.*\\.([A-Z0-9\\-]+)\\..*$","$1");
                 String ext  = fox.getName().replaceFirst("^.*\\.(.*)$","$1");
                 logger.debug("DSID["+fox+"] -> ["+fid+"]["+dsid+"]["+ext+"]");
-                upsertDatastream(sip, fox,fid,dsid,ext);
+                upsertDatastream(sip, fox, fid, dsid, ext);
             }
     
             // - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
             // - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
-            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z\\-]+\\.[0-9]+\\.[A-Za-z0-9_]+")));
+            foxs = dir.listFiles(((FilenameFilter)new RegexFileFilter(pre+"[A-Za-z0-9_]+\\.[A-Z0-9\\-]+\\.[0-9]+\\.[A-Za-z0-9_]+")));
             for (File fox:foxs) {
                 String fid  = fox.getName().replaceFirst("\\..*$","").replace(pre+"_",pre+":").replace("_CMD","");
-                String dsid = fox.getName().replaceFirst("^.*\\.([A-Z\\-]+)\\..*$","$1");
+                String dsid = fox.getName().replaceFirst("^.*\\.([A-Z0-9\\-]+)\\..*$","$1");
                 String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$","$1");
                 Date asof = new Date(Long.parseLong(epoch));
                 String ext  = fox.getName().replaceFirst("^.*\\.(.*)$","$1");
@@ -134,16 +134,19 @@ public class FedoraInteract extends FedoraAction {
     
     protected void upsertDatastream(SIPInterface sip,File fox, String fid, String dsid, String ext) throws DepositException {
         try {
-            // check if the DS already exists
+            // check if the DS already exists (will throw 
             GetDatastreamResponse res = getDatastream(fid,dsid).execute();
-            if (res.getStatus() == 404) {
-                // insert DS
-                insertDatastream(sip, fox, fid, dsid, ext);
-            } else if (res.getStatus() == 200) {
+            if (res.getStatus() == 200) {
                 // update DS
                 updateDatastream(sip, fox, fid, dsid, ext);
             } else
                 throw new DepositException("Unexpected status["+res.getStatus()+"] while interacting with Fedora Commons!");
+        } catch(FedoraClientException e) {
+            if (e.getStatus()==404) {
+                // insert DS
+                insertDatastream(sip, fox, fid, dsid, ext);
+            } else
+                throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
         } catch(DepositException ex) {
             throw ex;
         } catch(Exception ex) {
