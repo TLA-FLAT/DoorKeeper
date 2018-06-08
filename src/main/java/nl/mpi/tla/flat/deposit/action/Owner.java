@@ -82,7 +82,6 @@ public class Owner extends AbstractAction {
             XsltTransformer wacl2acl = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
             wacl2acl.setMessageListener(listener);
             wacl2acl.setErrorListener(listener);
-            wacl2acl.setParameter(new QName("record"), Saxon.wrapNode(context.getSIP().getRecord()));
             wacl2acl.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
                 
         } catch (Exception e) {

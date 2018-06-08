@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cmd="http://www.clarin.eu/cmd/" xmlns:lat="http://lat.mpi.nl/" xmlns:sem="http://marklogic.com/semantics" xmlns:functx="http://www.functx.com" exclude-result-prefixes="xs cmd lat sem functx" version="3.0">
 
-    <xsl:param name="record" select="doc('./record.cmdi')"/>
     <xsl:param name="acl-base" select="'.'"/>
 
     <xsl:variable name="debug" select="false()" static="yes"/>
