@@ -164,7 +164,7 @@ public class FedoraInteract extends FedoraAction {
                     throw new DepositException("Resource FOX["+fox+"] without DS location!");
                 String mime = Saxon.xpath2string(f, "/foxml:datastreamVersion/@MIMETYPE", null, NAMESPACES);
                 String lbl = Saxon.xpath2string(f, "/foxml:datastreamVersion/@LABEL", null, NAMESPACES);
-                AddDatastream ad = addDatastream(fid,dsid).dsLocation(loc);
+                AddDatastream ad = addDatastream(fid,dsid).dsLocation(loc).controlGroup("E");
                 if (mime!=null)
                     ad.mimeType(mime);
                 if (lbl!=null)
@@ -173,7 +173,7 @@ public class FedoraInteract extends FedoraAction {
             } else {
                 adsResponse = addDatastream(fid,dsid).content(fox).logMessage("Added "+dsid).execute();
             }
-            if (adsResponse.getStatus()!=200)
+            if (adsResponse.getStatus()!=201)
                 throw new DepositException("Unexpected status["+adsResponse.getStatus()+"] while interacting with Fedora Commons!");
             logger.info("Updated FedoraObject["+fid+"]["+dsid+"]["+adsResponse.getLastModifiedDate()+"]");
             // we should update the PID asOfDateTime
