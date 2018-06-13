@@ -22,6 +22,7 @@ import java.io.OutputStream;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
+import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
@@ -78,11 +79,16 @@ public class Owner extends AbstractAction {
             trix2sem.setMessageListener(listener);
             trix2sem.setErrorListener(listener);
             trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
-            // convert sem triples to an intermediate ACL using ACL/WebACL2ACL.xsl
-            XsltTransformer wacl2acl = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
-            wacl2acl.setMessageListener(listener);
-            wacl2acl.setErrorListener(listener);
-            wacl2acl.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+            // convert sem triples to the owner.xml
+            XsltTransformer wacl2owner = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
+            wacl2owner.setMessageListener(listener);
+            wacl2owner.setErrorListener(listener);
+            wacl2owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+            // pipe
+            XdmDestination destination = new XdmDestination();
+            trix2sem.setDestination(wacl2owner);
+            wacl2owner.setDestination(destination);
+            trix2sem.transform();
                 
         } catch (Exception e) {
             throw new DepositException("The creation of the owner file failed!", e);
