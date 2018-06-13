@@ -86,8 +86,11 @@ public class EPICHandleCreation extends AbstractAction {
             if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
 
                 String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
-                String dsid = context.getSIP().getFID().getRawFragment().replaceAll("@.*","");
-                String asof = context.getSIP().getFID().getRawFragment().replaceAll(".*@","");
+                String frag   = context.getSIP().getFID().getRawFragment();
+                if (frag == null)
+                    throw new DepositException("SIP FID["+context.getSIP().getFID()+"] isn't complete!");
+                String dsid = frag.replaceAll("@.*","");
+                String asof = frag.replaceAll(".*@","");
 
                 URI    pid  = context.getSIP().getPID();
                 String uuid = pid.toString().replaceAll(".*/","");
@@ -106,8 +109,11 @@ public class EPICHandleCreation extends AbstractAction {
             for (Collection col:context.getSIP().getCollections(true)) {
                 if (col.hasPID() && col.hasFID()) {
                     String fid    = col.getFID().toString().replaceAll("#.*","");
-                    String dsid   = col.getFID().getRawFragment().replaceAll("@.*","");
-                    String asof   = col.getFID().getRawFragment().replaceAll(".*@","");
+                    String frag   = col.getFID().getRawFragment();
+                    if (frag == null)
+                        throw new DepositException("collection FID["+col.getFID()+"] isn't complete!");
+                    String dsid   = frag.replaceAll("@.*","");
+                    String asof   = frag.replaceAll(".*@","");
 
                     String pid    = col.getPID().toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
                     String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
@@ -141,8 +147,11 @@ public class EPICHandleCreation extends AbstractAction {
                     // TODO: update might be a PID update
                     if (res.hasPID() && res.hasFID()) {
                         String fid  = res.getFID().toString().replaceAll("#.*","");
-                        String dsid = res.getFID().getRawFragment().replaceAll("@.*","");
-                        String asof = res.getFID().getRawFragment().replaceAll(".*@","");
+                        String frag   = res.getFID().getRawFragment();
+                        if (frag == null)
+                            throw new DepositException("resource FID["+res.getFID()+"] isn't complete!");
+                        String dsid = frag.replaceAll("@.*","");
+                        String asof = frag.replaceAll(".*@","");
 
                         String pid    = res.getPID().toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
                         String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
@@ -168,8 +177,12 @@ public class EPICHandleCreation extends AbstractAction {
                     continue;
                 if (red.toString().startsWith("lat:")) {
                     String fid    = red.toString().replaceAll("#.*","");
-                    String dsid   = red.getRawFragment().replaceAll("@.*","");
-                    String asof   = red.getRawFragment().replaceAll(".*@","");
+                    String frag   = red.getRawFragment();
+                    if (frag == null)
+                        throw new DepositException("redirect FID["+red+"] isn't complete!");
+
+                    String dsid   = frag.replaceAll("@.*","");
+                    String asof   = frag.replaceAll(".*@","");
                     String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
                     red           = new URI(loc);
                 }
