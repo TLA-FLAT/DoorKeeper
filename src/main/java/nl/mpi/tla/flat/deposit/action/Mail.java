@@ -27,6 +27,7 @@ import javax.mail.internet.MimeMessage;
 import javax.xml.transform.dom.DOMSource;
 
 import java.io.File;
+import java.net.URI;
 
 import javax.xml.transform.stream.StreamSource;
 
@@ -34,10 +35,12 @@ import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import nl.mpi.tla.flat.deposit.util.SaxonListener;
 
@@ -75,6 +78,8 @@ public class Mail extends FedoraAction {
 			XdmNode mailNodeConfig = Saxon.buildDocument(new StreamSource(mailConfig));
 			XdmNode mailNode = (XdmNode) Saxon.xpathSingle(mailNodeConfig, "/mailConfig");
 
+			String sendWhenSuccess = Saxon.xpath2string(mailNode, "./sendWhenSuccess");
+			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");		
 			String server = Saxon.xpath2string(mailNode, "./server");
 			logger.debug("Server[" + server + "]");
 			String port = Saxon.xpath2string(mailNode, "./port");
@@ -91,7 +96,7 @@ public class Mail extends FedoraAction {
 			String repo = Saxon.xpath2string(mailNode, "./repo");
 			String subject = null;
 			if (hasParameter("subject"))
-				subject =repo+getParameter("subject");
+				subject = repo + getParameter("subject");
 			logger.debug("Subject[" + subject + "]");
 
 			File xsl = new File(getParameter("template"));
@@ -102,21 +107,33 @@ public class Mail extends FedoraAction {
 			fox.setMessageListener(listener);
 			fox.setErrorListener(listener);
 
+			String userID = null;
 			for (String param : this.params.keySet()) {
-				if (param.startsWith("tmpl-"))
+				if (param.startsWith("tmpl-")) {
 					logger.debug("param[" + param + "]: " + params.get(param));
+					if (param.contains("user"))
+						userID = params.get(param).toString();
+				}
 				fox.setParameter(new QName(param.replaceFirst("^tmpl-", "")), params.get(param));
 			}
 
-			String stackTrace;
-			
+			String outcome = "SUCCESS";
 			fox.setParameter(new QName("sip"), new XdmAtomicValue(context.getSIP().getBase().toURI().toString()));
-			if (context.hasException()) {
-				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
-				stackTrace = ExceptionUtils.getFullStackTrace(context.getException()) ;
-				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
-			}
 
+			if (context.hasException()) {
+				outcome = "FAILED";
+				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
+				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
+				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
+			} else if ("false".equals(sendWhenSuccess)) {
+                // don't set any email
+				logger.info("Outcome: " + outcome);
+				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
+                return true;
+            }
+            fox.setParameter(new QName("outcome"), new XdmAtomicValue(outcome));
+            logger.debug("Outcome: " + outcome);
+			
 			fox.setSource(new DOMSource(context.getSIP().getRecord(), context.getSIP().getBase().toURI().toString()));
 			XdmDestination destination = new XdmDestination();
 			fox.setDestination(destination);
@@ -154,7 +171,7 @@ public class Mail extends FedoraAction {
 
 			msg.setFrom(fromAddress);
 			msg.addRecipient(javax.mail.Message.RecipientType.TO, toAddress);
-			msg.setSubject(subject);
+			msg.setSubject(subject + userID + " - "+ outcome);
 			msg.setSentDate(new Date());
 
 			msg.setContent(destination.getXdmNode().toString(), "text/html");
