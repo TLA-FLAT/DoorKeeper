@@ -130,6 +130,12 @@ public class Mail extends FedoraAction {
 				logger.info("Outcome: " + outcome);
 				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
                 return true;
+            } else if (context.getFlow().getStop()!=null) {
+            	  // don't set any email
+            	  logger.info("Outcome: " + outcome);
+            	  logger.info("But Code stops: " + context.getFlow().getStop());
+            	  logger.info("No email sent! (this was only a partial DoorKeeper run) ");
+            	  return true;
             }
             fox.setParameter(new QName("outcome"), new XdmAtomicValue(outcome));
             logger.debug("Outcome: " + outcome);
