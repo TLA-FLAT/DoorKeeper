@@ -132,7 +132,7 @@ public class FedoraInteract extends FedoraAction {
         return true;
     }
     
-    protected void upsertDatastream(SIPInterface sip,File fox, String fid, String dsid, String ext) throws DepositException {
+    protected void upsertDatastream(SIPInterface sip, File fox, String fid, String dsid, String ext) throws DepositException {
         try {
             // check if the DS already exists (will throw 
             GetDatastreamResponse res = getDatastream(fid,dsid).execute();
@@ -164,14 +164,18 @@ public class FedoraInteract extends FedoraAction {
                     throw new DepositException("Resource FOX["+fox+"] without DS location!");
                 String mime = Saxon.xpath2string(f, "/foxml:datastreamVersion/@MIMETYPE", null, NAMESPACES);
                 String lbl = Saxon.xpath2string(f, "/foxml:datastreamVersion/@LABEL", null, NAMESPACES);
-                AddDatastream ad = addDatastream(fid,dsid).dsLocation(loc).controlGroup("E");
+                AddDatastream ad = addDatastream(fid,dsid).controlGroup("E").dsLocation(loc);
                 if (mime!=null)
                     ad.mimeType(mime);
                 if (lbl!=null)
                     ad.dsLabel(lbl);
                 adsResponse = ad.logMessage("Added "+dsid).execute();
             } else {
-                adsResponse = addDatastream(fid,dsid).content(fox).logMessage("Added "+dsid).execute();
+                AddDatastream ad = addDatastream(fid,dsid);
+                if (dsid.equals("CMD"))
+                    ad.mimeType("application/x-cmdi+xml");
+                ad.content(fox);
+                adsResponse = ad.logMessage("Added "+dsid).execute();
             }
             if (adsResponse.getStatus()!=201)
                 throw new DepositException("Unexpected status["+adsResponse.getStatus()+"] while interacting with Fedora Commons!");
@@ -212,6 +216,7 @@ public class FedoraInteract extends FedoraAction {
                     md.lastModifiedDate(asof);
                 if (dsid.equals("CMD"))
                     md.mimeType("application/x-cmdi+xml");
+                md.content(fox);
                 mdsResponse = md.logMessage("Updated "+dsid).execute();
             }
             if (mdsResponse.getStatus()!=200)
