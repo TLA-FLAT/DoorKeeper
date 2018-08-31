@@ -24,7 +24,6 @@ import java.net.URI;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.logging.Level;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -61,6 +60,8 @@ public class Context {
     protected Exception ex = null;
     
     protected PrintWriter rollbackLog = null;
+    
+    protected Map<String,Object> memory = new LinkedHashMap<>();
     
     // constructor
         
@@ -160,6 +161,20 @@ public class Context {
     
     public  Map<URI,URI> getPIDs() {
         return pids;
+    }
+    
+    // Memory
+    
+    public Object putInMemory(String key, Object val) {
+        return memory.put(key,val);
+    }
+    
+    public boolean hasInMemory(String key) {
+        return memory.containsKey(key);
+    }
+    
+    public Object getFromMemory(String key) {
+        return memory.get(key);
     }
     
     // Exception

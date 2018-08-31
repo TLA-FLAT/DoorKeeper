@@ -36,12 +36,19 @@ public class Locking extends AbstractAction {
     
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(Locking.class.getName());
     
-    private static Map<String,ReentrantLock> locks = new HashMap<>();
+    private static final String MEMO = "nl.mpi.tla.flat.deposit.action.Locking.LOCKED";
     
-    private Set<ReentrantLock> locked = new HashSet<>();
+    private static Map<String,ReentrantLock> locks = new HashMap<>();
     
     @Override
     public boolean perform(Context context) throws DepositException {
+        Set<ReentrantLock> locked = null;
+        if (context.hasInMemory(MEMO)) {
+            locked = (Set<ReentrantLock>) context.getFromMemory(MEMO);
+        } else {
+            locked = new HashSet();
+            context.putInMemory(MEMO, locked);
+        }
         String mode = this.getParameter("mode", "lock");
         if (mode.equals("lock")) {
             for (XdmSequenceIterator iter=(params.containsKey("what")?params.get("what"):new XdmAtomicValue("sip")).iterator();iter.hasNext();) {
@@ -51,8 +58,10 @@ public class Locking extends AbstractAction {
                     if (!locks.containsKey(uri))
                         locks.put(uri, new ReentrantLock());
                     ReentrantLock lock = locks.get(uri);
+                    logger.debug("lock["+lock+"] sip["+uri+"]");
                     lock.lock();
                     locked.add(lock);
+                    logger.debug("locked["+lock+"] sip["+uri+"]");
                 } else if (what.contains("collections")) {
                     // loop over collections
                     for (Collection col:context.getSIP().getCollections(!mode.contains("parent"))) {
@@ -60,15 +69,19 @@ public class Locking extends AbstractAction {
                         if (!locks.containsKey(uri))
                             locks.put(uri, new ReentrantLock());
                         ReentrantLock lock = locks.get(uri);
+                        logger.debug("lock["+lock+"] collection["+uri+"]");
                         lock.lock();
                         locked.add(lock);
+                        logger.debug("locked["+lock+"] collection["+uri+"]");
                     }
                 } else {
                     if (!locks.containsKey(what))
                         locks.put(what, new ReentrantLock());
                     ReentrantLock lock = locks.get(what);
+                    logger.debug("lock["+lock+"] something["+what+"]");
                     lock.lock();
                     locked.add(lock);
+                    logger.debug("locked["+lock+"] something["+what+"]");
                 }
             }
             return true;
@@ -76,11 +89,12 @@ public class Locking extends AbstractAction {
         if (mode.equals("unlock")) {
             for (ReentrantLock lock:locked) {
                 lock.unlock();
-                // TODO: remove unused locks?
+                logger.debug("unlocked["+lock+"]");
             }
+            locked.clear();
             return true;
         }
-        logger.error("Unknown locking mode!");
+        logger.error("Unknown locking mode["+mode+"]!");
         return false;
     }
         
