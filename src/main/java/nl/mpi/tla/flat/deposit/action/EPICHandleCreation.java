@@ -110,8 +110,10 @@ public class EPICHandleCreation extends AbstractAction {
                 if (col.hasPID() && col.hasFID()) {
                     String fid    = col.getFID().toString().replaceAll("#.*","");
                     String frag   = col.getFID().getRawFragment();
-                    if (frag == null)
-                        throw new DepositException("collection FID["+col.getFID()+"] isn't complete!");
+                    if (frag == null) {
+                        logger.warn("collection FID["+col.getFID()+"] PID["+col.getPID()+"] isn't updated!");
+                        continue;
+                    }
                     String dsid   = frag.replaceAll("@.*","");
                     String asof   = frag.replaceAll(".*@","");
 
@@ -178,8 +180,10 @@ public class EPICHandleCreation extends AbstractAction {
                 if (red.toString().startsWith("lat:")) {
                     String fid    = red.toString().replaceAll("#.*","");
                     String frag   = red.getRawFragment();
-                    if (frag == null)
-                        throw new DepositException("redirect FID["+red+"] isn't complete!");
+                    if (frag == null) {
+                        logger.warn("redirect FID["+red+"] isn't complete!");
+                        continue;
+                    }
 
                     String dsid   = frag.replaceAll("@.*","");
                     String asof   = frag.replaceAll(".*@","");
