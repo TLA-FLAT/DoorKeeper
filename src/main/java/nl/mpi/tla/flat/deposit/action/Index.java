@@ -24,6 +24,7 @@ import java.net.URLEncoder;
 import java.util.Scanner;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 
@@ -54,7 +55,7 @@ public class Index extends AbstractAction {
                 }
             });
             
-            URL call = new URL(gsearchEndpoint,"rest?operation=updateIndex&action=fromPid&value="+URLEncoder.encode(sip.getFID().toString().replaceAll("#.*",""), "UTF-8"));
+            URL call = new URL(gsearchEndpoint,"rest?operation=updateIndex&action=fromPid&value="+URLEncoder.encode(sip.getFID(true).toString(), "UTF-8"));
 
             InputStream response = call.openStream();
             try (Scanner scanner = new Scanner(response)) {
@@ -63,7 +64,17 @@ public class Index extends AbstractAction {
             }
             
             for (Resource res:sip.getResources()) {
-                call = new URL(gsearchEndpoint,"rest?operation=updateIndex&action=fromPid&value="+URLEncoder.encode(res.getFID().toString().replaceAll("#.*",""), "UTF-8"));
+                call = new URL(gsearchEndpoint,"rest?operation=updateIndex&action=fromPid&value="+URLEncoder.encode(res.getFID(true).toString(), "UTF-8"));
+
+                response = call.openStream();
+                try (Scanner scanner = new Scanner(response)) {
+                    String responseBody = scanner.useDelimiter("\\A").next();
+                    //System.err.println(responseBody);
+                }
+            }
+
+            for (Collection col:sip.getCollections(true)) {
+                call = new URL(gsearchEndpoint,"rest?operation=updateIndex&action=fromPid&value="+URLEncoder.encode(col.getFID(true).toString(), "UTF-8"));
 
                 response = call.openStream();
                 try (Scanner scanner = new Scanner(response)) {
