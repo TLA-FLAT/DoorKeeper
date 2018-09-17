@@ -99,6 +99,8 @@
     </xsl:template>
     
     <xsl:template name="xacml">
+        <xsl:param name="dsid" select="'OBJ'"/>
+        <xsl:param name="visible" select="true()"/>
         <Policy xmlns="urn:oasis:names:tc:xacml:1.0:policy" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" PolicyId="islandora-xacml-editor-v1" RuleCombiningAlgId="urn:oasis:names:tc:xacml:1.0:rule-combining-algorithm:first-applicable">
             <Target>
                 <Subjects>
@@ -113,26 +115,28 @@
             </Target>
             <xsl:apply-templates mode="xacml" select="."/>
             <!-- read -->
-            <Rule RuleId="deny-access-functions" Effect="Deny">
+            <Rule RuleId="deny-dsid-mime" Effect="Deny">
                 <Target>
                     <Subjects>
                         <AnySubject/>
                     </Subjects>
                     <Resources>
-                        <AnyResource/>
+                        <Resource>
+                            <ResourceMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                    <xsl:value-of select="$dsid"/>
+                                </AttributeValue>
+                                <ResourceAttributeDesignator DataType="http://www.w3.org/2001/XMLSchema#string" AttributeId="urn:fedora:names:fedora:2.1:resource:datastream:id"/>
+                            </ResourceMatch>
+                        </Resource>
                     </Resources>
                     <Actions>
-                        <xsl:for-each select="$access-functions">
-                            <Action>
-                                <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
-                                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
-                                        <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
-                                        <xsl:value-of select="."/>
-                                    </AttributeValue>
-                                    <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
-                                </ActionMatch>
-                            </Action>
-                        </xsl:for-each>
+                        <Action>
+                            <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">urn:fedora:names:fedora:2.1:action:id-getDatastreamDissemination</AttributeValue>
+                                <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
+                            </ActionMatch>
+                        </Action>
                     </Actions>
                 </Target>
                 <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
@@ -152,6 +156,47 @@
                     </xsl:choose>
                 </Condition>
             </Rule>
+            <xsl:if test="not($visible)">
+                <Rule RuleId="deny-access-functions" Effect="Deny">
+                    <Target>
+                        <Subjects>
+                            <AnySubject/>
+                        </Subjects>
+                        <Resources>
+                            <AnyResource/>
+                        </Resources>
+                        <Actions>
+                            <xsl:for-each select="$access-functions">
+                                <Action>
+                                    <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                        <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                            <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
+                                            <xsl:value-of select="."/>
+                                        </AttributeValue>
+                                        <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
+                                    </ActionMatch>
+                                </Action>
+                            </xsl:for-each>
+                        </Actions>
+                    </Target>
+                    <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
+                        <xsl:choose>
+                            <xsl:when test="exists(read/user) and exists(read/role)">
+                                <Apply FunctionId="urn:oasis:names:tc:xacml:1.0:function:or">
+                                    <xsl:apply-templates select="read" mode="user"/>
+                                    <xsl:apply-templates select="read" mode="role"/>
+                                </Apply>
+                            </xsl:when>
+                            <xsl:when test="exists(read/user)">
+                                <xsl:apply-templates select="read" mode="user"/>
+                            </xsl:when>
+                            <xsl:when test="exists(read/role)">
+                                <xsl:apply-templates select="read" mode="role"/>
+                            </xsl:when>
+                        </xsl:choose>
+                    </Condition>
+                </Rule>
+            </xsl:if>
             <!-- write -->
             <Rule RuleId="deny-management-functions" Effect="Deny">
                 <Target>
@@ -252,11 +297,15 @@
         
     <xsl:template match="sip">
         <xsl:variable name="href-base" select="concat($acl-base,'/',replace(@id, '[^a-zA-Z0-9]', '_'))"/>
+        <xsl:variable name="visible" select="count(read/*) eq 1 and read/role='anonymous user'"/>
         
         <xsl:message>INF: SIP[<xsl:value-of select="@pid"/>]</xsl:message>
         <xsl:message>DBG: SIP policy[<xsl:value-of select="$href-base"/>.xml]</xsl:message>
         <xsl:result-document href="{$href-base}.xml">
-            <xsl:call-template name="xacml"/>
+            <xsl:call-template name="xacml">
+                <xsl:with-param name="dsid" select="'CMD'"/>
+                <xsl:with-param name="visible" select="$visible"/>
+            </xsl:call-template>
         </xsl:result-document>
         
         <xsl:message>DBG: SIP RELS-EXT[<xsl:value-of select="$href-base"/>.RELS-EXT.xml]</xsl:message>
@@ -264,16 +313,22 @@
             <xsl:call-template name="rels-ext"/>
         </xsl:result-document>
         
-        <xsl:apply-templates select="resource"/>
+        <xsl:apply-templates select="resource">
+            <xsl:with-param name="visible" select="$visible"/>
+        </xsl:apply-templates>
     </xsl:template>
     
     <xsl:template match="resource">
+        <xsl:param name="visible" select="true()"/>
         <xsl:variable name="href-base" select="concat($acl-base,'/',replace(@id, '[^a-zA-Z0-9]', '_'))"/>
         
         <xsl:message>INF: resource[<xsl:value-of select="@pid"/>]</xsl:message>
         <xsl:message>DBG: resource policy[<xsl:value-of select="$href-base"/>.xml]</xsl:message>
         <xsl:result-document href="{$href-base}.xml">
-            <xsl:call-template name="xacml"/>
+            <xsl:call-template name="xacml">
+                <xsl:with-param name="dsid" select="'OBJ'"/>
+                <xsl:with-param name="visible" select="$visible"/>
+            </xsl:call-template>
         </xsl:result-document>
         
         <xsl:message>DBG: resource RELS-EXT[<xsl:value-of select="$href-base"/>,RELS-EXT.xml]</xsl:message>
