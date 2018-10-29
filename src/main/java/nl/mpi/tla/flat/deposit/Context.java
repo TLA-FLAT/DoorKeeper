@@ -166,14 +166,19 @@ public class Context {
     // Memory
     
     public Object putInMemory(String key, Object val) {
+        logger.debug("put memory key["+key+"]["+val+"]");
         return memory.put(key,val);
     }
     
     public boolean hasInMemory(String key) {
+        for (String k:memory.keySet())
+            logger.debug("has memory key["+k+"]");
+        logger.debug("has memory key["+key+"]["+memory.containsKey(key)+"]");
         return memory.containsKey(key);
     }
     
     public Object getFromMemory(String key) {
+        logger.debug("get memory key["+key+"]["+memory.get(key)+"]");
         return memory.get(key);
     }
     
