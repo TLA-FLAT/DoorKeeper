@@ -126,17 +126,25 @@ public class Mail extends FedoraAction {
 				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
 			} else if ("false".equals(sendWhenSuccess)) {
-                // don't set any email
+                // don't send any email
 				logger.info("Outcome: " + outcome);
 				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
                 return true;
             } else if (context.getFlow().getStop()!=null) {
-            	  // don't set any email
+            	  // don't send any email
             	  logger.info("Outcome: " + outcome);
             	  logger.info("But Code stops: " + context.getFlow().getStop());
             	  logger.info("No email sent! (this was only a partial DoorKeeper run) ");
             	  return true;
             }
+			
+			if(outcome.equals("SUCCESS")) {
+				if (context.getSIP().hasPID()) {
+					String pid = context.getSIP().getPID().toString().replaceAll("hdl:","https://hdl.handle.net/");
+					fox.setParameter(new QName("handle"), new XdmAtomicValue(pid));
+				}
+			}
+			
             fox.setParameter(new QName("outcome"), new XdmAtomicValue(outcome));
             logger.debug("Outcome: " + outcome);
 			
