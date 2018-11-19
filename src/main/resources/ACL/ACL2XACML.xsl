@@ -10,6 +10,16 @@
     
     <xsl:variable name="debug" select="false()" static="yes"/>
     
+    <xsl:variable name="dsid-functions" select="(
+        'id-getDatastreamDissemination'
+    )"/>
+    
+    <xsl:variable name="access-functions" select="(
+        'api-a',
+        'id-getDatastreamHistory',
+        'id-listObjectInResourceIndexResults'
+    )"/>
+    
     <xsl:variable name="management-functions" select="(
         'id-addDatastream',
         'id-addDisseminator',
@@ -36,12 +46,6 @@
         'id-reloadPolicies'
     )"/>
 
-    <xsl:variable name="access-functions" select="(
-        'api-a',
-        'id-getDatastreamHistory',
-        'id-listObjectInResourceIndexResults'
-    )"/>
-    
     <xsl:template match="text()" mode="#all"/>
     
     <xsl:template match="read|write" mode="user">
@@ -115,6 +119,7 @@
             </Target>
             <xsl:apply-templates mode="xacml" select="."/>
             <!-- read -->
+            <!-- visible means that some info is available but the OBJ might be not (that needs read access) -->
             <Rule RuleId="deny-dsid-mime" Effect="Deny">
                 <Target>
                     <Subjects>
@@ -131,12 +136,17 @@
                         </Resource>
                     </Resources>
                     <Actions>
-                        <Action>
-                            <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
-                                <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">urn:fedora:names:fedora:2.1:action:id-getDatastreamDissemination</AttributeValue>
-                                <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
-                            </ActionMatch>
-                        </Action>
+                        <xsl:for-each select="$dsid-functions">
+                            <Action>
+                                <ActionMatch MatchId="urn:oasis:names:tc:xacml:1.0:function:string-equal">
+                                    <AttributeValue DataType="http://www.w3.org/2001/XMLSchema#string">
+                                        <xsl:text>urn:fedora:names:fedora:2.1:action:</xsl:text>
+                                        <xsl:value-of select="."/>
+                                    </AttributeValue>
+                                    <ActionAttributeDesignator AttributeId="urn:fedora:names:fedora:2.1:action:id" DataType="http://www.w3.org/2001/XMLSchema#string"/>
+                                </ActionMatch>
+                            </Action>
+                        </xsl:for-each>
                     </Actions>
                 </Target>
                 <Condition FunctionId="urn:oasis:names:tc:xacml:1.0:function:not">
@@ -157,6 +167,7 @@
                 </Condition>
             </Rule>
             <xsl:if test="not($visible)">
+                <!-- invisible means no access at all -->
                 <Rule RuleId="deny-access-functions" Effect="Deny">
                     <Target>
                         <Subjects>
@@ -254,30 +265,33 @@
     </xsl:template>
 
     <xsl:template name="rels-ext">
+        <xsl:param name="visible" select="true()"/>
         <rdf:RDF xmlns:fedora="info:fedora/fedora-system:def/relations-external#" xmlns:fedora-model="info:fedora/fedora-system:def/model#" xmlns:islandora="http://islandora.ca/ontology/relsext#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
             <rdf:Description rdf:about="info:fedora/{@id}">
-                <!-- read -->
-                <xsl:for-each select="read/user">
-                    <xsl:variable name="user" select="."/>
-                    <islandora:isViewableByUser>
-                        <xsl:value-of select="$user"/>
-                    </islandora:isViewableByUser>
-                </xsl:for-each>
-                <xsl:variable name="all" as="xs:string*">
-                    <xsl:for-each select="read/role">
-                        <xsl:variable name="role" select="."/>
-                        <xsl:sequence select="$role"/>
-                        <xsl:if test="exists($roles)">
-                            <xsl:sequence select="$roles//role[.=$role]/following-sibling::role"/>
-                        </xsl:if>
+                <xsl:if test="not($visible)">
+                    <!-- read -->
+                    <xsl:for-each select="read/user">
+                        <xsl:variable name="user" select="."/>
+                        <islandora:isViewableByUser>
+                            <xsl:value-of select="$user"/>
+                        </islandora:isViewableByUser>
                     </xsl:for-each>
-                </xsl:variable>
-                <xsl:for-each select="distinct-values($all)">
-                    <xsl:variable name="role" select="."/>
-                    <islandora:isViewableByRole>
-                        <xsl:value-of select="$role"/>
-                    </islandora:isViewableByRole>
-                </xsl:for-each>
+                    <xsl:variable name="all" as="xs:string*">
+                        <xsl:for-each select="read/role">
+                            <xsl:variable name="role" select="."/>
+                            <xsl:sequence select="$role"/>
+                            <xsl:if test="exists($roles)">
+                                <xsl:sequence select="$roles//role[.=$role]/following-sibling::role"/>
+                            </xsl:if>
+                        </xsl:for-each>
+                    </xsl:variable>
+                    <xsl:for-each select="distinct-values($all)">
+                        <xsl:variable name="role" select="."/>
+                        <islandora:isViewableByRole>
+                            <xsl:value-of select="$role"/>
+                        </islandora:isViewableByRole>
+                    </xsl:for-each>
+                </xsl:if>
                 <!-- write -->
                 <xsl:for-each select="write/user">
                     <xsl:variable name="user" select="."/>
@@ -310,7 +324,9 @@
         
         <xsl:message>DBG: SIP RELS-EXT[<xsl:value-of select="$href-base"/>.RELS-EXT.xml]</xsl:message>
         <xsl:result-document href="{$href-base}.RELS-EXT.xml">
-            <xsl:call-template name="rels-ext"/>
+            <xsl:call-template name="rels-ext">
+                <xsl:with-param name="visible" select="$visible"/>
+            </xsl:call-template>
         </xsl:result-document>
         
         <xsl:apply-templates select="resource">
@@ -333,7 +349,9 @@
         
         <xsl:message>DBG: resource RELS-EXT[<xsl:value-of select="$href-base"/>,RELS-EXT.xml]</xsl:message>
         <xsl:result-document href="{$href-base}.RELS-EXT.xml">
-            <xsl:call-template name="rels-ext"/>
+            <xsl:call-template name="rels-ext">
+                <xsl:with-param name="visible" select="$visible"/>
+            </xsl:call-template>
         </xsl:result-document>        
     </xsl:template>
     
