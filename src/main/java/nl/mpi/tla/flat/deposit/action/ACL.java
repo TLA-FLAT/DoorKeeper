@@ -104,6 +104,11 @@ public class ACL extends AbstractAction {
             trix2sem.setMessageListener(listener);
             trix2sem.setErrorListener(listener);
             trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
+            XdmDestination destination = new XdmDestination();
+            trix2sem.setDestination(destination);
+            trix2sem.transform();
+            Saxon.save(destination, new File(dir + "/policy.sem"));
+            
             // convert sem triples to an intermediate ACL using ACL/WebACL2ACL.xsl
             XsltTransformer wacl2acl = Saxon.buildTransformer(ACL.class.getResource("/ACL/WebACL2ACL.xsl")).load();
             wacl2acl.setMessageListener(listener);
@@ -113,8 +118,13 @@ public class ACL extends AbstractAction {
             if (this.hasParameter("default-account"))
                 wacl2acl.setParameter(new QName("default-accounts"), this.params.get("default-account"));
             if (this.hasParameter("default-role"))
-                wacl2acl.setParameter(new QName("default-roles"), this.params.get("default-role"));
-                
+                wacl2acl.setParameter(new QName("default-roles"), this.params.get("default-role"));                
+            wacl2acl.setSource(new StreamSource(dir +"/policy.sem"));
+            destination = new XdmDestination();
+            wacl2acl.setDestination(destination);
+            wacl2acl.transform();
+            Saxon.save(destination, new File(dir + "/policy.acl"));
+
             // convert intermediate ACl to XACM using ACL/ACL2XACML.xsl or an override
             XsltTransformer acl2xacml = null;
             if (this.hasParameter("acl2xacml")) {
@@ -141,13 +151,11 @@ public class ACL extends AbstractAction {
             for (String param:this.params.keySet()) {
                 if (param.startsWith("xsl-param-"))
                     acl2xacml.setParameter(new QName(param.replaceFirst("^xsl-param-","")), params.get(param));
-            }
-            // pipe
-            XdmDestination destination = new XdmDestination();
-            trix2sem.setDestination(wacl2acl);
-            wacl2acl.setDestination(acl2xacml);
+            }            
+            acl2xacml.setSource(new StreamSource(dir +"/policy.acl"));
+            destination = new XdmDestination();
             acl2xacml.setDestination(destination);
-            trix2sem.transform();
+            acl2xacml.transform();
         } catch (Exception e) {
             throw new DepositException("The creation of ACL files failed!", e);
         } finally {
