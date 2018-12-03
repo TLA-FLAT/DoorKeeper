@@ -151,6 +151,12 @@ public class Context {
         return pids.put(pid,red);
     }
     
+    public void delPID(URI pid) {
+    	if (pids.containsKey(pid)) {
+    		pids.remove(pid);
+    	}
+    }
+    
     public boolean hasPID(URI pid) {
         return pids.containsKey(pid);
     }
