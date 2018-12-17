@@ -68,6 +68,7 @@ public class Context {
     public Context(Flow flow,XdmNode spec,Map<String,XdmValue> params)  throws DepositException {
         this.flow = flow;
         props.putAll(params);
+        loadNamespaces(spec);
         loadProperties(spec);
     }
     
@@ -75,6 +76,16 @@ public class Context {
     
     public Flow getFlow() {
         return flow;
+    }
+    
+    // Namespaces
+    private void loadNamespaces(XdmNode spec) throws DepositException {
+        try {
+            for (XdmItem ns: Saxon.xpath(spec, "/flow/config/namespace"))
+                Global.NAMESPACES.put(Saxon.xpath2string(ns, "@prefix"), Saxon.xpath2string(ns, "@uri"));
+        } catch(SaxonApiException e) {
+            throw new DepositException(e);
+        }
     }
     
     // Properties
