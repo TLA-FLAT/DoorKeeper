@@ -123,11 +123,7 @@ abstract public class Resource {
             }
             logger.warn("Resource["+this.uri+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         }
-        if (fid.toString().startsWith("lat:")) {
-            this.fid = fid;
-        } else {
-            throw new DepositException("The Resource["+fid+"] isn't a valid FLAT Fedora Commons PID!");
-        }
+        this.fid = fid;
         dirty();
     }
     

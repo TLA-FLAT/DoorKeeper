@@ -27,16 +27,19 @@ import org.w3c.dom.Node;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
     
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(CMDCollection.class.getName());
     
     protected Node node = null;
+    String namespace;
     
-    public CMDCollection(URI pid,URI fid) throws DepositException {
+    public CMDCollection(URI pid,URI fid, String namespace) throws DepositException {
         this.pid = pid;
         this.fid = fid;
+        this.namespace=namespace;
         if (this.pid!=null)
             this.uri = this.pid;
         else if (this.fid!=null)
@@ -45,19 +48,20 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             throw new DepositException("no collection URI found!");
     }
     
-    public CMDCollection(Node node) throws DepositException {
-        this(null,node);
+    public CMDCollection(Node node, String namespace) throws DepositException {
+        this(null,node,namespace);
     }
         
-    public CMDCollection(URI base,Node node) throws DepositException {
+    public CMDCollection(URI base,Node node, String namespace) throws DepositException {
         try {
             this.node = node;
+            this.namespace = namespace;
             
             // string value
             String str = node.getTextContent();
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith(namespace+":"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
@@ -69,7 +73,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             str = ((Element)node).getAttribute("lat:flatURI");
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith(namespace+":"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
@@ -83,7 +87,7 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             str = ((Element)node).getAttribute("lat:localURI");
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith(namespace+":"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
@@ -109,8 +113,9 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
         }
         
     }
-    
-    // node
+
+
+	// node
     public boolean hasNode() {
         return this.node!=null;
     }
@@ -123,6 +128,15 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
     
     public Node getNode() {
         return this.node;
+    }
+    
+    @Override
+    public void setFID(URI fid) throws DepositException {
+        if (fid.toString().startsWith(namespace+":")) {
+            super.setFID(fid);
+        } else {
+            throw new DepositException("The Collection["+fid+"] isn't a valid FLAT Fedora Commons PID!");
+        }        
     }
     
     @Override

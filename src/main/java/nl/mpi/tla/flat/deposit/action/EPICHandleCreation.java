@@ -39,6 +39,7 @@ import net.sf.saxon.s9api.XdmItem;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class EPICHandleCreation extends AbstractAction {
     
@@ -49,6 +50,8 @@ public class EPICHandleCreation extends AbstractAction {
         
         try {
             
+        	String namespace = context.getProperty("fedoraNamespace", "lat").toString();
+        	
             String fedora = this.getParameter("fedoraConfig");
             String epic   = this.getParameter("epicConfig");
 
@@ -189,7 +192,7 @@ public class EPICHandleCreation extends AbstractAction {
                 URI red = pids.get(pid);
                 if (red == null)
                     continue;
-                if (red.toString().startsWith("lat:")) {
+                if (red.toString().startsWith(namespace+":")) {
                     String fid    = red.toString().replaceAll("#.*","");
                     String frag   = red.getRawFragment();
                     if (frag == null) {

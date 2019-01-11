@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class FedoraLoadCollectionHierarchy extends FedoraAction {
     
@@ -51,6 +52,8 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
     public boolean perform(Context context) throws DepositException {       
         try {
             connect(context);
+            
+            String namespace = context.getProperty("fedoraNamespace", "lat").toString();
             
             SIPInterface sip = context.getSIP();
             if (sip.hasCollections()) {
@@ -89,7 +92,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                             URI fid = new URI(f.replace("info:fedora/",""));
                             if (!fid.toString().startsWith("islandora:")) {
                                 URI pid = lookupPID(fid);
-                                CMDCollection col = new CMDCollection(pid,fid);
+                                CMDCollection col = new CMDCollection(pid, fid, namespace);
                                 if (sip instanceof CMD)
                                     ((CMD)sip).addCollection(col);
                                 this.completeFID(col);
@@ -104,7 +107,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             } else
                 logger.debug("This SIP["+sip.getBase()+"] has no Collections or FID!");
             for (Collection col:sip.getCollections()) {
-                loadParentCollections(new ArrayDeque<>(Arrays.asList(col.getFID())),col);
+                loadParentCollections(new ArrayDeque<>(Arrays.asList(col.getFID())),col, namespace);
             }
         } catch (DepositException ex) {
             throw ex;
@@ -114,7 +117,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
         return true;
     }
     
-    private void loadParentCollections(Deque<URI> hist,Collection col) throws Exception {
+    private void loadParentCollections(Deque<URI> hist,Collection col, String namespace) throws Exception {
         // fetch parent collections
         String sparql = "SELECT ?fid WHERE { <info:fedora/"+col.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
         logger.debug("SPARQL["+sparql+"]");
@@ -129,7 +132,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                     URI fid = new URI(f.replace("info:fedora/","").replaceAll("#.*",""));
                     if (hasCMDDatastream(fid)) {
                         URI pid = lookupPID(fid);
-                        CMDCollection pcol = new CMDCollection(pid,fid);
+                        CMDCollection pcol = new CMDCollection(pid,fid,namespace);
                         this.completeFID(pcol);
                         col.addParentCollection(pcol);
                     }
@@ -142,7 +145,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             if (hasCMDDatastream(pcol.getFID(true))) {
                 if (!hist.contains(pcol.getFID())) {
                     hist.push(col.getFID());
-                    loadParentCollections(hist, pcol);
+                    loadParentCollections(hist, pcol, namespace);
                 } else {
                     hist.push(col.getFID());
                     throw new DepositException("(in)direct cycle["+hist+"] for FID["+pcol.getFID()+"]");
