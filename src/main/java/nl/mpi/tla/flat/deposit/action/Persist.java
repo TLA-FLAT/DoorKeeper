@@ -89,8 +89,9 @@ public class Persist extends AbstractAction {
                     // add version number (if needed)
                     // 0 is used for the initial ingest (cf FC version numbers)
                     int v = 1;
+                    File o = newResourceFile;
                     while (newResourceFile.exists())
-                        newResourceFile = new File(newResourceFile.toString()+"."+(v++));
+                        newResourceFile = new File(o.toString()+"."+(v++));
                     // move the file to its persistent place
                     context.registerRollbackEvent(this, "mv", "src", res.getFile().toPath().toString(),"dst",newResourceFile.toPath().toString());
                     Files.move(res.getFile().toPath(), newResourceFile.toPath());
