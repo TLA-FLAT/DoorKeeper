@@ -85,11 +85,7 @@ abstract public class Collection {
             }
             logger.warn("Collection["+this.uri+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         }
-        if (fid.toString().startsWith("lat:")) {
-            this.fid = fid;
-        } else {
-            throw new DepositException("The Collection["+fid+"] isn't a valid FLAT Fedora Commons PID!");
-        }
+        this.fid = fid;
         dirty();
     }
     

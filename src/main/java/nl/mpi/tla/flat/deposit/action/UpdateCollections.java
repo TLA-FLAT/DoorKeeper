@@ -51,6 +51,7 @@ import org.slf4j.MDC;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class UpdateCollections extends FedoraAction {
     
@@ -65,6 +66,8 @@ public class UpdateCollections extends FedoraAction {
     public boolean perform(Context context) throws DepositException {       
         try {
             connect(context);
+            
+            String namespace = context.getProperty("fedoraNamespace", "lat").toString();
 
             // create the output dir
             dir = new File(getParameter("dir","./fox"));
@@ -104,7 +107,7 @@ public class UpdateCollections extends FedoraAction {
                     throw new DepositException("direct cycle for PID["+col.getURI()+"]");
                 else if (col.hasFID() && col.getFID().equals(context.getSIP().getFID()))
                     throw new DepositException("direct cycle for FID["+col.getFID()+"]");
-                if (col.hasFID() && col.getFID().toString().startsWith("lat:")) {
+                if (col.hasFID() && col.getFID().toString().startsWith(namespace+":")) {
                     try {
                         // load the collection's CMD
                         FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
@@ -129,8 +132,8 @@ public class UpdateCollections extends FedoraAction {
                                 updateDC(first,col.getFID(true),pid);
                                 // loop over collections
                                 for (Collection par:col.getParentCollections()) {
-                                    if (par.getFID().toString().startsWith("lat:")) {
-                                        updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, col.getFID(), oldPID, newPID);
+                                    if (par.getFID().toString().startsWith(namespace+":")) {
+                                        updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, col.getFID(), oldPID, newPID, namespace);
                                     }
                                 }
                             } else
@@ -153,7 +156,7 @@ public class UpdateCollections extends FedoraAction {
         return true;
     }
     
-    private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart) throws Exception {
+    private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart, String namespace) throws Exception {
         try {
             // load the collection's CMD
             FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
@@ -187,10 +190,10 @@ public class UpdateCollections extends FedoraAction {
                     updateDC(dir,col.getFID(true),pid);
                     // update the parent collection
                     for (Collection par:col.getParentCollections()) {
-                        if (par.getFID().toString().startsWith("lat:")) {
+                        if (par.getFID().toString().startsWith(namespace+":")) {
                             if (!hist.contains(par.getFID())) {
                                 hist.push(col.getFID());
-                                updateCollection(hist, par, col.getFID(), oldPID, newPID);
+                                updateCollection(hist, par, col.getFID(), oldPID, newPID,namespace);
                             } else {
                                 hist.push(col.getFID());
                                 throw new DepositException("(in)direct cycle["+hist+"] for FID["+par.getFID()+"]");

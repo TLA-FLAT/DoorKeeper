@@ -50,6 +50,7 @@ import org.w3c.dom.Node;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class CMD implements SIPInterface {
     
@@ -74,9 +75,11 @@ public class CMD implements SIPInterface {
     protected boolean dirty = false;
     
     protected boolean update = false;
+    String namespace;
     
-    public CMD(File spec) throws DepositException {
+    public CMD(File spec, String namespace) throws DepositException {
         this.base = spec;
+        this.namespace = namespace;
         load(spec);
         loadResources();
         loadCollections();
@@ -138,7 +141,7 @@ public class CMD implements SIPInterface {
             }
             logger.warn("SIP["+this.base+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         }
-        if (fid.toString().startsWith("lat:")) {
+        if (fid.toString().startsWith(namespace+":")) {
             this.fid = fid;
         } else {
             throw new DepositException("The URI["+fid+"] isn't a valid FLAT Fedora Commons PID!");
@@ -280,7 +283,7 @@ public class CMD implements SIPInterface {
         try {
             for (XdmItem collection:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
                 Node colNode = Saxon.unwrapNode((XdmNode)collection);
-                Collection col = new CMDCollection(base.toURI(), colNode);
+                Collection col = new CMDCollection(base.toURI(), colNode, namespace);
                 if (!col.hasPID() && !col.hasFID()) {
                     URI uri = col.getURI();
                     if (uri==null) {
@@ -448,7 +451,7 @@ public class CMD implements SIPInterface {
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
                 logger.debug("MdSelfLink["+str+"]["+u+"]["+u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*")+"]");
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith(namespace+":"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
@@ -459,7 +462,7 @@ public class CMD implements SIPInterface {
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith(namespace+":"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
@@ -470,7 +473,7 @@ public class CMD implements SIPInterface {
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:localURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
-                if (u.toString().startsWith("lat:"))
+                if (u.toString().startsWith(namespace+":"))
                     this.setFID(u);
                 else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                     this.setPID(u);
