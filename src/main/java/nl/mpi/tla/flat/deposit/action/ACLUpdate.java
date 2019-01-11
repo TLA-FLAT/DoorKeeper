@@ -54,6 +54,9 @@ public class ACLUpdate extends FedoraAction {
     @Override
     public boolean perform(Context context) throws DepositException {
         try {
+            
+            String namespace = context.getProperty("fedoraNamespace", "lat").toString();
+            
             connect(context);
 
             File dir = new File(getParameter("dir","./acl"));
@@ -100,7 +103,7 @@ public class ACLUpdate extends FedoraAction {
                         if (res.hasFID())
                             fid = res.getFID(true).toString();
                         else if (res.hasPID())
-                            fid = res.getPID().toString().replace("^http(s?)://hdl.handle.net/","hdl:").replace("@format=[a-z]+","").replace("[^a-zA-Z0-9]","_").replace("^hdl_","lat:");
+                            fid = res.getPID().toString().replace("^http(s?)://hdl.handle.net/","hdl:").replace("@format=[a-z]+","").replace("[^a-zA-Z0-9]","_").replace("^hdl_",namespace+":");
                         File policy = null;
                         if (fid!=null)
                             policy = new File(dir + "/"+fid.replaceAll("[^a-zA-Z0-9]", "_")+".xml");
