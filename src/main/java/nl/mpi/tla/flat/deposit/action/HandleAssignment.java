@@ -25,6 +25,7 @@ import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
+import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +68,13 @@ public class HandleAssignment extends AbstractAction {
                     if (res.isInsert() && res.hasPID()) {
                         logger.info("Retained existing PID["+res.getPID()+"] for Resource["+res.getURI()+"]");
                     } else {
-                        res.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
+                        URI uri = new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID());
+                        if (res instanceof CMDResource) {
+                            String id = ((CMDResource)res).getID();
+                            if (props.containsKey("res."+id+".PID"))
+                                uri = new URI(props.getProperty("res."+id+".PID"));
+                        }
+                        res.setPID(uri);
                         logger.info("Assigned new PID["+res.getPID()+"] to Resource["+res.getURI()+"]");
                     }
                 }
