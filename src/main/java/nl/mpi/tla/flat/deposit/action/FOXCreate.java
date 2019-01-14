@@ -56,6 +56,8 @@ public class FOXCreate extends AbstractAction {
         URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
             
+            String namespace = context.getProperty("fedoraNamespace", "lat").toString();
+            
             // check for the user profile
             File owner = new File(getParameter("owner"));
             if (!owner.exists()) {
@@ -105,6 +107,7 @@ public class FOXCreate extends AbstractAction {
             fox.setParameter(new QName("fox-base"), new XdmAtomicValue(dir.toString()));
             fox.setParameter(new QName("rels-doc"), Saxon.buildDocument(new StreamSource(FOXCreate.class.getResource("/FOXCreate/relations.xml").toString())));
             fox.setParameter(new QName("repository"), new XdmAtomicValue((new XMLConfiguration(fedora)).getString("publicServer")));
+            fox.setParameter(new QName("namespace"), new XdmAtomicValue(namespace));
             
             // optional parameters
             if (hasParameter("management"))
