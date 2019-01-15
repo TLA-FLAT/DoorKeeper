@@ -51,6 +51,7 @@ import nl.mpi.tla.flat.deposit.util.Global;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class FedoraInteract extends FedoraAction {
 
@@ -69,56 +70,49 @@ public class FedoraInteract extends FedoraAction {
 			// <fid>.xml (FOXML -> ingest)
 			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.xml")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replace(".xml", "").replaceFirst("^"+pre+"_", pre + ":").replace("_CMD","");
+				String fid = fox.getName().replace(".xml", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD","");
 				String dsid = (fox.getName().endsWith("_CMD.xml") ? "CMD" : "OBJ");
 				logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
 
 				context.registerRollbackEvent(this, "ingest", "fid", fid);
 
-				IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox)
-						.logMessage("Initial ingest").ignoreMime(true).execute();
+				IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
 				if (iResponse.getStatus() != 201)
-					throw new DepositException(
-							"Unexpected status[" + iResponse.getStatus() + "] while interacting with Fedora Commons!");
+					throw new DepositException("Unexpected status[" + iResponse.getStatus() + "] while interacting with Fedora Commons!");
 				Date asof = getObjectProfile(fid).execute().getLastModifiedDate();
 				fid = completeFID(sip, new URI(fid), asof).toString();
-				logger.info("Created FedoraObject[" + iResponse.getPid() + "][" + iResponse.getLocation() + "][" + dsid
-						+ "][" + asof + "]");
+				logger.info("Created FedoraObject[" + iResponse.getPid() + "][" + iResponse.getLocation() + "][" + dsid+ "][" + asof + "]");
 				logger.debug("Should match FID[" + fid + "]");
 			}
 
 			// - <fid>.<asof>.props (props -> modify (some) properties)
 			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.[0-9]+\\.props")));
 			for (File fox : foxs) {
-                            String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^"+pre+"_", pre+":").replace("_CMD", "");
-                            try{
-				String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
-				Date asof = new Date(Long.parseLong(epoch));
-				logger.debug("Properties[" + fox + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
-				XdmNode props = Saxon.buildDocument(new StreamSource(fox));
-				for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES); iter
-						.hasNext();) {
-					XdmItem prop = iter.next();
-					String name = Saxon.xpath2string(prop, "@NAME");
-					String value = Saxon.xpath2string(prop, "@VALUE");
-					if (name.equals("info:fedora/fedora-system:def/model#label")) {
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD", "");
+				try {
+					String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
+					Date asof = new Date(Long.parseLong(epoch));
+					logger.debug("Properties[" + fox + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
+					XdmNode props = Saxon.buildDocument(new StreamSource(fox));
+					for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES); iter.hasNext();) {
+						XdmItem prop = iter.next();
+						String name = Saxon.xpath2string(prop, "@NAME");
+						String value = Saxon.xpath2string(prop, "@VALUE");
+						if (name.equals("info:fedora/fedora-system:def/model#label")) {
 
-						context.registerRollbackEvent(this, "property", "fid", fid, "prop", "label", "old",
-								getObjectProfile(fid).execute().getLabel(), "new", value, "last",
-								Global.asOfDateTime(getObjectProfile(fid).execute().getLastModifiedDate()));
+							context.registerRollbackEvent(this, "property", "fid", fid, "prop", "label", "old", getObjectProfile(fid).execute().getLabel(), "new", value, "last", Global.asOfDateTime(getObjectProfile(fid).execute().getLastModifiedDate()));
 
-						FedoraResponse res = modifyObject(fid).lastModifiedDate(asof).label(value).execute();
-						if (res.getStatus() != 200)
-							throw new DepositException("Unexpected status[" + res.getStatus()
-									+ "] while interacting with Fedora Commons!");
+							FedoraResponse res = modifyObject(fid).lastModifiedDate(asof).label(value).execute();
+							if (res.getStatus() != 200)
+								throw new DepositException("Unexpected status[" + res.getStatus()+ "] while interacting with Fedora Commons!");
+						}
 					}
+				} catch (FedoraClientException e) {
+					if (e.getStatus() == 404) {
+						throw new DepositException("FedoraObject[" + fid + "] wasn't created!", e);
+					} else
+						throw new DepositException("Unexpected status[" + e.getStatus() + "] while querying Fedora Commons!", e);
 				}
-                            } catch(FedoraClientException e) {
-                                if (e.getStatus()==404) {
-                                    throw new DepositException("FedoraObject["+fid+"] wasn't created!",e);
-                                } else
-                                    throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
-                            }
 
 			}
 
@@ -127,7 +121,7 @@ public class FedoraInteract extends FedoraAction {
 			foxs = dir.listFiles(
 					((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^"+pre+"_", pre+":").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD", "");
 				String dsid = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String ext = fox.getName().replaceFirst("^.*\\.(.*)$", "$1");
 				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + ext + "]");
@@ -136,16 +130,14 @@ public class FedoraInteract extends FedoraAction {
 
 			// - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
 			// - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
-			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(
-					pre + "[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
+			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^"+pre+"_", pre+":").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD", "");
 				String dsid = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$", "$1");
 				Date asof = new Date(Long.parseLong(epoch));
 				String ext = fox.getName().replaceFirst("^.*\\.(.*)$", "$1");
-				logger.debug(
-						"DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + epoch + "=" + asof + "][" + ext + "]");
+				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + epoch + "=" + asof + "][" + ext + "]");
 				updateDatastream(context, fox, fid, dsid, asof, ext);
 			}
 		} catch (Exception e) {
@@ -154,8 +146,7 @@ public class FedoraInteract extends FedoraAction {
 		return true;
 	}
 
-	protected void upsertDatastream(Context context, File fox, String fid, String dsid, String ext)
-			throws DepositException {
+	protected void upsertDatastream(Context context, File fox, String fid, String dsid, String ext) throws DepositException {
 		try {
 			// check if the DS already exists (will throw
 			GetDatastreamResponse res = getDatastream(fid, dsid).execute();
@@ -163,15 +154,13 @@ public class FedoraInteract extends FedoraAction {
 				// update DS
 				updateDatastream(context, fox, fid, dsid, ext);
 			} else
-				throw new DepositException(
-						"Unexpected status[" + res.getStatus() + "] while interacting with Fedora Commons!");
+				throw new DepositException("Unexpected status[" + res.getStatus() + "] while interacting with Fedora Commons!");
 		} catch (FedoraClientException e) {
 			if (e.getStatus() == 404) {
 				// insert DS
 				insertDatastream(context, fox, fid, dsid, ext);
 			} else
-				throw new DepositException("Unexpected status[" + e.getStatus() + "] while querying Fedora Commons!",
-						e);
+				throw new DepositException("Unexpected status[" + e.getStatus() + "] while querying Fedora Commons!",e);
 		} catch (DepositException ex) {
 			throw ex;
 		} catch (Exception ex) {
@@ -187,8 +176,7 @@ public class FedoraInteract extends FedoraAction {
 			AddDatastreamResponse adsResponse = null;
 			if (ext.equals("file")) {
 				XdmNode f = Saxon.buildDocument(new StreamSource(fox));
-				String loc = Saxon.xpath2string(f, "/foxml:datastreamVersion/foxml:contentLocation/@REF", null,
-						NAMESPACES);
+				String loc = Saxon.xpath2string(f, "/foxml:datastreamVersion/foxml:contentLocation/@REF", null, NAMESPACES);
 				if (loc == null)
 					throw new DepositException("Resource FOX[" + fox + "] without DS location!");
 				String mime = Saxon.xpath2string(f, "/foxml:datastreamVersion/@MIMETYPE", null, NAMESPACES);
@@ -207,18 +195,17 @@ public class FedoraInteract extends FedoraAction {
 				adsResponse = ad.logMessage("Added " + dsid).execute();
 			}
 			if (adsResponse.getStatus() != 201)
-				throw new DepositException(
-						"Unexpected status[" + adsResponse.getStatus() + "] while interacting with Fedora Commons!");
+				throw new DepositException("Unexpected status[" + adsResponse.getStatus() + "] while interacting with Fedora Commons!");
 			logger.info("Updated FedoraObject[" + fid + "][" + dsid + "][" + adsResponse.getLastModifiedDate() + "]");
 			// we should update the PID asOfDateTime
 			fid = completeFID(sip, new URI(fid), adsResponse.getLastModifiedDate()).toString();
 			logger.debug("Should match FID[" + fid + "]");
-		} catch(FedoraClientException e) {
-                    if (e.getStatus()==404) {
-                        throw new DepositException("FedoraObject["+fid+"] doesn't exist!",e);
-                    } else
-                        throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
-                } catch (Exception ex) {
+		} catch (FedoraClientException e) {
+			if (e.getStatus() == 404) {
+				throw new DepositException("FedoraObject[" + fid + "] doesn't exist!", e);
+			} else
+				throw new DepositException("Unexpected status[" + e.getStatus() + "] while querying Fedora Commons!", e);
+		} catch (Exception ex) {
 			throw new DepositException(ex);
 		}
 	}
@@ -230,15 +217,13 @@ public class FedoraInteract extends FedoraAction {
 	void updateDatastream(Context context, File fox, String fid, String dsid, Date asof, String ext)
 			throws DepositException {
 		try {
-			context.registerRollbackEvent(this, "update", "fid", fid, "dsid", dsid, "last",
-					Global.asOfDateTime(getObjectProfile(fid).execute().getLastModifiedDate()));
+			context.registerRollbackEvent(this, "update", "fid", fid, "dsid", dsid, "last", Global.asOfDateTime(getObjectProfile(fid).execute().getLastModifiedDate()));
 
 			SIPInterface sip = context.getSIP();
 			ModifyDatastreamResponse mdsResponse = null;
 			if (ext.equals("file")) {
 				XdmNode f = Saxon.buildDocument(new StreamSource(fox));
-				String loc = Saxon.xpath2string(f, "/foxml:datastreamVersion/foxml:contentLocation/@REF", null,
-						NAMESPACES);
+				String loc = Saxon.xpath2string(f, "/foxml:datastreamVersion/foxml:contentLocation/@REF", null, NAMESPACES);
 				if (loc == null)
 					throw new DepositException("Resource FOX[" + fox + "] without DS location!");
 				String mime = Saxon.xpath2string(f, "/foxml:datastreamVersion/@MIMETYPE", null, NAMESPACES);
@@ -261,17 +246,16 @@ public class FedoraInteract extends FedoraAction {
 				mdsResponse = md.logMessage("Updated " + dsid).execute();
 			}
 			if (mdsResponse.getStatus() != 200)
-				throw new DepositException(
-						"Unexpected status[" + mdsResponse.getStatus() + "] while interacting with Fedora Commons!");
+				throw new DepositException("Unexpected status[" + mdsResponse.getStatus() + "] while interacting with Fedora Commons!");
 			logger.info("Updated FedoraObject[" + fid + "][" + dsid + "][" + mdsResponse.getLastModifiedDate() + "]");
 			// we should update the PID asOfDateTime
 			fid = completeFID(sip, new URI(fid), mdsResponse.getLastModifiedDate()).toString();
 			logger.debug("Should match FID[" + fid + "]");
-		} catch(FedoraClientException e) {
-                    if (e.getStatus()==404) {
-                        throw new DepositException("FedoraObject["+fid+"] and/or datastream["+dsid+"] doesn't exist!",e);
-                    } else
-                        throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
+		} catch (FedoraClientException e) {
+			if (e.getStatus() == 404) {
+				throw new DepositException("FedoraObject[" + fid + "] and/or datastream[" + dsid + "] doesn't exist!",e);
+			} else
+				throw new DepositException("Unexpected status[" + e.getStatus() + "] while querying Fedora Commons!",e);
 		} catch (Exception ex) {
 			throw new DepositException(ex);
 		}
@@ -280,22 +264,19 @@ public class FedoraInteract extends FedoraAction {
 	protected URI completeFID(SIPInterface sip, URI fid, Date date) throws DepositException {
 		if (sip.hasFID() && sip.getFID().toString().startsWith(fid.toString())) {
 			sip.setFIDasOfTimeDate(date); // will keep the latest asOfDateTime
-			logger.debug("Fedora SIP datastream[" + sip.getPID() + "]->[" + sip.getFID() + "]=[" + fid + "][" + date
-					+ "] completed!");
+			logger.debug("Fedora SIP datastream[" + sip.getPID() + "]->[" + sip.getFID() + "]=[" + fid + "][" + date+ "] completed!");
 			return sip.getFID();
 		}
 		Collection col = sip.getCollectionByFID(fid);
 		if (col != null) {
 			col.setFIDasOfTimeDate(date); // will keep the latest asOfDateTime
-			logger.debug("Fedora Collection datastream[" + col.getPID() + "]->[" + col.getFID() + "]=[" + fid + "]["
-					+ date + "] completed!");
+			logger.debug("Fedora Collection datastream[" + col.getPID() + "]->[" + col.getFID() + "]=[" + fid + "]["+ date + "] completed!");
 			return col.getFID();
 		}
 		Resource res = sip.getResourceByFID(fid);
 		if (res != null) {
 			res.setFIDasOfTimeDate(date); // will keep the latest asOfDateTime
-			logger.debug("Fedora Resource datastream[" + res.getPID() + "]->[" + res.getFID() + "]=[" + fid + "]["
-					+ date + "] completed!");
+			logger.debug("Fedora Resource datastream[" + res.getPID() + "]->[" + res.getFID() + "]=[" + fid + "]["+ date + "] completed!");
 			return res.getFID();
 		}
 		logger.debug("Fedora datastream[" + fid + "][" + date + "] couldn't be associated with a PID!");
@@ -313,6 +294,7 @@ public class FedoraInteract extends FedoraAction {
 						if (fid != null) {
 							if (getObjectProfile(fid).execute().getLastModifiedDate().equals(Global.asOfDateTime(context.getSIP().getFID().getRawFragment().replaceAll(".*@", "")))) {
 								purgeObject(fid).logMessage("rollback of ingest").execute();
+								logger.info("FedoraInteract:Ingest- successful for fid:"+fid);
 							} else {
 								logger.warn("couldn't rollback ingest[" + fid + "] as it has been updated already!");
 							}
@@ -325,6 +307,7 @@ public class FedoraInteract extends FedoraAction {
 						if (getObjectProfile(fid).execute().getLastModifiedDate().after(dlast)) {
 							String old = Saxon.xpath2string(event, "param[@name='old']/@value");
 							modifyObject(fid).label(old).logMessage("rollback of label update").execute();
+							logger.info("FedoraInteract:Property- successful for fid:"+fid);
 						} else {
 							logger.info("Ignoring the rollback for fid[" + fid+ "] as no changes happened to the Properties of FedoraInteract");
 						}
@@ -333,16 +316,42 @@ public class FedoraInteract extends FedoraAction {
 						String fid = Saxon.xpath2string(event, "param[@name='fid']/@value");
 						String dsid = Saxon.xpath2string(event, "param[@name='dsid']/@value");
 						if (fid != null & dsid != null) {
-							URI fidURI = new URI(fid);
-							Date asof = Global.asOfDateTime(context.getSIP().getResourceByFID(fidURI).getFID().getRawFragment().replaceAll(".*@", ""));
-							Date lmod = getObjectProfile(fid).execute().getLastModifiedDate();
-							if (lmod.equals(asof)) {
-								purgeDatastream(fid, dsid).logMessage("rollback of insert").execute();
+							URI ufid = null;
+							if (context.getSIP().getFID().toString().startsWith(fid)) {
+								// update of a datastream in the compound
+								ufid = context.getSIP().getFID();
+							}
+							if (ufid == null) {
+								Resource res = context.getSIP().getResourceByFID(new URI(fid));
+								if (res != null) {
+									// update of a datastream in a resource
+									ufid = res.getFID();
+								}
+							}
+							if (ufid == null) {
+								Collection col = context.getSIP().getCollectionByFID(new URI(fid));
+								if (col != null) {
+									// update of a datastream in a collection
+									ufid = col.getFID();
+								}
+							}
+							if (ufid != null) {
+								String fragment = ufid.getRawFragment();
+								if (fragment != null) {
+									Date asof = Global.asOfDateTime(context.getSIP().getResourceByFID(ufid).getFID().getRawFragment().replaceAll(".*@", ""));
+									Date lmod = getObjectProfile(fid).execute().getLastModifiedDate();
+									if (lmod.equals(asof)) {
+										purgeDatastream(fid, dsid).logMessage("rollback of insert").execute();
+										logger.info("FedoraInteract:Insert- successful for fid:"+ fid +" dsid:"+ dsid);
+									}
+								} else {
+									logger.warn("couldn't rollback update[" + fid + "] [" + dsid + "] the asof[" + ufid+ "] is unknown!");
+								}
 							} else {
-								logger.warn("couldn't rollback insert[" + fid + "] [" + dsid+ "] as it has been updated already (asof[" + asof + "]!=lmod[" + lmod + "])!");
+								logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as the resource/collection couldn't be found!");
 							}
 						} else {
-							logger.info("Ignoring the rollback for fid[" + fid + "] dsid[" + dsid+ "] as no changes happened to the Insert of FedoraInteract");
+							logger.info("Ignoring the rollback for fid[" + fid + "] dsid[" + dsid+ "] as no changes happened to the Update of FedoraInteract");
 						}
 					}
 					if (tpe.equals("update")) {
@@ -377,6 +386,7 @@ public class FedoraInteract extends FedoraAction {
 									Date lmod = getDatastream(fid, dsid).execute().getLastModifiedDate();
 									if (lmod.equals(asof)) {
 										purgeDatastream(fid, dsid).startDT(asof).logMessage("rollback of update").execute();
+										logger.info("FedoraInteract:Update- successful for fid:"+ fid +" dsid:"+ dsid);
 									} else if (lmod.after(asof)) {
 										logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as it has been updated already (asof[" + asof + "]!=lmod[" + lmod+ "])!");
 									}
