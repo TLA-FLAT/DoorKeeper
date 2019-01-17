@@ -19,6 +19,7 @@ package nl.mpi.tla.flat.deposit.action.mapping.util;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -51,10 +52,11 @@ public class FileWalker extends SimpleFileVisitor<Path> {
         }
 
         for (Resource cmdiResource: cmdiResources) {
-
-            if(Paths.get(cmdiResource.getURI()).toString().equals( file.toRealPath().toString()))
-
-            matchingResources.add(file);
+            URI uri = cmdiResource.getURI();
+            if (uri.getScheme().equals("file")) {
+                if (Paths.get(cmdiResource.getURI()).toString().equals(file.toRealPath().toString()))
+                    matchingResources.add(file);
+            }
         }
 
 
