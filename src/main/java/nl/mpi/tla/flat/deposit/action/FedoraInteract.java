@@ -28,7 +28,6 @@ import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.net.URI;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -49,7 +48,6 @@ import org.slf4j.LoggerFactory;
 import nl.mpi.tla.flat.deposit.util.Global;
 
 /**
- *
  * @author menzowi
  * @author pavsri
  */
@@ -294,7 +292,7 @@ public class FedoraInteract extends FedoraAction {
 						if (fid != null) {
 							if (getObjectProfile(fid).execute().getLastModifiedDate().equals(Global.asOfDateTime(context.getSIP().getFID().getRawFragment().replaceAll(".*@", "")))) {
 								purgeObject(fid).logMessage("rollback of ingest").execute();
-								logger.info("FedoraInteract:Ingest- successful for fid:"+fid);
+								logger.debug("ingest rollback for fid["+fid+"]");
 							} else {
 								logger.warn("couldn't rollback ingest[" + fid + "] as it has been updated already!");
 							}
@@ -307,9 +305,9 @@ public class FedoraInteract extends FedoraAction {
 						if (getObjectProfile(fid).execute().getLastModifiedDate().after(dlast)) {
 							String old = Saxon.xpath2string(event, "param[@name='old']/@value");
 							modifyObject(fid).label(old).logMessage("rollback of label update").execute();
-							logger.info("FedoraInteract:Property- successful for fid:"+fid);
+							logger.debug("property rollback for fid["+fid+"]");
 						} else {
-							logger.info("Ignoring the rollback for fid[" + fid+ "] as no changes happened to the Properties of FedoraInteract");
+							logger.debug("ignoring property rollback for fid[" + fid+ "] as no changes happened");
 						}
 					}
 					if (tpe.equals("insert")) {
@@ -342,16 +340,18 @@ public class FedoraInteract extends FedoraAction {
 									Date lmod = getObjectProfile(fid).execute().getLastModifiedDate();
 									if (lmod.equals(asof)) {
 										purgeDatastream(fid, dsid).logMessage("rollback of insert").execute();
-										logger.info("FedoraInteract:Insert- successful for fid:"+ fid +" dsid:"+ dsid);
-									}
+										logger.debug("insert rollback for fid["+ fid +"] dsid["+ dsid+"]");
+									} else {
+                                                                            logger.debug("ignored rollback insert[" + fid + "] [" + dsid + "] the asof out of sync (asof[" + asof + "]!=lmod[" + lmod+ "])");
+                                                                        }
 								} else {
-									logger.warn("couldn't rollback update[" + fid + "] [" + dsid + "] the asof[" + ufid+ "] is unknown!");
+									logger.warn("couldn't rollback insert[" + fid + "] [" + dsid + "] the asof[" + ufid+ "] is unknown!");
 								}
 							} else {
-								logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as the resource/collection couldn't be found!");
+								logger.warn("couldn't rollback insert[" + fid + "] [" + dsid+ "] as the resource/collection couldn't be found!");
 							}
 						} else {
-							logger.info("Ignoring the rollback for fid[" + fid + "] dsid[" + dsid+ "] as no changes happened to the Update of FedoraInteract");
+							logger.debug("ignoring the insert rollback for fid[" + fid + "] dsid[" + dsid+ "] as no changes happened");
 						}
 					}
 					if (tpe.equals("update")) {
@@ -386,18 +386,20 @@ public class FedoraInteract extends FedoraAction {
 									Date lmod = getDatastream(fid, dsid).execute().getLastModifiedDate();
 									if (lmod.equals(asof)) {
 										purgeDatastream(fid, dsid).startDT(asof).logMessage("rollback of update").execute();
-										logger.info("FedoraInteract:Update- successful for fid:"+ fid +" dsid:"+ dsid);
+										logger.debug("update rollback for fid["+ fid +"] dsid["+ dsid+"]");
 									} else if (lmod.after(asof)) {
-										logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as it has been updated already (asof[" + asof + "]!=lmod[" + lmod+ "])!");
-									}
+										logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as it has been updated already (asof[" + asof + "]<lmod[" + lmod+ "])!");
+									} else {
+                                                                            logger.debug("ignored rollback update[" + fid + "] [" + dsid + "] the asof is too late (asof[" + asof + "]>lmod[" + lmod+ "])");
+                                                                        }
 								} else {
-									logger.warn("couldn't rollback update[" + fid + "] [" + dsid + "] the asof[" + ufid+ "] is unknown!");
+									logger.warn("couldn't rollback update[" + fid + "] [" + dsid + "] the asof is unknown!");
 								}
 							} else {
 								logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as the resource/collection couldn't be found!");
 							}
 						} else {
-							logger.info("Ignoring the rollback for fid[" + fid + "] dsid[" + dsid+ "] as no changes happened to the Update of FedoraInteract");
+							logger.debug("ignoring the update rollback for fid[" + fid + "] dsid[" + dsid+ "] as no changes happened");
 						}
 					}
 				} catch (Exception ex) {

@@ -50,7 +50,7 @@ public class EPICHandleCreation extends AbstractAction {
         
         try {
             
-        	String namespace = context.getProperty("fedoraNamespace", "lat").toString();
+            String namespace = context.getProperty("fedoraNamespace", "lat").toString();
         	
             String fedora = this.getParameter("fedoraConfig");
             String epic   = this.getParameter("epicConfig");
@@ -236,10 +236,9 @@ public class EPICHandleCreation extends AbstractAction {
     	if (events.size()>0) {
     	Boolean delMode = true;
     	String epic;
-		try {
-			epic = this.getParameter("epicConfig");
+        try {
+                epic = this.getParameter("epicConfig");
 	    	File config = new File(epic);
-	    	
 	    	
 	        if (!config.exists()) {
 	            logger.error("The EPIC configuration["+epic+"] doesn't exist!");
@@ -257,7 +256,7 @@ public class EPICHandleCreation extends AbstractAction {
 	        XMLConfiguration xConfig = new XMLConfiguration(config);
 	        
 	        boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
-            String tombstone = xConfig.getString("tombstone");
+                String tombstone = xConfig.getString("tombstone");
 	        
 	        PIDService ps = new PIDService(xConfig, null);
 	        
@@ -271,7 +270,6 @@ public class EPICHandleCreation extends AbstractAction {
 	                	
 	                	if(delMode){
 	                		try {
-	                			
 	                			ps.deleteHandle(uuid);
 	                			logger.debug("rollback action[" + this.getName() + "] event[" + tpe + "] deleted handle [" + uuid + "]");
 	                		}
