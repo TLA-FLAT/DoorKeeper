@@ -18,14 +18,21 @@ package nl.mpi.tla.flat.deposit.action;
 
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
-import ch.qos.logback.core.joran.spi.JoranException;
 import ch.qos.logback.core.util.StatusPrinter;
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.UUID;
+import javax.xml.transform.Source;
+import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.QName;
+import net.sf.saxon.s9api.XdmAtomicValue;
+import net.sf.saxon.s9api.XdmDestination;
+import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
+import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.flat.deposit.util.SaxonListener;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +52,21 @@ public class WorkspaceLogSetup extends AbstractAction {
             MDC.put("sip","SIP_"+UUID.randomUUID());
 
         try {
+            File config = null;
+            if (this.hasParameter("logConfig")) {
+                config = Paths.get(this.getParameter("logConfig")).toFile();
+                if (!config.exists()) {
+                    logger.error("The log config["+config+"] doesn't exist!");
+                    return false;
+                } else if (!config.isFile()) {
+                    logger.error("The log config["+config+"] isn't a file!");
+                    return false;
+                } else if (!config.canRead()) {
+                    logger.error("The log config["+config+"] dan't be read!");
+                    return false;
+                }
+            }
+                        
             File dir = new File(getParameter("dir","./logs"));
             if (!dir.exists())
                 FileUtils.forceMkdir(dir);
@@ -57,58 +79,26 @@ public class WorkspaceLogSetup extends AbstractAction {
                 if (logback.exists())
                     logback.delete();
                 
-                PrintWriter out = new PrintWriter(logback);
-                out.print(
-                    "<configuration>\n" +
-                    "	<appender name=\"DEVEL\" class=\"ch.qos.logback.core.FileAppender\">\n" +
-                    "		<file>" + dir + "/devel.log</file>\n" +
-                    "		<append>true</append>\n" +
-                    "           <filter class=\"ch.qos.logback.core.filter.EvaluatorFilter\">\n" +
-                    "                   <evaluator>\n" +
-                    "                           <expression>return (mdc.get(\"sip\") != null &amp;&amp; ((String)mdc.get(\"sip\")).equals(\""+ MDC.get("sip") +"\"));</expression>\n" +
-                    "                   </evaluator>\n" +
-                    "                   <OnMismatch>DENY</OnMismatch>\n" +
-                    "                   <OnMatch>ACCEPT</OnMatch>\n" +
-                    "           </filter>\n" +
-                    "           <encoder>\n" +
-                    "                    <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} : %msg%n</pattern>\n" +
-                    "           </encoder>" +
-                    "	</appender>\n" +
-                    "	<appender name=\"USER\" class=\"ch.qos.logback.core.FileAppender\">\n" +
-                    "		<file>" + dir + "/user-log-events.xml</file>\n" +
-                    "		<append>true</append>\n" +
-                    "           <filter class=\"ch.qos.logback.core.filter.EvaluatorFilter\">\n" +
-                    "                   <evaluator>\n" +
-                    "                           <expression>return (level >= INFO &amp;&amp; mdc.get(\"sip\") != null &amp;&amp; ((String)mdc.get(\"sip\")).equals(\""+ MDC.get("sip") +"\"));</expression>\n" +
-                    "                   </evaluator>\n" +
-                    "                   <OnMismatch>DENY</OnMismatch>\n" +
-                    "                   <OnMatch>ACCEPT</OnMatch>\n" +
-                    "           </filter>\n" +
-                    "           <encoder class=\"ch.qos.logback.core.encoder.LayoutWrappingEncoder\">\n" +
-                    "                   <layout class=\"ch.qos.logback.classic.log4j.XMLLayout\"/>\n" +
-                    "           </encoder>" +
-                    "	</appender>\n" +
-                    "   <logger name=\"nl.mpi.tla.flat.deposit\" level=\"DEBUG\">" +
-                    "		<appender-ref ref=\"USER\" />\n" +
-                    "		<appender-ref ref=\"DEVEL\" />\n" +
-                    "	</logger>\n" +
-                    "   <root level=\"INFO\">\n" +
-                    "		<appender-ref ref=\"USER\" />\n" +
-                    "		<appender-ref ref=\"DEVEL\" />\n" +
-                    "	</root>\n" +
-                    "</configuration>"
-                );
-                out.close();
-                // create {$work}/logs/user-log.xml
-                out = new PrintWriter(dir.toPath().resolve("./user-log.xml").toFile());
-                out.print(
-                        "<?xml version=\"1.0\" ?>\n" +
-                        "<!DOCTYPE log4j:eventSet PUBLIC \"-//APACHE//DTD LOG4J 1.2//EN\" \"log4j.dtd\" [<!ENTITY data SYSTEM \"user-log-events.xml\">]>\n" +
-                        "<log4j:eventSet version=\"1.2\" xmlns:log4j=\"http://jakarta.apache.org/log4j/\">\n" +
-                        "    &data;\n" +
-                        "</log4j:eventSet>"
-                );
-                out.close();
+                XsltTransformer configure = Saxon.buildTransformer(WorkspaceLogSetup.class.getResource("/WorkspaceLog/config-log.xsl")).load();
+                SaxonListener listener = new SaxonListener("WorkspaceLogSetup", MDC.get("sip"));
+                configure.setMessageListener(listener);
+                configure.setErrorListener(listener);
+
+                configure.setParameter(new QName("dir"), new XdmAtomicValue(dir.toString()));
+                configure.setParameter(new QName("sip"), new XdmAtomicValue(MDC.get("sip")));
+                
+                Source in = (config!=null?new StreamSource(config):new StreamSource(WorkspaceLogSetup.class.getResource("/WorkspaceLog/empty-config.xml").toString()));
+                configure.setSource(in);
+                
+                XdmDestination destination = new XdmDestination();
+                configure.setDestination(destination);
+                
+                configure.transform();
+                
+                Saxon.save(destination,logback);
+                
+                // copy user-log.xml to {$work}/logs/user-log.xml
+                Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/user-log.xml"), dir.toPath().resolve("./user-log.xml"));
                 // copy log4j.dtd to {$work}/logs/
                 Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/log4j.dtd"), dir.toPath().resolve("./log4j.dtd"));
             }

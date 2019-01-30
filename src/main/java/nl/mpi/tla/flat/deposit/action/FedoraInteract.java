@@ -22,9 +22,11 @@ import com.yourmediashelf.fedora.client.request.AddDatastream;
 import com.yourmediashelf.fedora.client.request.ModifyDatastream;
 import com.yourmediashelf.fedora.client.response.AddDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.FedoraResponse;
+import com.yourmediashelf.fedora.client.response.GetDatastreamHistoryResponse;
 import com.yourmediashelf.fedora.client.response.IngestResponse;
 import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
+import com.yourmediashelf.fedora.generated.management.DatastreamProfile;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.net.URI;
@@ -215,7 +217,7 @@ public class FedoraInteract extends FedoraAction {
 	void updateDatastream(Context context, File fox, String fid, String dsid, Date asof, String ext)
 			throws DepositException {
 		try {
-			context.registerRollbackEvent(this, "update", "fid", fid, "dsid", dsid, "last", Global.asOfDateTime(getObjectProfile(fid).execute().getLastModifiedDate()));
+			context.registerRollbackEvent(this, "update", "fid", fid, "dsid", dsid, "last", Global.asOfDateTime(getDatastream(fid, dsid).execute().getLastModifiedDate()));
 
 			SIPInterface sip = context.getSIP();
 			ModifyDatastreamResponse mdsResponse = null;
@@ -359,7 +361,8 @@ public class FedoraInteract extends FedoraAction {
 						String dsid = Saxon.xpath2string(event, "param[@name='dsid']/@value");
 						String last = Saxon.xpath2string(event, "param[@name='last']/@value");
 						Date dlast = Global.asOfDateTime(last);
-						if (getObjectProfile(fid).execute().getLastModifiedDate().compareTo(dlast) >= 0) {
+                                                Date min = getNextDatastreamMod(fid,dsid,dlast);
+						if (min!=null) {
 							URI ufid = null;
 							if (context.getSIP().getFID().toString().startsWith(fid)) {
 								// update of a datastream in the compound
@@ -382,15 +385,14 @@ public class FedoraInteract extends FedoraAction {
 							if (ufid != null) {
 								String fragment = ufid.getRawFragment();
 								if (fragment != null) {
-									Date asof = Global.asOfDateTime(fragment.replaceAll(".*@", ""));
+									Date max = Global.asOfDateTime(fragment.replaceAll(".*@", ""));
 									Date lmod = getDatastream(fid, dsid).execute().getLastModifiedDate();
-									if (lmod.equals(asof)) {
-										purgeDatastream(fid, dsid).startDT(asof).logMessage("rollback of update").execute();
-										logger.debug("update rollback for fid["+ fid +"] dsid["+ dsid+"]");
-									} else if (lmod.after(asof)) {
-										logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as it has been updated already (asof[" + asof + "]<lmod[" + lmod+ "])!");
+                                                                        logger.debug("update rollback mod["+lmod+"]["+lmod.toInstant().toEpochMilli()+"] in range[min["+min+"]["+min.toInstant().toEpochMilli()+"],max["+max+"]["+max.toInstant().toEpochMilli()+"]]?["+((lmod.equals(min)||lmod.after(min))&&(lmod.equals(max)||lmod.before(max)))+"]");
+									if (lmod.after(max)) {
+                                                                                logger.warn("couldn't rollback update[" + fid + "] [" + dsid+ "] as it has been updated already (asof[" + max + "]<lmod[" + lmod+ "])!");
 									} else {
-                                                                            logger.debug("ignored rollback update[" + fid + "] [" + dsid + "] the asof is too late (asof[" + asof + "]>lmod[" + lmod+ "])");
+										purgeDatastream(fid, dsid).startDT(min).endDT(max).logMessage("rollback of update").execute();
+										logger.debug("update rollback for fid["+ fid +"] dsid["+ dsid+"]");
                                                                         }
 								} else {
 									logger.warn("couldn't rollback update[" + fid + "] [" + dsid + "] the asof is unknown!");
@@ -408,4 +410,36 @@ public class FedoraInteract extends FedoraAction {
 			}
 		}
 	}
+
+        protected Date getNextDatastreamMod(String fid,String dsid,Date last) {
+            logger.debug("getNextDatastreamMod(fid["+fid+"],dsid["+dsid+"],last["+last+"])");
+            Date nxt=null;
+            try {
+                GetDatastreamHistoryResponse res = getDatastreamHistory(fid,dsid).execute();
+                if (res.getStatus() == 200) {
+                    boolean get = false;
+                    List profs = res.getDatastreamProfile().getDatastreamProfile();
+                    for (ListIterator<DatastreamProfile> iter = profs.listIterator(profs.size()); iter.hasPrevious();) {
+                        Date d = iter.previous().getDsCreateDate().toGregorianCalendar().getTime();
+                        if (get) {
+                            logger.debug("> mod["+d+"]");
+                            nxt = d;
+                            break;
+                        }
+                        if (d.equals(last)) {
+                            logger.debug("= mod["+d+"]");
+                            get = true;
+                        } else
+                            logger.debug("< mod["+d+"]");
+                    }
+                } else
+                    logger.debug("Unexpected status[" + res.getStatus() + "] while interacting with Fedora Commons!");
+            } catch (FedoraClientException e) {
+                if (e.getStatus() == 404) {
+                    logger.debug("FedoraObject[" + fid + "] and/or datastream[" + dsid + "] doesn't exist!",e);
+                } else
+                    logger.debug("Unexpected status[" + e.getStatus() + "] while interacting with Fedora Commons!");
+            }
+            return nxt;
+        }
 }
