@@ -13,7 +13,6 @@
 
 	<xsl:template match="configuration">
 		<xsl:copy>
-			<xsl:apply-templates select="@* | node()"/>
 			<appender name="DEVEL" class="ch.qos.logback.core.FileAppender">
 				<file><xsl:value-of select="$dir"/>/devel.log</file>
 				<append>true</append>
@@ -44,6 +43,7 @@
 				<appender-ref ref="USER"/>
 				<appender-ref ref="DEVEL"/>
 			</logger>
+			<xsl:apply-templates select="@* | node()"/>
 		</xsl:copy>
 	</xsl:template>
 
