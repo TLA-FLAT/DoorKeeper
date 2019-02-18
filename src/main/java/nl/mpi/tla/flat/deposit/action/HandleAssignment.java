@@ -45,10 +45,11 @@ public class HandleAssignment extends AbstractAction {
                 throw new DepositException("Handle prefix has not been specified!");
 
             Properties props = new Properties();
-            if (hasParameter("overwrite")) {
-                File pf = new File(getParameter("overwrite"));
+            String overwrite = this.getParameter("overwrite", context.getProperty("overwrite", "").toString());
+            if (!overwrite.equals("")) {
+                File pf = new File(overwrite);
                 if (pf.exists() && pf.canRead()) {
-                    if (getParameter("overwrite").endsWith(".xml"))
+                    if (overwrite.endsWith(".xml"))
                         props.loadFromXML(new FileInputStream(pf));
                     else
                         props.load(new FileInputStream(pf));

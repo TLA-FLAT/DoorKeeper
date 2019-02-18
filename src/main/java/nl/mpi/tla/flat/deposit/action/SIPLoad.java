@@ -17,6 +17,7 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
+import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMD;
@@ -35,7 +36,8 @@ public class SIPLoad extends AbstractAction {
     
     @Override
     public boolean perform(Context context) throws DepositException {
-    	String namespace = context.getProperty("fedoraNamespace", "lat").toString();
+    	String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
+        XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
         String sip = this.getParameter("sip","./metadata/record.cmdi");
         if (sip == null) {
             logger.error("no sip file specified!");
@@ -57,7 +59,7 @@ public class SIPLoad extends AbstractAction {
         }
 
         logger.debug("SIP["+mr.getAbsolutePath()+"]");
-        context.setSIP(new CMD(mr,namespace));
+        context.setSIP(new CMD(mr,namespace,namespaces));
 
         return true;
     }

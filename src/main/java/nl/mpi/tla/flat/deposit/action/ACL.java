@@ -52,7 +52,7 @@ public class ACL extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
         URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
-            String namespace = this.getParameter("fedoraNamespace", context.getProperty("fedoraNamespace", "lat").toString());
+            String namespace = this.getParameter("activeFedoraNamespace", context.getProperty("activeFedoraNamespace", "lat").toString());
             // check for the policy
             File policy = new File(getParameter("policy", "./metadata/policy.n3"));
             if (!policy.exists()) {

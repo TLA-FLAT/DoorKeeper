@@ -65,12 +65,11 @@ public class FedoraInteract extends FedoraAction {
 			SIPInterface sip = context.getSIP();
 
 			File dir = new File(this.getParameter("dir", "./fox"));
-			String pre = context.getProperty("fedoraNamespace", "lat").toString();
 
 			// <fid>.xml (FOXML -> ingest)
-			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.xml")));
+			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.xml")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replace(".xml", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD","");
+				String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "\\1:").replace("_CMD","");
 				String dsid = (fox.getName().endsWith("_CMD.xml") ? "CMD" : "OBJ");
 				logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
 
@@ -86,9 +85,9 @@ public class FedoraInteract extends FedoraAction {
 			}
 
 			// - <fid>.<asof>.props (props -> modify (some) properties)
-			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.[0-9]+\\.props")));
+			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "\\1:").replace("_CMD", "");
 				try {
 					String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
 					Date asof = new Date(Long.parseLong(epoch));
@@ -119,9 +118,9 @@ public class FedoraInteract extends FedoraAction {
 			// - <fid>.<dsid>.file ... create/modify DS
 			// - <fid>.<dsid>.<ext>... create/modify DS
 			foxs = dir.listFiles(
-					((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[A-Za-z0-9_]+")));
+					((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "\\1:").replace("_CMD", "");
 				String dsid = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String ext = fox.getName().replaceFirst("^.*\\.(.*)$", "$1");
 				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + ext + "]");
@@ -130,9 +129,9 @@ public class FedoraInteract extends FedoraAction {
 
 			// - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
 			// - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
-			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(pre + "[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
+			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^" + pre + "_", pre + ":").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "\\1:").replace("_CMD", "");
 				String dsid = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$", "$1");
 				Date asof = new Date(Long.parseLong(epoch));
