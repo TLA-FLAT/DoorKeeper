@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cmd="http://www.clarin.eu/cmd/" xmlns:lat="http://lat.mpi.nl/" xmlns:sem="http://marklogic.com/semantics" xmlns:functx="http://www.functx.com" exclude-result-prefixes="xs cmd lat sem functx" version="3.0">
 
+    <xsl:param name="ns" select="'lat'"/>
+
     <xsl:param name="record" select="doc('./record.cmdi')"/>
     <xsl:param name="acl-base" select="'.'"/>
 
@@ -160,7 +162,7 @@
                             <xsl:sequence select="normalize-space($record/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI)"/>
                         </xsl:when>
                         <xsl:otherwise>
-                            <xsl:sequence select="cmd:lat('lat:', $sipPID)"/>
+                            <xsl:sequence select="cmd:lat(concat($ns,':'), $sipPID)"/>
                         </xsl:otherwise>
                     </xsl:choose>
                 </xsl:variable>
@@ -272,7 +274,7 @@
                                     <xsl:sequence select="normalize-space($resource/cmd:ResourceRef/@lat:flatURI)"/>
                                 </xsl:when>
                                 <xsl:otherwise>
-                                    <xsl:sequence select="cmd:lat('lat:', $resPID)"/>
+                                    <xsl:sequence select="cmd:lat(concat($ns,':'), $resPID)"/>
                                 </xsl:otherwise>
                             </xsl:choose>
                         </xsl:variable>

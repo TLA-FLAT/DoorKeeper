@@ -21,7 +21,9 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import net.sf.saxon.s9api.SaxonApiException;
+import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.DepositException;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.flat.deposit.util.Saxon;
@@ -40,10 +42,15 @@ public class CMDResource extends Resource {
     protected Node node = null;
     
     protected String id = null;
+    
+    protected String namespace;
+    protected XdmValue namespaces;
 
-    public CMDResource(URI base,Node node) throws DepositException {
+    public CMDResource(URI base,Node node,String namespace, XdmValue namespaces) throws DepositException {
         try {
             this.node = node;
+            this.namespace = namespace;
+            this.namespaces = namespaces;
             
             // id
             String str = Saxon.xpath2string(Saxon.wrapNode(node),"@id",null,NAMESPACES);
@@ -54,40 +61,61 @@ public class CMDResource extends Resource {
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
-                    this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
-                    this.setPID(u);
-                else
-                    this.uri = u;
+                boolean m = false;
+                for(XdmItem ns:namespaces) {
+                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                        this.setFID(u);
+                        m = true;
+                    }
+                }
+                if (!m) {
+                    if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                        this.setPID(u);
+                    else
+                        this.uri = u;
+                }
             }
                 
             // @lat:flatURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
-                    this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
-                    this.setPID(u);
-                else if (this.uri==null)
-                    this.uri = u;
-                else if (!this.uri.equals(u))
-                    throw new DepositException("two candidates for a resource URI["+this.uri+"]["+u+"]!");
+                boolean m = false;
+                for(XdmItem ns:namespaces) {
+                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                        this.setFID(u);
+                        m = true;
+                    }
+                }
+                if (!m) {
+                    if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                        this.setPID(u);
+                    else if (this.uri==null)
+                        this.uri = u;
+                    else if (!this.uri.equals(u))
+                        throw new DepositException("two candidates for a resource URI["+this.uri+"]["+u+"]!");
+                }
             }
 
             // @lat:localURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:localURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
-                if (u.toString().startsWith("lat:"))
-                    this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
-                    this.setPID(u);
-                else if (this.uri==null)
-                    this.uri = u;
-                else if (!this.uri.equals(u))
-                    throw new DepositException("two candidates for a resource URI["+this.uri+"]["+u+"]!");
+                boolean m = false;
+                for(XdmItem ns:namespaces) {
+                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                        this.setFID(u);
+                        m = true;
+                    }
+                }
+                if (!m) {
+                    if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                        this.setPID(u);
+                    else if (this.uri==null)
+                        this.uri = u;
+                    else if (!this.uri.equals(u))
+                        throw new DepositException("two candidates for a resource URI["+this.uri+"]["+u+"]!");
+                }
             }
             
             // make sure we have at least an URI
@@ -143,6 +171,19 @@ public class CMDResource extends Resource {
         if (this.id==null)
             throw new DepositException("Resource["+this.uri+"] has no ID yet!");
         return this.id;
+    }
+    
+    @Override
+    public void setFID(URI fid) throws DepositException {
+        boolean m = false;
+        for(XdmItem ns:namespaces) {
+            if (fid.toString().startsWith(ns+":")) {
+                super.setFID(fid);
+                m = true;
+            }
+        }
+        if (!m)
+            throw new DepositException("The Resource["+fid+"] isn't a valid FLAT Fedora Commons PID!");
     }
 
     @Override

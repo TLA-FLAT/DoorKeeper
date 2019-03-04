@@ -52,6 +52,7 @@ public class ACL extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
         URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
+            String namespace = this.getParameter("activeFedoraNamespace", context.getProperty("activeFedoraNamespace", "lat").toString());
             // check for the policy
             File policy = new File(getParameter("policy", "./metadata/policy.n3"));
             if (!policy.exists()) {
@@ -113,6 +114,7 @@ public class ACL extends AbstractAction {
             XsltTransformer wacl2acl = Saxon.buildTransformer(ACL.class.getResource("/ACL/WebACL2ACL.xsl")).load();
             wacl2acl.setMessageListener(listener);
             wacl2acl.setErrorListener(listener);
+            wacl2acl.setParameter(new QName("ns"), new XdmAtomicValue(namespace));
             wacl2acl.setParameter(new QName("record"), Saxon.wrapNode(context.getSIP().getRecord()));
             wacl2acl.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
             if (this.hasParameter("default-account"))

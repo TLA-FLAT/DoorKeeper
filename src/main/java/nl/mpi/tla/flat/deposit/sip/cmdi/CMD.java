@@ -33,6 +33,7 @@ import javax.xml.transform.dom.DOMSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
@@ -75,11 +76,14 @@ public class CMD implements SIPInterface {
     protected boolean dirty = false;
     
     protected boolean update = false;
-    String namespace;
     
-    public CMD(File spec, String namespace) throws DepositException {
+    protected String namespace;
+    protected XdmValue fedoraNamespaces;
+    
+    public CMD(File spec, String namespace, XdmValue namespaces) throws DepositException {
         this.base = spec;
         this.namespace = namespace;
+        this.fedoraNamespaces = namespaces;
         load(spec);
         loadResources();
         loadCollections();
@@ -144,6 +148,11 @@ public class CMD implements SIPInterface {
         if (fid.toString().startsWith(namespace+":")) {
             this.fid = fid;
         } else {
+            for(XdmItem ns:fedoraNamespaces) {
+                if (fid.toString().startsWith(ns.getStringValue()+":")) {
+                    logger.warn("the FID["+fid+"] has a known namespace, but it's not the active namespace["+namespace+"]!");
+                }
+            }
             throw new DepositException("The URI["+fid+"] isn't a valid FLAT Fedora Commons PID!");
         }
         dirty();
@@ -231,7 +240,7 @@ public class CMD implements SIPInterface {
         try {
             for (XdmItem resource:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType='Resource']",null,NAMESPACES)) {
                 Node resNode = Saxon.unwrapNode((XdmNode)resource);
-                Resource res = new CMDResource(base.toURI(),resNode);
+                Resource res = new CMDResource(base.toURI(),resNode,namespace,fedoraNamespaces);
                 if (resources.contains(res)) {
                     logger.warn("double ResourceProxy["+Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES)+"]["+res.getURI()+"]["+(res.hasFID()?res.getFID():"")+"]!");
                 } else {
@@ -283,7 +292,7 @@ public class CMD implements SIPInterface {
         try {
             for (XdmItem collection:Saxon.xpath(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Resources/cmd:IsPartOfList/cmd:IsPartOf",null,NAMESPACES)) {
                 Node colNode = Saxon.unwrapNode((XdmNode)collection);
-                Collection col = new CMDCollection(base.toURI(), colNode, namespace);
+                Collection col = new CMDCollection(base.toURI(), colNode, namespace, fedoraNamespaces);
                 if (!col.hasPID() && !col.hasFID()) {
                     URI uri = col.getURI();
                     if (uri==null) {
@@ -293,7 +302,7 @@ public class CMD implements SIPInterface {
                     } else if (uri.toString().startsWith("islandora:")) {
                         logger.warn("Relationship with collection["+uri+"] might not survive!");
                     } else {
-                        logger.warn("Skipped empty IsPartOf["+uri+"]!");
+                        logger.warn("Skipped unrecognized IsPartOf["+uri+"]!");
                     }
                 } else if (collections.contains(col)) {
                     logger.warn("double IsPartOf["+collection.getStringValue()+"]["+col.getURI()+"]["+(col.hasFID()?col.getFID():"")+"]!");
@@ -451,10 +460,20 @@ public class CMD implements SIPInterface {
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
                 logger.debug("MdSelfLink["+str+"]["+u+"]["+u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*")+"]");
-                if (u.toString().startsWith(namespace+":"))
-                    this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
-                    this.setPID(u);
+                boolean m = false;
+                for(XdmItem ns:fedoraNamespaces) {
+                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                        this.setFID(u);
+                        m = true;
+                    }
+                }
+                if (!m) {
+                    if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                        this.setPID(u);
+                    else
+                        logger.warn("skipping unrecognized MdSelflink["+str+"]");
+                }
+                
             }
             logger.debug("MdSelfLink["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasFID()?getFID():"NONE")+"]");
                 
@@ -462,10 +481,19 @@ public class CMD implements SIPInterface {
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
-                if (u.toString().startsWith(namespace+":"))
-                    this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
-                    this.setPID(u);
+                boolean m = false;
+                for(XdmItem ns:fedoraNamespaces) {
+                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                        this.setFID(u);
+                        m = true;
+                    }
+                }
+                if (!m) {
+                    if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                        this.setPID(u);
+                    else
+                        logger.warn("skipping unrecognized MdSelflink/@lat:flatURI["+str+"]");
+                }
             }
             logger.debug("MdSelfLink/@lat:flatURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasFID()?getFID():"NONE")+"]");
 
@@ -473,10 +501,19 @@ public class CMD implements SIPInterface {
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:localURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
-                if (u.toString().startsWith(namespace+":"))
-                    this.setFID(u);
-                else if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
-                    this.setPID(u);
+                boolean m = false;
+                for(XdmItem ns:fedoraNamespaces) {
+                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                        this.setFID(u);
+                        m = true;
+                    }
+                }
+                if (!m) {
+                    if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
+                        this.setPID(u);
+                    else
+                        logger.warn("skipping unrecognized MdSelflink/@lat:localURI["+str+"]");
+                }
             }
             logger.debug("MdSelfLink/@lat:localURI["+str+"] PID["+(hasPID()?getPID():"NONE")+"] FID["+(hasFID()?getFID():"NONE")+"]");
         } catch(Exception e) {
