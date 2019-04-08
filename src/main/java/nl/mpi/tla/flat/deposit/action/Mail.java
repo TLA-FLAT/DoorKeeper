@@ -119,24 +119,30 @@ public class Mail extends FedoraAction {
 
 			String outcome = "SUCCESS";
 			fox.setParameter(new QName("sip"), new XdmAtomicValue(context.getSIP().getBase().toURI().toString()));
+			Boolean swordStatus = context.getFlow().getStatus();
+			String sRun = "Archiving";
 
-			if (context.hasException()) {
-				outcome = "FAILED";
-				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
-				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
-				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
-			} else if ("false".equals(sendWhenSuccess)) {
+			if ("false".equals(sendWhenSuccess)) {
                 // don't send any email
 				logger.info("Outcome: " + outcome);
 				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
                 return true;
-            } else if (context.getFlow().getStop()!=null) {
-            	  // don't send any email
-            	  logger.info("Outcome: " + outcome);
-            	  logger.info("But Code stops: " + context.getFlow().getStop());
-            	  logger.info("No email sent! (this was only a partial DoorKeeper run) ");
-            	  return true;
             }
+			
+			if (!swordStatus.booleanValue() && context.getFlow().getStop()!=null) {
+          	  // don't send any email
+          	  logger.info("Outcome: " + outcome);
+          	  logger.info("But Code stops: " + context.getFlow().getStop());
+          	  logger.info("No email sent! (this was only a partial DoorKeeper run) ");
+          	  return true;
+			} else if (swordStatus == null || context.hasException() || !swordStatus.booleanValue()) {
+				outcome = "FAILED";
+				if (!swordStatus.booleanValue())
+					sRun = "Validation";
+				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
+				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
+				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
+			} 
 			
 			if(outcome.equals("SUCCESS")) {
 				if (context.getSIP().hasPID()) {
@@ -185,7 +191,7 @@ public class Mail extends FedoraAction {
 
 			msg.setFrom(fromAddress);
 			msg.addRecipient(javax.mail.Message.RecipientType.TO, toAddress);
-			msg.setSubject(subject + userID + " - "+ outcome);
+			msg.setSubject(subject + userID + " - "+ outcome + " (" + sRun + ")"); //sRun = Validation or Archiving
 			msg.setSentDate(new Date());
 
 			msg.setContent(destination.getXdmNode().toString(), "text/html");
