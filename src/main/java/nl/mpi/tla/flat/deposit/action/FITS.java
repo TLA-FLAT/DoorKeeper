@@ -46,7 +46,7 @@ public class FITS extends AbstractAction {
     
     @Override
     public boolean perform(Context context) throws DepositException {
-        boolean allAcceptable = true;
+        int unallowed = 0;
         File dir = null;
         if (hasParameter("dir")) {
             dir = new File(getParameter("dir"));
@@ -228,7 +228,7 @@ public class FITS extends AbstractAction {
                             // no allowed or fallback mimetype was found for this resource
                             logger.debug(". mimetypes failed");
                             logger.error("No mimetype found for resource[{}]", file);
-                            allAcceptable = false;
+                            unallowed++;
                         } else
                             logger.debug(". mimetypes succeeded");
                     }
@@ -237,6 +237,8 @@ public class FITS extends AbstractAction {
                 }
             }
         }
-        return allAcceptable;
+        if (unallowed>0)
+            logger.error("{} resources were not allowed!", unallowed);
+        return (unallowed==0);
     }
 }

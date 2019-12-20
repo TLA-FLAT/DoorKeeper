@@ -16,12 +16,16 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.net.URI;
+import java.util.Properties;
 import java.util.UUID;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
+import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,10 +43,22 @@ public class HandleAssignment extends AbstractAction {
             
             if (!hasParameter("prefix"))
                 throw new DepositException("Handle prefix has not been specified!");
+
+            Properties props = new Properties();
+            String overwrite = this.getParameter("overwrite", context.getProperty("overwrite", "").toString());
+            if (!overwrite.equals("")) {
+                File pf = new File(overwrite);
+                if (pf.exists() && pf.canRead()) {
+                    if (overwrite.endsWith(".xml"))
+                        props.loadFromXML(new FileInputStream(pf));
+                    else
+                        props.load(new FileInputStream(pf));
+                }
+            }
             
             SIPInterface sip = context.getSIP();
             URI pid = (sip.hasPID()?sip.getPID():null);
-            sip.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
+            sip.setPID(new URI(props.getProperty("sip.PID","hdl:"+getParameter("prefix")+"/"+UUID.randomUUID())));
             if (pid==null) {
                 logger.info("Assigned new PID["+sip.getPID()+"] to the SIP");
             } else {
@@ -53,7 +69,13 @@ public class HandleAssignment extends AbstractAction {
                     if (res.isInsert() && res.hasPID()) {
                         logger.info("Retained existing PID["+res.getPID()+"] for Resource["+res.getURI()+"]");
                     } else {
-                        res.setPID(new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID()));
+                        URI uri = new URI("hdl:"+getParameter("prefix")+"/"+UUID.randomUUID());
+                        if (res instanceof CMDResource) {
+                            String id = ((CMDResource)res).getID();
+                            if (props.containsKey("res."+id+".PID"))
+                                uri = new URI(props.getProperty("res."+id+".PID"));
+                        }
+                        res.setPID(uri);
                         logger.info("Assigned new PID["+res.getPID()+"] to Resource["+res.getURI()+"]");
                     }
                 }

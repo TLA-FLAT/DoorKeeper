@@ -116,13 +116,14 @@ abstract public class Resource {
     }
     
     public void setFID(URI fid) throws DepositException {
-        if (this.fid!=null)
+        if (this.fid!=null) {
+            if (this.getFID(true).toString().equals(fid.toString())) {
+                logger.warn("Resource["+this.uri+"] has already this Fedora Commons PID["+this.fid+"], retaining it!");
+                return;
+            }
             logger.warn("Resource["+this.uri+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
-        if (fid.toString().startsWith("lat:")) {
-            this.fid = fid;
-        } else {
-            throw new DepositException("The Resource["+fid+"] isn't a valid FLAT Fedora Commons PID!");
         }
+        this.fid = fid;
         dirty();
     }
     
@@ -137,7 +138,7 @@ abstract public class Resource {
                 _dsid = _asof.replaceAll("@.*","");
                 _asof = _asof.replaceAll(".*@","");
             }
-            if (_dsid!=null && _dsid.equals(dsid))
+            if (_dsid!=null && !_dsid.equals(dsid))
                 logger.warn("FID["+this.fid+"] changing the DSID to ["+dsid+"]");
             this.fid = new URI(_fid+"#"+dsid+(_asof!=null?"@"+_asof:""));
         } catch (URISyntaxException ex) {
@@ -157,7 +158,7 @@ abstract public class Resource {
                 _dsid = _asof.replaceAll("@.*","");
                 _asof = _asof.replaceAll(".*@","");
             } else
-                _dsid = "CMD";
+                _dsid = "OBJ";
             try {
                 if (_asof!=null) {
                     if (Global.asOfDateTime(_asof).after(date)) {

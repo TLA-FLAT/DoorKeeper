@@ -21,10 +21,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
+import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmValue;
@@ -49,15 +51,17 @@ public class Flow {
     
     protected Context context = null;
     
-    protected List<ActionInterface> noActions = new LinkedList<>();
+    protected List<Action> noActions = new LinkedList<>();
     
-    protected List<ActionInterface> initActions = noActions;
+    protected List<Action> initActions = noActions;
     
-    protected List<ActionInterface> mainActions =  noActions;
+    protected List<Action> mainActions = noActions;
     
-    protected List<ActionInterface> exceptionActions = noActions;
+    protected List<Action> exceptionActions = noActions;
     
-    protected List<ActionInterface> finalActions = noActions;
+    protected List<Action> finalActions = noActions;
+    
+    protected boolean rollback = false;
     
     protected String start = null;
     
@@ -99,13 +103,14 @@ public class Flow {
             mainActions = loadFlow(Saxon.xpath(spec, "/flow/main/action"));
             exceptionActions = loadFlow(Saxon.xpath(spec, "/flow/exception/action"));
             finalActions = loadFlow(Saxon.xpath(spec, "/flow/final/action"));
+            rollback = Saxon.xpath2boolean(spec, "exists(/flow/rollback)");
         } catch (SaxonApiException ex) {
             throw new DepositException(ex);
         }
     }
     
-    private List<ActionInterface> loadFlow(XdmValue actions) throws DepositException {
-        List<ActionInterface> flow = new LinkedList<>();
+    private List<Action> loadFlow(XdmValue actions) throws DepositException {
+        List<Action> flow = new LinkedList<>();
         for (XdmItem action:actions) {
             try {
                 String name = Saxon.xpath2string(action,"@name");
@@ -115,17 +120,13 @@ public class Flow {
                         continue;
                     }
                 }
-                // get parameters
-                Map<String,XdmValue> params = new LinkedHashMap();
-                context.loadParameters(params,Saxon.xpath(action, "parameter"),"parameter");
                 try {
                     // use the regular class loader to load the action class
                     Class<ActionInterface> face = (Class<ActionInterface>) Class.forName(clazz);
                     // instantiate the class and add it to the workflow
                     ActionInterface actionImpl = face.newInstance();
                     actionImpl.setName(name!=null?name:clazz);
-                    actionImpl.setParameters(params);
-                    flow.add(actionImpl);
+                    flow.add(new Action(actionImpl,Saxon.xpath(action, "parameter")));
                 } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
                     Flow.logger.error(" couldn't load action["+name+"]["+clazz+"]! "+e.getMessage());
                     throw new DepositException(e);
@@ -190,6 +191,12 @@ public class Flow {
                 t = x;
                 Flow.logger.error(" exception during the exception handling flow! "+x.getMessage(),x);
             }
+            try {
+                if (rollback)
+                    rollback();
+            } catch(Exception x) {
+                Flow.logger.error(" exception during the rollback! "+x.getMessage(),x);
+            }
         } finally {
             try {
                 finalFlow();
@@ -208,7 +215,7 @@ public class Flow {
     private boolean initFlow() throws DepositException {
         Flow.logger.debug("BEGIN  init flow");
         boolean next = true;
-        for (ActionInterface action:initActions) {
+        for (Action action:initActions) {
             Flow.logger.debug("ACTION init flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
@@ -225,7 +232,7 @@ public class Flow {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
         boolean next = true;
         boolean run  = (start==null);
-        for (ActionInterface action:mainActions) {
+        for (Action action:mainActions) {
             if (!run && start!=null && action.getName().equals(start))
                 run = true;
             if (run) {
@@ -250,9 +257,8 @@ public class Flow {
     private boolean exceptionFlow(Exception e) throws DepositException {
         Flow.logger.debug("BEGIN  exception flow");
         boolean next = true;
-        if (exceptionActions.isEmpty())
-            Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
-        for (ActionInterface action:exceptionActions) {
+        Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
+        for (Action action:exceptionActions) {
             Flow.logger.debug("ACTION exception flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
@@ -264,11 +270,25 @@ public class Flow {
         Flow.logger.debug(" END   exception flow["+next+"]");
         return next;
     }
+    
+    private void rollback() {
+        XdmNode log = context.getRollbackLog();
+        for (int a=mainActions.size();a>0;a--) {
+            Action action = mainActions.get((a - 1));
+            try {
+                Map vars = new HashMap();
+                vars.put("action",new XdmAtomicValue(action.getName()));
+                action.rollback(context,Saxon.xpathList(log, "/rollback/event[@action=$action]",vars));
+            } catch (SaxonApiException ex) {
+                Flow.logger.error("error during rollback action["+action.getName()+"]",ex);
+            }
+        }
+    }
 
     private boolean finalFlow() throws DepositException {
         Flow.logger.debug("BEGIN  final flow");
         boolean next = true;
-        for (ActionInterface action:finalActions) {
+        for (Action action:finalActions) {
             Flow.logger.debug("ACTION final flow["+action.getName()+"]");
             next = action.perform(context);
             context.save();
@@ -279,6 +299,50 @@ public class Flow {
         }
         Flow.logger.debug(" END   final flow["+next+"]");
         return next;
+    }
+    
+    class Action {
+        
+        private ActionInterface action = null;
+        private XdmValue params = null;
+        
+        public Action(ActionInterface action,XdmValue params) {
+            this.action = action;
+            this.params = params;
+        }
+        
+        public String getName() {
+            if (this.action==null)
+                return null;
+            return this.action.getName();
+        }
+        
+        public boolean perform(Context context) throws DepositException {
+            if (this.action==null)
+                throw new DepositException("Action is unknown!");
+            if (this.params==null)
+                throw new DepositException("Action["+this.action.getName()+"] parameters are unknown!");
+            try {
+                this.action.setParameters(context.loadParameters(new LinkedHashMap<String,XdmValue>(),this.params,"parameter"));
+            } catch (SaxonApiException e) {
+                throw new DepositException("JIT loading and expanding parameters for action["+this.action.getName()+"] failed!",e);
+            }
+            return this.action.perform(context);
+        }
+        
+        public void rollback(Context context,List<XdmItem> events) {
+            Flow.logger.debug("rollback action["+this.action.getName()+"]["+this.action.getClass().getName()+"]");
+            for (ListIterator<XdmItem> iter = events.listIterator(events.size());iter.hasPrevious();) {
+                try {
+                    XdmItem x = iter.previous();
+                    Flow.logger.debug("- rollback event["+Saxon.xpath2string(x,"@type")+"]");
+                    for (XdmItem p:Saxon.xpath(x, "./param"))
+                        Flow.logger.debug("- - param["+Saxon.xpath2string(p, "@name")+"="+Saxon.xpath2string(p, "@value")+"]");
+                } catch (SaxonApiException ex) {
+                }
+            }
+            this.action.rollback(context, events);
+        }
     }
 
 }

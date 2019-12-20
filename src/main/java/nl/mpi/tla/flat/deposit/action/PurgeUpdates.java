@@ -36,6 +36,7 @@ import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
+import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 
 /**
@@ -53,17 +54,16 @@ public class PurgeUpdates extends FedoraAction {
             // connect to Fedora
             connect(context);
             
-            Map<String,String> nss = new HashMap<String,String>();
-            nss.put("fits","http://hul.harvard.edu/ois/xml/ns/fits/fits_output");
-            nss.put("dc","http://purl.org/dc/elements/1.1/");
+            String ext = getParameter("ext",".FITS.xml");
+            String xp  = getParameter("path","normalize-space(//fits:md5checksum)");
             
-            Path fits = Paths.get(getParameter("fits","./fits")).toAbsolutePath();
-            if (!fits.toFile().exists())
-                throw new DepositException("FITS directory["+fits+"] doesn't exist!");
-            if (!fits.toFile().isDirectory())
-                throw new DepositException("FITS directory["+fits+"] isn't a directory!");
-            if (!fits.toFile().canRead())
-                throw new DepositException("FITS directory["+fits+"] can't be read!");
+            Path dir = Paths.get(getParameter("dir","./fits")).toAbsolutePath();
+            if (!dir.toFile().exists())
+                throw new DepositException("directory["+dir+"] doesn't exist!");
+            if (!dir.toFile().isDirectory())
+                throw new DepositException("directory["+dir+"] isn't a directory!");
+            if (!dir.toFile().canRead())
+                throw new DepositException("directory["+dir+"] can't be read!");
             
             SIPInterface sip = context.getSIP();
             Set<Resource> resources = context.getSIP().getResources();
@@ -73,26 +73,26 @@ public class PurgeUpdates extends FedoraAction {
                     if (!res.hasFID())
                         throw new DepositException("Update of Resource["+res.getURI()+"] but location in the Repository is unknown!");
                     
-                    // get local checksum (from FITS)
+                    // get local checksum
                     String name = res.getFile().getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
                     if (res instanceof CMDResource)
                         name = ((CMDResource)res).getID();
-                    File f = fits.resolve("./"+name+".FITS.xml").toFile();
-                    logger.debug("FITS file["+f.getAbsolutePath()+"] for Resource["+res.getURI()+"]");
+                    File f = dir.resolve("./"+name+ext).toFile();
+                    logger.debug("file["+f.getAbsolutePath()+"] for Resource["+res.getURI()+"]");
                     if (!f.exists())
-                        throw new DepositException("FITS file for Resource["+res.getURI()+"] doesn't exist!");
+                        throw new DepositException("file for Resource["+res.getURI()+"] doesn't exist!");
                     if (!f.isFile())
-                        throw new DepositException("FITS file for Resource["+res.getURI()+"] isn't a file!");
+                        throw new DepositException("file for Resource["+res.getURI()+"] isn't a file!");
                     if (!f.canRead())
-                        throw new DepositException("FITS file for Resource["+res.getURI()+"] can't be read!");
+                        throw new DepositException("file for Resource["+res.getURI()+"] can't be read!");
                     
                     XdmNode fd = Saxon.buildDocument(new StreamSource(f));
-                    String fitsChecksum = Saxon.xpath2string(fd, "normalize-space(//fits:md5checksum)",null,nss);
+                    String checksum = Saxon.xpath2string(fd,xp,null,Global.NAMESPACES);
                     
-                    if (fitsChecksum.isEmpty())
-                        throw new DepositException("FITS checksum for Resource["+res.getURI()+"] is unknown!");
+                    if (checksum.isEmpty())
+                        throw new DepositException("checksum for Resource["+res.getURI()+"] is unknown!");
                     
-                    logger.debug("FITS checksum["+fitsChecksum+"] for Resource["+res.getURI()+"]");
+                    logger.debug("checksum["+checksum+"] for Resource["+res.getURI()+"]");
                     
                     // get repository checksum (from FC DO DC)                    
                     FedoraResponse resp = getDatastreamDissemination(res.getFID().toString(),"DC").execute();
@@ -101,14 +101,14 @@ public class PurgeUpdates extends FedoraAction {
                         
                     XdmNode fc = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
                     logger.debug("DC["+fc.toString()+"]");
-                    String fcChecksum = Saxon.xpath2string(fc, "normalize-space(//dc:identifier[starts-with(.,'md5:')])",null,nss).replace("md5:","");
+                    String fcChecksum = Saxon.xpath2string(fc, "normalize-space(//dc:identifier[starts-with(.,'md5:')])",null,Global.NAMESPACES).replace("md5:","");
 
                     if (fcChecksum.isEmpty())
                         throw new DepositException("Stored checksum for Resource["+res.getURI()+"] is unknown!");
                     
                     logger.debug("FC checksum["+fcChecksum+"] for Resource["+res.getURI()+"]");
 
-                    if (fcChecksum.equals(fitsChecksum)) {
+                    if (fcChecksum.equals(checksum)) {
                         res.setStatus(Resource.Status.NOOP);
                         logger.debug("This Resource["+res.getPID()+"] is a noop of stored Resource["+res.getFID()+"]!");
                     } else
@@ -123,21 +123,4 @@ public class PurgeUpdates extends FedoraAction {
         return true;
     }
     
-    protected boolean checkLocalResource(Resource res,List<Path> dirs) throws DepositException {
-        File f = res.getFile();
-        Path p = f.getAbsoluteFile().toPath();
-        boolean ok = false;
-        for (Path d:dirs) {
-            if (ok = p.startsWith(d))
-                break;
-        }
-        if (!ok)
-            throw new DepositException("Resource with URI[" + res.getURI() + "] is not present in a resource directory!");
-        if (!f.exists()) {
-            throw new DepositException("File with URI[" + res.getURI() + "] is not present in resource directory!");
-        } else if (!f.canRead()) {
-            throw new DepositException("File with URI[" + res.getURI() + "] is not readable!");
-        }
-        return true;
-    }
 }

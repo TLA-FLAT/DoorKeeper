@@ -38,6 +38,7 @@ import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XPathCompiler;
 import net.sf.saxon.s9api.XPathSelector;
 import net.sf.saxon.s9api.XQueryCompiler;
+import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmValue;
@@ -379,6 +380,10 @@ public class Saxon  extends Transform {
         } catch (Exception ex) {
             throw new SaxonApiException(ex);
         }
+    }
+    
+    static public void save(XdmDestination dest,File result) throws SaxonApiException {
+        Saxon.save(dest.getXdmNode().asSource(),result);
     }
     
     static public String toString(Source source) throws SaxonApiException {

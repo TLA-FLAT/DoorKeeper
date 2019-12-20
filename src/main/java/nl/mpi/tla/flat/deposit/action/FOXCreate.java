@@ -30,6 +30,7 @@ import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
@@ -53,7 +54,11 @@ public class FOXCreate extends AbstractAction {
 
     @Override
     public boolean perform(Context context) throws DepositException {
+        URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
+            
+            String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
+            XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
             
             // check for the user profile
             File owner = new File(getParameter("owner"));
@@ -84,19 +89,15 @@ public class FOXCreate extends AbstractAction {
             
             File dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
-                 FileUtils.forceMkdir(dir);
+                FileUtils.forceMkdir(dir);
 
-            URIResolver org = Saxon.getXsltCompiler().getURIResolver();
+            
             if (hasParameter("jar_cmd2fox")) {
                 Saxon.getXsltCompiler().setURIResolver(new JarURIResolver(org,new File(getParameter("jar_cmd2fox"))));
             }
             
             File xsl = new File(getParameter("cmd2fox"));
             XsltExecutable cmd2fox = Saxon.buildTransformer(xsl);
-            
-            if (org!=null) {
-                Saxon.getXsltCompiler().setURIResolver(org);
-            }
             
             XsltTransformer fox = cmd2fox.load();
             SaxonListener listener = new SaxonListener("FOXCreate",MDC.get("sip"));
@@ -107,8 +108,9 @@ public class FOXCreate extends AbstractAction {
             fox.setParameter(new QName("owner"), new XdmAtomicValue(profile.getString("name")));
             fox.setParameter(new QName("fox-base"), new XdmAtomicValue(dir.toString()));
             fox.setParameter(new QName("rels-doc"), Saxon.buildDocument(new StreamSource(FOXCreate.class.getResource("/FOXCreate/relations.xml").toString())));
-            fox.setParameter(new QName("create-cmd-object"), new XdmAtomicValue(false));
             fox.setParameter(new QName("repository"), new XdmAtomicValue((new XMLConfiguration(fedora)).getString("publicServer")));
+            fox.setParameter(new QName("namespace"), new XdmAtomicValue(namespace));
+            fox.setParameter(new QName("namespaces"), namespaces);
             
             // optional parameters
             if (hasParameter("management"))
@@ -129,6 +131,8 @@ public class FOXCreate extends AbstractAction {
                 fox.setParameter(new QName("always-compound-eval"), params.get("always-compound-eval"));
             if (hasParameter("license-uri"))
                 fox.setParameter(new QName("license-uri"), params.get("license-uri"));
+            if (hasParameter("overwrite-resource-label"))
+                fox.setParameter(new QName("overwrite-resource-label"),new XdmAtomicValue(getParameter("overwrite-resource-label").toLowerCase().contains("t")));
             
             // additional parameters
             for (String param:this.params.keySet()) {
@@ -155,16 +159,23 @@ public class FOXCreate extends AbstractAction {
             if (self!=null) {
                 if (Saxon.xpath2boolean(self,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
                     context.getSIP().setFID(new URI(Saxon.xpath2string(self,"@lat:flatURI",null,NAMESPACES)));
-                }
-            }
+                } else
+                    throw new DepositException("No FID found in this FOX["+dir+"/"+fid+"_CMD.xml]!");
+            } else
+                throw new DepositException("No MdSelfLink found in this FOX["+dir+"/"+fid+"_CMD.xml]!");
             for (XdmItem resource:Saxon.xpath(cmd,"//cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType='Resource']",null,NAMESPACES)) {
                 URI pid = new URI(Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES));
                 if (Saxon.xpath2boolean(resource,"normalize-space(cmd:ResourceRef/@lat:flatURI)!=''",null,NAMESPACES)) {
                     context.getSIP().getResource(pid).setFID(new URI(Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
-                }
+                } else
+                    throw new DepositException("No FID found for this resource["+pid+"]!");
             }
         } catch(Exception e) {
             throw new DepositException("The creation of FOX files failed!",e);
+       } finally {
+            // restore the URL resolver
+            if (org!=null)
+                Saxon.getXsltCompiler().setURIResolver(org);
         }
         return true;
     }
@@ -180,8 +191,8 @@ public class FOXCreate extends AbstractAction {
         }
         
         public Source resolve(String href,String base) throws TransformerException {
-            if (href.equals("jar:cmd2fox.xsl")) {
-                return new javax.xml.transform.stream.StreamSource(xsl);
+            if (href.equals("jar:cmd2fox.xsl") && xsl!=null) {
+                return new javax.xml.transform.stream.StreamSource(this.xsl);
             } else {
                 return resolver.resolve(href,base);
             }

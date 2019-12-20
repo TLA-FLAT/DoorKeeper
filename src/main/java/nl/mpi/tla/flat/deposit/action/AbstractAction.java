@@ -17,7 +17,9 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
@@ -67,5 +69,9 @@ abstract public class AbstractAction implements ActionInterface {
     
     @Override
     abstract public boolean perform(Context context) throws DepositException;
+    
+    @Override
+    public void rollback(Context context,List<XdmItem> events) {
+    }
     
 }

@@ -16,9 +16,11 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
+import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreams;
 import static com.yourmediashelf.fedora.client.FedoraClient.getObjectProfile;
 import static com.yourmediashelf.fedora.client.FedoraClient.riSearch;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
+import com.yourmediashelf.fedora.generated.management.DatastreamProfile;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -28,6 +30,7 @@ import java.util.Iterator;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
@@ -40,6 +43,7 @@ import org.slf4j.LoggerFactory;
 /**
  *
  * @author menzowi
+ * @author pavsri
  */
 public class FedoraLoadCollectionHierarchy extends FedoraAction {
     
@@ -49,6 +53,9 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
     public boolean perform(Context context) throws DepositException {       
         try {
             connect(context);
+            
+            String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
+            XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
             
             SIPInterface sip = context.getSIP();
             if (sip.hasCollections()) {
@@ -87,7 +94,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                             URI fid = new URI(f.replace("info:fedora/",""));
                             if (!fid.toString().startsWith("islandora:")) {
                                 URI pid = lookupPID(fid);
-                                CMDCollection col = new CMDCollection(pid,fid);
+                                CMDCollection col = new CMDCollection(pid, fid, namespace, namespaces);
                                 if (sip instanceof CMD)
                                     ((CMD)sip).addCollection(col);
                                 this.completeFID(col);
@@ -102,7 +109,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             } else
                 logger.debug("This SIP["+sip.getBase()+"] has no Collections or FID!");
             for (Collection col:sip.getCollections()) {
-                loadParentCollections(new ArrayDeque<>(Arrays.asList(col.getFID())),col);
+                loadParentCollections(new ArrayDeque<>(Arrays.asList(col.getFID())),col, namespace, namespaces);
             }
         } catch (DepositException ex) {
             throw ex;
@@ -112,7 +119,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
         return true;
     }
     
-    private void loadParentCollections(Deque<URI> hist,Collection col) throws Exception {
+    private void loadParentCollections(Deque<URI> hist,Collection col, String namespace, XdmValue namespaces) throws Exception {
         // fetch parent collections
         String sparql = "SELECT ?fid WHERE { <info:fedora/"+col.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
         logger.debug("SPARQL["+sparql+"]");
@@ -125,20 +132,22 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 String f = n.getStringValue();
                 if (f!=null && !f.isEmpty()) {
                     URI fid = new URI(f.replace("info:fedora/","").replaceAll("#.*",""));
-                    URI pid = lookupPID(fid);
-                    CMDCollection pcol = new CMDCollection(pid,fid);
-                    this.completeFID(pcol);
-                    col.addParentCollection(pcol);
+                    if (hasCMDDatastream(fid)) {
+                        URI pid = lookupPID(fid);
+                        CMDCollection pcol = new CMDCollection(pid,fid,namespace,namespaces);
+                        this.completeFID(pcol);
+                        col.addParentCollection(pcol);
+                    }
                 }
             }
         } else
             throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
         // fetch ancestor collections
         for (Collection pcol:col.getParentCollections()) {
-            if (pcol.getFID().toString().startsWith("lat:")) {
+            if (hasCMDDatastream(pcol.getFID(true))) {
                 if (!hist.contains(pcol.getFID())) {
                     hist.push(col.getFID());
-                    loadParentCollections(hist, pcol);
+                    loadParentCollections(hist, pcol, namespace, namespaces);
                 } else {
                     hist.push(col.getFID());
                     throw new DepositException("(in)direct cycle["+hist+"] for FID["+pcol.getFID()+"]");
@@ -157,7 +166,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                     fid = this.lookupFID(col.getPID());
                 else 
                     throw new DepositException("Unknown Collection["+col+"]!");
-                if (fid.toString().startsWith("lat:")) {
+                if (hasCMDDatastream(fid)) {
                     Date asof = getObjectProfile(fid.toString()).execute().getLastModifiedDate();
                     col.setFIDasOfTimeDate(asof);
                     logger.debug("Fedora Collection datastream["+(col.hasPID()?col.getPID():"")+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
@@ -166,6 +175,18 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
         } catch(Exception e) {
             throw new DepositException("Completing the FID of Collection["+col+"] failed!",e);
         }
-   }
+    }
+    
+    protected boolean hasCMDDatastream(URI fid) throws DepositException {
+        try {
+            for(DatastreamProfile p:getDatastreams(fid.toString()).execute().getDatastreamProfiles()) {
+                if (p.getDsID().equals("CMD"))
+                    return true;
+            }
+            return false;
+        } catch(Exception e) {
+            throw new DepositException("Looking for the CMD datastream of Collection["+fid+"] failed!",e);
+        }
+    }
 
 }

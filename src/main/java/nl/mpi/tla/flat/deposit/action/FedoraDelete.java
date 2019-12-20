@@ -22,7 +22,11 @@ import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
 import com.yourmediashelf.fedora.client.response.RiSearchResponse;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -42,71 +46,133 @@ import org.slf4j.MDC;
 /**
  *
  * @author menzowi
+ * @author pavi
  */
 public class FedoraDelete extends FedoraAction {
 
-    private static final Logger logger = LoggerFactory.getLogger(FedoraDelete.class.getName());
+	private static final Logger logger = LoggerFactory.getLogger(FedoraDelete.class.getName());
 
-    @Override
-    public boolean perform(Context context) throws DepositException {
-        try {
-            connect(context);
+	@Override
+	public boolean perform(Context context) throws DepositException {
+		try {
+			connect(context);
 
-            SIPInterface sip = context.getSIP();
-            
-            String sid = sip.getFID().toString().replaceAll("@.*","").replaceAll("#.*","");            
-            String sparql = "SELECT ?fid WHERE { ?fid <info:fedora/fedora-system:def/relations-external#isConstituentOf> <info:fedora/"+sid+"> } ";
-            logger.debug("SPARQL["+sparql+"]");
-            RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
-            if (resp.getStatus()==200) {
-                XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
-                logger.debug("RESULT["+tpl.toString()+"]");
-                
-                XsltTransformer delRel = Saxon.buildTransformer(FOXUpdate.class.getResource("/FedoraDelete/delREL.xsl")).load();
-                SaxonListener listener = new SaxonListener("FedoraDelete",MDC.get("sip"));
-                delRel.setMessageListener(listener);
-                delRel.setErrorListener(listener);
+			SIPInterface sip = context.getSIP();
 
-                for (Iterator<XdmItem> iter=Saxon.xpathIterator(tpl, "//*:results/*:result/*:fid/normalize-space(@uri)");iter.hasNext();) {
-                    XdmItem f = iter.next();
-                    if (f!=null && !f.getStringValue().isEmpty()) {
-                        URI fid = new URI(f.getStringValue().replace("info:fedora/",""));
-                        if (sip.getResourceByFID(fid)!=null)
-                            continue;
-                        logger.debug("DELETE: Resource["+fid+"]");
-                        // remove relation from deleted Resource to SIP from RELS-EXT
-                        FedoraResponse res = getDatastreamDissemination(fid.toString(),"RELS-EXT").execute();
-                        if (res.getStatus()==200) {
-                            InputStream str = res.getEntityInputStream();
-                            XdmNode ext = Saxon.buildDocument(new StreamSource(str));
-                            delRel.setSource(ext.asSource());
-                            delRel.clearParameters();
-                            delRel.setParameter(new QName("sip"), new XdmAtomicValue(sid));
-                            XdmDestination destination = new XdmDestination();
-                            delRel.setDestination(destination);
-                            delRel.transform();
-                            ModifyDatastreamResponse mdsResponse = modifyDatastream(fid.toString(),"RELS-EXT").content(Saxon.toString(destination.getXdmNode().asSource())).logMessage("Deleted from compound["+sid+"]").execute();
-                            if (mdsResponse.getStatus()!=200)
-                                throw new DepositException("Unexpected status["+mdsResponse.getStatus()+"] while interacting with Fedora Commons!");
-                            logger.debug("DELETE: Resource["+fid+"] deleted from SIP["+sid+"]");
-                            // if Resource has no other relation to a SIP set the state to the DO to inactive
-                            if (Saxon.xpath2boolean(destination.getXdmNode(),"empty(//*:isConstituentOf)")) {
-                                FedoraResponse fResponse = modifyObject(fid.toString()).state("I").execute();
-                                if (fResponse.getStatus()!=200)
-                                    throw new DepositException("Unexpected status["+fResponse.getStatus()+"] while interacting with Fedora Commons!");
-                                logger.debug("DELETE: Resource["+fid+"] set state[Inactive]");
-                            }
-                        } else
-                            throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
-                    }
-                }
-            } else
-                throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
-        } catch(Exception e) {
-            throw new DepositException("Connecting to Fedora Commons failed!",e);
-        }
+			String sid = sip.getFID().toString().replaceAll("@.*", "").replaceAll("#.*", "");
+			String sparql = "SELECT ?fid WHERE { ?fid <info:fedora/fedora-system:def/relations-external#isConstituentOf> <info:fedora/"
+					+ sid + "> } ";
+			logger.debug("SPARQL[" + sparql + "]");
+			RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
+			if (resp.getStatus() == 200) {
+				XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
+				logger.debug("RESULT[" + tpl.toString() + "]");
 
-        return true;
-    }
-    
+				XsltTransformer delRel = Saxon.buildTransformer(FOXUpdate.class.getResource("/FedoraDelete/delREL.xsl"))
+						.load();
+				SaxonListener listener = new SaxonListener("FedoraDelete", MDC.get("sip"));
+				delRel.setMessageListener(listener);
+				delRel.setErrorListener(listener);
+
+				for (Iterator<XdmItem> iter = Saxon.xpathIterator(tpl,
+						"//*:results/*:result/*:fid/normalize-space(@uri)"); iter.hasNext();) {
+					XdmItem f = iter.next();
+					if (f != null && !f.getStringValue().isEmpty()) {
+						URI fid = new URI(f.getStringValue().replace("info:fedora/", ""));
+						if (sip.getResourceByFID(fid) != null)
+							continue;
+						logger.debug("DELETE: Resource[" + fid + "]");
+
+						context.registerRollbackEvent(this, "delete", "fid", fid.toString());
+
+						// remove relation from deleted Resource to SIP from RELS-EXT
+						FedoraResponse res = getDatastreamDissemination(fid.toString(), "RELS-EXT").execute();
+						if (res.getStatus() == 200) {
+							InputStream str = res.getEntityInputStream();
+							XdmNode ext = Saxon.buildDocument(new StreamSource(str));
+							delRel.setSource(ext.asSource());
+							delRel.clearParameters();
+							delRel.setParameter(new QName("sip"), new XdmAtomicValue(sid));
+							XdmDestination destination = new XdmDestination();
+							delRel.setDestination(destination);
+							delRel.transform();
+							ModifyDatastreamResponse mdsResponse = modifyDatastream(fid.toString(), "RELS-EXT")
+									.content(Saxon.toString(destination.getXdmNode().asSource()))
+									.logMessage("Deleted from compound[" + sid + "]").execute();
+							if (mdsResponse.getStatus() != 200)
+								throw new DepositException("Unexpected status[" + mdsResponse.getStatus()
+										+ "] while interacting with Fedora Commons!");
+							logger.debug("DELETE: Resource[" + fid + "] deleted from SIP[" + sid + "]");
+							// if Resource has no other relation to a SIP set the state to the DO to
+							// inactive
+							if (Saxon.xpath2boolean(destination.getXdmNode(), "empty(//*:isConstituentOf)")) {
+
+								context.registerRollbackEvent(this, "inactive", "fid", fid.toString());
+
+								FedoraResponse fResponse = modifyObject(fid.toString()).state("I").execute();
+								if (fResponse.getStatus() != 200)
+									throw new DepositException("Unexpected status[" + fResponse.getStatus()
+											+ "] while interacting with Fedora Commons!");
+								logger.debug("DELETE: Resource[" + fid + "] set state[Inactive]");
+							}
+						} else
+							throw new DepositException(
+									"Unexpected status[" + resp.getStatus() + "] while querying Fedora Commons!");
+					}
+				}
+			} else
+				throw new DepositException(
+						"Unexpected status[" + resp.getStatus() + "] while querying Fedora Commons!");
+		} catch (Exception e) {
+			throw new DepositException("Connecting to Fedora Commons failed!", e);
+		}
+
+		return true;
+	}
+
+	public void rollback(Context context, List<XdmItem> events) {
+		try {
+			if (events.size() > 0) {
+				XsltTransformer addRel = Saxon.buildTransformer(FOXUpdate.class.getResource("/FedoraDelete/addREL.xsl")).load();
+				SaxonListener listener = new SaxonListener("FedoraDelete", MDC.get("sip"));
+				addRel.setMessageListener(listener);
+				addRel.setErrorListener(listener);
+				for (ListIterator<XdmItem> iter = events.listIterator(events.size()); iter.hasPrevious();) {
+					XdmItem event = iter.previous();
+					String tpe = Saxon.xpath2string(event, "@type");
+					if (tpe.equals("inactive")) {
+						String fid = Saxon.xpath2string(event, "param[@name='fid']/@value");
+						FedoraResponse fResponse = modifyObject(fid.toString()).state("A").execute();
+						if (fResponse.getStatus() != 200)
+							throw new DepositException("Rollback:Unexpected status[" + fResponse.getStatus()+ "] while interacting with Fedora Commons!");
+						logger.debug("ROLLBACK DELETE: Resource[" + fid + "] set state[active]");
+					}
+					if (tpe.equals("delete")) {
+						SIPInterface sip = context.getSIP();
+						String sid = sip.getFID().toString().replaceAll("@.*", "").replaceAll("#.*", "");
+						String fid = Saxon.xpath2string(event, "param[@name='fid']/@value");
+						FedoraResponse res = getDatastreamDissemination(fid.toString(), "RELS-EXT").execute();
+						if (res.getStatus() == 200) {
+							InputStream str = res.getEntityInputStream();
+							XdmNode ext = Saxon.buildDocument(new StreamSource(str));
+							 logger.debug("in RELS-EXT["+Saxon.toString(ext.asSource())+"]");
+							addRel.setSource(ext.asSource());
+							addRel.clearParameters();
+							addRel.setParameter(new QName("sip"), new XdmAtomicValue(sid));
+							XdmDestination destination = new XdmDestination();
+							addRel.setDestination(destination);
+							addRel.transform();
+							 logger.debug("out RELS-EXT["+Saxon.toString(destination.getXdmNode().asSource())+"]");
+							ModifyDatastreamResponse mdsResponse = modifyDatastream(fid.toString(), "RELS-EXT").content(Saxon.toString(destination.getXdmNode().asSource())).logMessage("Restored from compound[" + sid + "]").execute();
+							if (mdsResponse.getStatus() != 200)
+								throw new DepositException("Rollback: Unexpected status[" + mdsResponse.getStatus()+ "] while interacting with Fedora Commons!");
+							logger.debug("ROLLBACK DELETE: Resource[" + fid + "] restored from SIP[" + sid + "]");
+						}
+					}
+				}
+			}
+		} catch (Exception ex) {
+			logger.error("rollback action[" + this.getName() + "] event[" + events + "] failed!", ex);
+		}
+	}
 }

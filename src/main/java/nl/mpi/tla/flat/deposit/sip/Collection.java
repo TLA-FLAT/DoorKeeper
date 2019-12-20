@@ -78,13 +78,14 @@ abstract public class Collection {
     }
     
     public void setFID(URI fid) throws DepositException {
-        if (this.fid!=null)
+        if (this.fid!=null) {
+            if (this.getFID(true).toString().equals(fid.toString())) {
+                logger.warn("Collection["+this.uri+"] has already this Fedora Commons PID["+this.fid+"], retaining it!");
+                return;
+            }
             logger.warn("Collection["+this.uri+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
-        if (fid.toString().startsWith("lat:")) {
-            this.fid = fid;
-        } else {
-            throw new DepositException("The Collection["+fid+"] isn't a valid FLAT Fedora Commons PID!");
         }
+        this.fid = fid;
         dirty();
     }
     
@@ -99,7 +100,7 @@ abstract public class Collection {
                 _dsid = _asof.replaceAll("@.*","");
                 _asof = _asof.replaceAll(".*@","");
             }
-            if (_dsid!=null && _dsid.equals(dsid))
+            if (_dsid!=null && !_dsid.equals(dsid))
                 logger.warn("FID["+this.fid+"] changing the DSID to ["+dsid+"]");
             this.fid = new URI(_fid+"#"+dsid+(_asof!=null?"@"+_asof:""));
         } catch (URISyntaxException ex) {

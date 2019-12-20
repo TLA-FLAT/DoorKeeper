@@ -16,15 +16,21 @@
  */
 package nl.mpi.tla.flat.deposit;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringReader;
 import java.net.URI;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmValue;
+import nl.mpi.tla.flat.deposit.action.ActionInterface;
 import nl.mpi.tla.flat.deposit.context.ImportPropertiesInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
@@ -52,10 +58,17 @@ public class Context {
     protected SIPInterface sip = null;
     
     protected Exception ex = null;
+    
+    protected PrintWriter rollbackLog = null;
+    
+    protected Map<String,Object> memory = new LinkedHashMap<>();
+    
+    // constructor
         
     public Context(Flow flow,XdmNode spec,Map<String,XdmValue> params)  throws DepositException {
         this.flow = flow;
         props.putAll(params);
+        loadNamespaces(spec);
         loadProperties(spec);
     }
     
@@ -63,6 +76,16 @@ public class Context {
     
     public Flow getFlow() {
         return flow;
+    }
+    
+    // Namespaces
+    private void loadNamespaces(XdmNode spec) throws DepositException {
+        try {
+            for (XdmItem ns: Saxon.xpath(spec, "/flow/config/namespace"))
+                Global.NAMESPACES.put(Saxon.xpath2string(ns, "@prefix"), Saxon.xpath2string(ns, "@uri"));
+        } catch(SaxonApiException e) {
+            throw new DepositException(e);
+        }
     }
     
     // Properties
@@ -139,6 +162,12 @@ public class Context {
         return pids.put(pid,red);
     }
     
+    public void delPID(URI pid) {
+    	if (pids.containsKey(pid)) {
+    		pids.remove(pid);
+    	}
+    }
+    
     public boolean hasPID(URI pid) {
         return pids.containsKey(pid);
     }
@@ -149,6 +178,25 @@ public class Context {
     
     public  Map<URI,URI> getPIDs() {
         return pids;
+    }
+    
+    // Memory
+    
+    public Object putInMemory(String key, Object val) {
+        logger.debug("put memory key["+key+"]["+val+"]");
+        return memory.put(key,val);
+    }
+    
+    public boolean hasInMemory(String key) {
+        for (String k:memory.keySet())
+            logger.debug("has memory key["+k+"]");
+        logger.debug("has memory key["+key+"]["+memory.containsKey(key)+"]");
+        return memory.containsKey(key);
+    }
+    
+    public Object getFromMemory(String key) {
+        logger.debug("get memory key["+key+"]["+memory.get(key)+"]");
+        return memory.get(key);
     }
     
     // Exception
@@ -165,9 +213,60 @@ public class Context {
         return this.ex;
     }
     
+    // Rollback
+    
+    protected void initRollbackLog() {
+        if (rollbackLog == null) {
+            try {
+                rollbackLog = new PrintWriter(new FileWriter(this.getProperty("dk-rollbackLog", "rollback.log").toString(),true),true);
+            } catch (IOException ex) {
+                this.logger.error("Couldn't create/open rollback log file["+this.getProperty("dk-rollbackLog", "rollback.log").toString()+"]",ex);
+                System.exit(1);
+            }
+        }
+    }
+    
+    protected String escXML(String s) {
+        return s.replaceAll("&","&amp;").replaceAll("\"","&quot;").replaceAll("'","&apos;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+    }
+    
+    public void registerRollbackEvent(ActionInterface action, String event, String... params) {
+        initRollbackLog();
+        if (params.length % 2 != 0) {
+            this.logger.warn("uneven param list for action["+action.getName()+"] event["+event+"]!");
+        }
+        rollbackLog.format("<event action=\"%s\" type=\"%s\">", escXML(action.getName()), escXML(event));
+        for (int p=0;p<params.length;p++) {
+            if ((p+1) < params.length)
+                rollbackLog.format("<param name=\"%s\" value=\"%s\"/>",escXML(params[p]),escXML(params[++p]));
+            else
+                rollbackLog.format("<param name=\"%s\"/>",escXML(params[p]));
+        }
+        rollbackLog.format("</event>");
+        rollbackLog.flush();
+    }
+    
+    public XdmNode getRollbackLog() {
+        try {
+            initRollbackLog();
+            rollbackLog.flush();
+            rollbackLog.close();
+            rollbackLog = null; // force reopening if needed
+            String xml = "<?xml version=\"1.0\" ?>\n" +
+                    "<!DOCTYPE rollback [<!ENTITY data SYSTEM \"rollback.log\">]>\n" +
+                    "<rollback>&data;</rollback>";
+            xml = xml.replaceAll("rollback.log",this.getProperty("dk-rollbackLog", "rollback.log").toString());
+            return Saxon.buildDocument(new StreamSource(new StringReader(xml)));
+        } catch (SaxonApiException ex) {
+            this.logger.error("Couldn't read rollback log file["+this.getProperty("dk-rollbackLog", "rollback.log").toString()+"]",ex);
+            System.exit(1);
+        }
+        return null;
+    }
+    
     // Utilities: general method to load properties or parameters
     
-    public void loadParameters(Map<String,XdmValue> map,XdmValue params,String type) throws SaxonApiException, DepositException {
+    public Map<String,XdmValue> loadParameters(Map<String,XdmValue> map,XdmValue params,String type) throws SaxonApiException, DepositException {
         for (XdmItem param : params) {
             String name = Saxon.xpath2string(param,"@name");
             if (Saxon.hasAttribute(param,"when")) {
@@ -176,7 +275,7 @@ public class Context {
                 }
             }
             if (Saxon.xpath2boolean(param,"../"+type+"[@name='"+name+"']/@uniq='true'")) {
-                if (props.containsKey(name)) {
+                if (map.containsKey(name)) {
                     this.logger.error(type+"["+name+"] should be unique!");
                     throw new DepositException(type+"["+name+"] should be unique!");
                 }
@@ -237,6 +336,7 @@ public class Context {
             }
             map.put(name,nvals);
         }
+        return map;
     }
-    
+
 }

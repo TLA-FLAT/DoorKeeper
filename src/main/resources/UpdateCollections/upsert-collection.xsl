@@ -14,8 +14,10 @@
     
     <xsl:param name="prefix"/>
     <xsl:param name="new-pid-eval" select="'true()'"/>
+    <xsl:param name="try-fix-pid" select="false()"/>
     
     <xsl:key name="rp" match="cmd:ResourceProxy" use="replace(cmd:ResourceRef,'http(s)?://hdl.handle.net/','hdl:')"/>
+    <xsl:key name="rpf" match="cmd:ResourceProxy" use="replace(cmd:ResourceRef/@lat:flatURI,'#.*$','')"/>
     
     <xsl:variable name="namespaces">
         <ns/>
@@ -75,8 +77,18 @@
         </xsl:copy>
     </xsl:template>
     
+    <xsl:template match="cmd:ResourceRef[replace(@lat:flatURI,'#.*$','')=replace($fid,'#.*$','')]" mode="fix">
+        <xsl:message>DBG: = update &amp; fix ResourceProxy[<xsl:value-of select="@lat:flatURI"/>][<xsl:value-of select="."/>] -> [<xsl:value-of select="$new-pid"/>]</xsl:message>
+        <xsl:copy>
+            <xsl:apply-templates select="@* except @lat:flatURI" mode="#current"/>
+            <xsl:attribute name="lat:flatURI" select="$fid"/>
+            <xsl:value-of select="replace($new-pid,'hdl:','https://hdl.handle.net/')"/>
+        </xsl:copy>
+    </xsl:template>
+    
     <xsl:template match="/">
         <xsl:message>DBG: upsert-collections.xsl:</xsl:message>
+        <xsl:message>DBG: ~ try-fix-pid[<xsl:value-of select="$try-fix-pid"/>]</xsl:message>
         <xsl:message>DBG: - fid[<xsl:value-of select="$fid"/>]</xsl:message>
         <xsl:message>DBG: - old-pid[<xsl:value-of select="$old-pid"/>]</xsl:message>
         <xsl:message>DBG: - new-pid[<xsl:value-of select="$new-pid"/>]</xsl:message>
@@ -94,6 +106,18 @@
             <xsl:when test="normalize-space($old-pid)!='' and exists(key('rp',replace($old-pid,'http(s)?://hdl.handle.net/','hdl:')))">
                 <xsl:message>DBG: > update [<xsl:value-of select="$old-pid"/>] -> [<xsl:value-of select="$new-pid"/>]</xsl:message>
                 <xsl:apply-templates mode="update"/>
+            </xsl:when>
+            <xsl:when test="normalize-space($old-pid)!='' and $try-fix-pid">
+                <xsl:choose>
+                    <xsl:when test="exists(key('rpf',replace($fid,'#.*$','')))">
+                        <xsl:message>ERR: [<xsl:value-of select="$old-pid"/>] is not a member of this collection!</xsl:message>
+                        <xsl:message>WRN: Fixing based on FID[<xsl:value-of select="replace($fid,'#.*$','')"/>], don't use this in production!!!</xsl:message>
+                        <xsl:apply-templates mode="fix"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:message terminate="yes">ERR: [<xsl:value-of select="$old-pid"/>][<xsl:value-of select="replace($fid,'#.*$','')"/>] is not a member of this collection!</xsl:message>
+                    </xsl:otherwise>
+                </xsl:choose>
             </xsl:when>
             <xsl:when test="normalize-space($old-pid)!=''">
                 <xsl:message terminate="yes">ERR: [<xsl:value-of select="$old-pid"/>] is not a member of this collection!</xsl:message>
