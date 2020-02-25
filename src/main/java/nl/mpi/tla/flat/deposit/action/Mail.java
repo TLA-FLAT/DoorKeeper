@@ -132,24 +132,35 @@ public class Mail extends FedoraAction {
             }
 			
 			if (context.getFlow().getStop()!=null) {
-          	  // don't send any email
-          	  logger.info("Outcome: " + outcome);
-          	  logger.info("But Code stops: " + context.getFlow().getStop());
-          	  logger.info("No email sent! (this was only a partial DoorKeeper run) ");
-          	  return true;
-			} else if (swordStatus == null || context.hasException() || !swordStatus.booleanValue()) {
-				outcome = "FAILED";
-				if (!swordStatus.booleanValue()) {
-					//Validation failed
-					if ("false".equals(sendOnFailedValidation)) //don't send email based on param
+				if (!swordStatus.booleanValue()) { //Validation failed
+					outcome = "FAILED";
+					if ("false".equals(sendOnFailedValidation)) { //don't send email based on param
+						logger.info("No email sent! (this was only a partial DoorKeeper run) with outcome: "+ outcome);
+						logger.info("No email sent! (mail-config.xml <sendOnFailedValidation> has value false) ");
 						return true;
+					}
 					else
 						sRun = "Validation"; //send email on failed validation
+					    logger.info("Email sent! (this was only a partial DoorKeeper run) with outcome: "+ outcome);
+					    logger.info("Email sent! (mail-config.xml <sendOnFailedValidation> has value True) ");
+						fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
+						String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
+						fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
 				}
+				else {  //Validation successful
+					logger.info("Outcome: " + outcome);
+		          	logger.info("But Code stops: " + context.getFlow().getStop());
+		          	logger.info("No email sent! (this was only a partial DoorKeeper run) ");
+		          	return true;
+				}   	  
+          }
+			
+            if (swordStatus == null || context.hasException()) {
+				outcome = "FAILED";
 				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
 				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
-			} 
+			}
 			
 			if(outcome.equals("SUCCESS")) {
 				if (context.getSIP().hasPID()) {
