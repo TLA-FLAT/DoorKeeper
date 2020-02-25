@@ -79,7 +79,9 @@ public class Mail extends FedoraAction {
 			XdmNode mailNode = (XdmNode) Saxon.xpathSingle(mailNodeConfig, "/mailConfig");
 
 			String sendWhenSuccess = Saxon.xpath2string(mailNode, "./sendWhenSuccess");
-			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");		
+			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");	
+			String sendOnFailedValidation = Saxon.xpath2string(mailNode, "./sendOnFailedValidation"); 
+			logger.debug("sendOnFailedValidation[" + sendOnFailedValidation + "]");	
 			String server = Saxon.xpath2string(mailNode, "./server");
 			logger.debug("Server[" + server + "]");
 			String port = Saxon.xpath2string(mailNode, "./port");
@@ -129,7 +131,7 @@ public class Mail extends FedoraAction {
                 return true;
             }
 			
-			if (!swordStatus.booleanValue() && context.getFlow().getStop()!=null) {
+			if (context.getFlow().getStop()!=null) {
           	  // don't send any email
           	  logger.info("Outcome: " + outcome);
           	  logger.info("But Code stops: " + context.getFlow().getStop());
@@ -137,8 +139,13 @@ public class Mail extends FedoraAction {
           	  return true;
 			} else if (swordStatus == null || context.hasException() || !swordStatus.booleanValue()) {
 				outcome = "FAILED";
-				if (!swordStatus.booleanValue())
-					sRun = "Validation";
+				if (!swordStatus.booleanValue()) {
+					//Validation failed
+					if ("false".equals(sendOnFailedValidation)) //don't send email based on param
+						return true;
+					else
+						sRun = "Validation"; //send email on failed validation
+				}
 				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
 				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
