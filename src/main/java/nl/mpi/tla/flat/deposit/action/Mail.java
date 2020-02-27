@@ -139,13 +139,16 @@ public class Mail extends FedoraAction {
 						logger.info("No email sent! (mail-config.xml <sendOnFailedValidation> has value false) ");
 						return true;
 					}
-					else
+					else {
 						sRun = "Validation"; //send email on failed validation
 					    logger.info("Email sent! (this was only a partial DoorKeeper run) with outcome: "+ outcome);
 					    logger.info("Email sent! (mail-config.xml <sendOnFailedValidation> has value True) ");
-						fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
-						String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
-						fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
+					    if (context.getException() != null) {
+							fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
+							String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
+							fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
+					    }
+					}
 				}
 				else {  //Validation successful
 					logger.info("Outcome: " + outcome);
@@ -157,12 +160,14 @@ public class Mail extends FedoraAction {
 			
             if (swordStatus == null || context.hasException()) {
 				outcome = "FAILED";
+				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
 				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
 				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
 			}
 			
 			if(outcome.equals("SUCCESS")) {
+				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
 				if (context.getSIP().hasPID()) {
 					String pid = context.getSIP().getPID().toString().replaceAll("hdl:","https://hdl.handle.net/");
 					fox.setParameter(new QName("handle"), new XdmAtomicValue(pid));
