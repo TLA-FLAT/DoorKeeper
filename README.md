@@ -7,17 +7,17 @@ Some actions depend on some (patched) libraries which are not available in a Mav
 - https://github.com/meertensinstituut/EPICify.git
 
 ```sh
-$ git clone https://github.com/menzowindhouwer/fedora-cargo-plugin.git 
+$ git clone https://github.com/menzowindhouwer/fedora-cargo-plugin.git
 $ cd fedora-cargo-plugin
 $ mvn clean install
 $ cd ..
 
-$ git clone https://github.com/menzowindhouwer/fedora-client.git 
+$ git clone https://github.com/menzowindhouwer/fedora-client.git
 $ cd fedora-client
 $ mvn clean install
 $ cd ..
 
-$ git clone https://github.com/meertensinstituut/EPICify.git  
+$ git clone https://github.com/meertensinstituut/EPICify.git
 $ cd EPICify
 $ mvn clean install
 $ cd ..
@@ -62,7 +62,7 @@ The actions to be executed are specified in a workflow XML file. Its structure r
 </flow>
 ```
 
-### Configuration section 
+### Configuration section
 The purpose of the configuration section is to specify global properties. These can be imported from the "environment", specified in the worflow file, or provided by the host application, e.g., the command line tool or a servlet.
 
 ```xml
@@ -88,7 +88,7 @@ The other sections of the workflow file contain declarations of action invocatio
     <init>
         <action name="log setup" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogSetup">
             <parameter name="dir" value="{$work}/logs"/>
-        </action>        
+        </action>
         <action name="check workspace" class="nl.mpi.tla.flat.deposit.action.SIPLoad">
             <parameter name="sip" value="{$work}/metadata/record.cmdi"/>
         </action>
@@ -185,7 +185,7 @@ parameter          | default  | cardinality | notes
 `policyFile`       |          | 1           | should point to a valid [policy file](#policyFile)
 `xpathDatasetName` |          | 1           | XPath 2.0 expression into the SIP XML specification
 
-Move resources that match the rules in the policy file to a subdirectory, dynamically named using the `xpathDatasetName` in the (persistent) resource directory. 
+Move resources that match the rules in the policy file to a subdirectory, dynamically named using the `xpathDatasetName` in the (persistent) resource directory.
 
 #### <a name="policyFile"></a>policyFile
 ```xml
@@ -222,7 +222,7 @@ parameter | default                | cardinality | notes
 `policy`  | `./metadata/policy.n3` | ?           | should point to a valid [WebAccessControl file](#WebAccessControl)
 `dir`     | `./acl`                | ?           | directory will be created if it doesn't exist already
 
-Converts a WebAccessControl file into a set of [XACML policies](https://wiki.duraspace.org/display/FEDORA38/XACML+Policy+Enforcement), i.e., one for each resource in the SIP, in the specified directory. It will also extract the [user profile](#userProfile) of the owner into an `owner.xml` in the specified directory. This profile can be used by subsequent actions that need info on the owner. 
+Converts a WebAccessControl file into a set of [XACML policies](https://wiki.duraspace.org/display/FEDORA38/XACML+Policy+Enforcement), i.e., one for each resource in the SIP, in the specified directory. It will also extract the [user profile](#userProfile) of the owner into an `owner.xml` in the specified directory. This profile can be used by subsequent actions that need info on the owner.
 
 #### <a name="WebAccessControl"></a>WebAccessControl
 
@@ -269,7 +269,7 @@ The policy file should be based on the [WebAccessControl W3C proposal](https://w
 # a colleague
 <#other1> a foaf:Person ;
    foaf:account [foaf:accountServiceHomepage <#flat>; foaf:accountName "sarah@cmeertens.knaw.nl"].
- 
+
 # give the owner read and write access
 [acl:accessTo <sip>; acl:mode acl:Read, acl:Write;  acl:agent <#owner>].
 
@@ -291,7 +291,7 @@ The policy file should be based on the [WebAccessControl W3C proposal](https://w
 # academics (= the drupal role of 'authenticated user')
 <#academic> a foaf:Group;
    foaf:account [foaf:accountServiceHomepage <#flat>; foaf:accountName "authenticated user"].
-   
+
 # the owner
 <#owner> a foaf:Person ;
    foaf:account [foaf:accountServiceHomepage <#flat>; foaf:accountName "bob@meertens.knaw.nl"].
@@ -331,7 +331,7 @@ _NOTES_:
 - for a SIP a specific access policy based on its Fedora ID (+ `.xml`) is looked for, if it doesn't exist it fallsback to `default-cmd-policy.xml` or even `default-policy.xml`
 - for a resource a specific access policy based on its Fedora ID (+ `.xml`) is looked for, if it doesn't exist it fallsback to `default-resource-policy.xml` or even `default-policy.xml`
 - for a SIP a specific management file based on its Fedora ID (+ `.xml`) is looked for
-- a management file should be a valid [Java XML properties](http://docs.oracle.com/javase/8/docs/api/java/util/Properties.html) file 
+- a management file should be a valid [Java XML properties](http://docs.oracle.com/javase/8/docs/api/java/util/Properties.html) file
 - see [ACL](#ACL) (optional, earlier)
 - see [FedoraInteract](#FedoraInteract) (mandatory, later)
 
@@ -351,9 +351,9 @@ When there is no potential collection the, optional, default collection is taken
 <map xmlns:cmd="http://www.clarin.eu/cmd/" mode="all">
     <default pid="lat:collection_meertens"/>
     <!--
-Papieren collecties: 0-1000, 
+Papieren collecties: 0-1000,
 
-Digitale collecties: 1001-1999 en 3000-e.v., 
+Digitale collecties: 1001-1999 en 3000-e.v.,
 
 Audio collecties: 2000 – 2999.
     -->
@@ -452,9 +452,9 @@ _NOTES_:
 
 parameter        | default  | cardinality | notes
 -----------------|----------|-------------|------
-`fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig) 
+`fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig)
 `dir`            | `./fox`  | ?           |
-`namespace`      | `lat`    | ?           | 
+`namespace`      | `lat`    | ?           |
 
 Loads all the Digital Objects or datastreams from files in the specified directory and loads them into the specified Fedora Commons repository. After this the URLs for the datastreams to which the assigned handles can resolve are known.
 
@@ -477,7 +477,7 @@ _NOTES_:
 
 parameter        | default  | cardinality | notes
 -----------------|----------|-------------|------
-`fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig) 
+`fedoraConfig`   |          | 1           | path to a valid [Fedora Commons configuration](#fedoraConfig)
 `epicConfig`     |          | 1           | should point to a valid [EPIC config file](#EPICconfig)
 
 Creates or updates the assigned handles for the SIP, its resources and collections and makes them redirect to the right datastreams stored in the Fedora Commons repository.
@@ -512,6 +512,85 @@ Triggers indexing the deposited SIP using [gsearch](https://github.com/fcrepo3/g
 
 _NOTES_:
 - see [FedoraInteract](#FedoraInteract) (mandatory, earlier)
+
+### <a name="Mail"></a>`nl.mpi.tla.flat.deposit.action.Mail`
+
+parameter         | default  | cardinality | notes
+------------------|----------|-------------|------
+`config`          |          | 1           | path to a [Mail config file](#Mailconfig)
+`subject`         |          | 1           | fixed part of the mail subject
+`template`        |          | 1           | path to a [Mail exception template XSLT file](#MailException)
+`tmpl-bag`        |          | 1           |
+`tmpl-user`       |          | 1           |
+
+Sends out emails on successful and/or failed Doorkeeper runs
+
+#### <a name="MailConfig"></a>Mail config file
+```xml
+<mailConfig>
+    <sendWhenSuccess>true</sendWhenSuccess> <!-- On successful ingest: true- email sent , false- No email sent -->
+    <sendOnFailedValidation>true</sendOnFailedValidation><!-- On an unsuccessful validation: true- email sent , false- No email sent -->
+    <server>mailhost.example.com</server>
+    <port>25</port>
+    <user></user>
+    <password></password>
+    <from>doorkeeper@example.com</from>
+    <repo>[The Archive]</repo>
+    <to>archivist@example.com</to>
+</mailConfig>
+```
+
+#### <a name="MailException"></a>Mail exception template XSLT file
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:cmd="http://www.clarin.eu/cmd/" xmlns:lat="http://lat.mpi.nl/" version="2.0">
+    <xsl:param name="bag"/>
+    <xsl:param name="sip"/>
+    <xsl:param name="user"/>
+    <xsl:param name="exception"/>
+    <xsl:param name="stacktrace"/>
+    <xsl:param name="repo"/>
+    <xsl:param name="outcome"/>
+    <xsl:param name="handle"/>
+    <xsl:output method="html" encoding="UTF-8"/>
+    <xsl:template match="/">
+        <p>
+            <b> <xsl:text> The result of the deposit: </xsl:text> </b>
+            <xsl:value-of select="$outcome"/>
+            <br/>
+            <xsl:if test="normalize-space($user)!=''">
+                <b><xsl:text> User: </xsl:text></b>
+                <xsl:value-of select="$user"/>
+                <br/>
+            </xsl:if>
+            <b><xsl:text> SIP: </xsl:text></b>
+            <xsl:value-of select="$sip"/>
+            <br/>
+            <xsl:variable name="localURI" select="(/cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy/cmd:ResourceRef/@lat:localURI)[1]"/>
+            <xsl:if test="normalize-space($localURI)!=''">
+                <b> <xsl:text> Data Location: </xsl:text> </b>
+                <xsl:value-of select="replace(resolve-uri($localURI,base-uri()),'(.*)/.*','$1')"/>
+                <br/>
+            </xsl:if>
+            <xsl:if test="normalize-space($handle)!=''">
+                <b> <xsl:text> Handle: </xsl:text> </b>
+                <xsl:value-of select="$handle"/>
+                <br/>
+            </xsl:if>
+        </p>
+        <p>
+            <xsl:if test="normalize-space($exception)!=''">
+                <b><xsl:text>Exception: </xsl:text></b>
+                <xsl:value-of select="$exception"/>
+                <br/>
+                <br/>
+                <b><xsl:text>Detailed:</xsl:text></b>
+                <xsl:value-of select="$stacktrace"/>
+            </xsl:if>
+        </p>
+    </xsl:template>
+</xsl:stylesheet>
+```
 
 ### <a name="UpdateSwordStatus"></a>`nl.mpi.tla.flat.deposit.action.UpdateSwordStatus`
 
@@ -562,7 +641,7 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
     <init>
         <action name="log setup" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogSetup">
             <parameter name="dir" value="{$work}/logs"/>
-        </action>        
+        </action>
         <action name="check workspace" class="nl.mpi.tla.flat.deposit.action.SIPLoad">
             <parameter name="sip" value="{$work}/metadata/record.cmdi"/>
         </action>
@@ -635,10 +714,19 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
     <exception>
     </exception>
     <final>
+        <!--
+        <action class="nl.mpi.tla.flat.deposit.action.Mail">
+            <parameter name="config" value="{$base}/policies/mail-config.xml"/>
+            <parameter name="subject" value=": deposit for user "/>
+            <parameter name="template" value="{$base}/policies/mail-exception.xsl"/>
+            <parameter name="tmpl-bag" value="{$bag}"/>
+            <parameter name="tmpl-user" value="{if (sx:fileExists(concat('file:',$work,'/acl/owner.xml') cast as xs:anyURI)) then (doc(concat($work,'/acl/owner.xml'))/user/name) else ('')}"/>
+        </action>
+        -->
         <action name="status" class="nl.mpi.tla.flat.deposit.action.UpdateSwordStatus">
             <parameter name="props" value="{$work}/../../deposit.properties"/>
         </action>
-        <action name="log teardown" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogCleanup"/>        
+        <action name="log teardown" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogCleanup"/>
     </final>
 </flow>
 ```
