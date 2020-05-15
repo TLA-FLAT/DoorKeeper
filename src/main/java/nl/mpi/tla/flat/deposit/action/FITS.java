@@ -27,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 
@@ -57,12 +58,14 @@ public class FITS extends AbstractAction {
 	private Semaphore semaphore;
 	XdmNode result;
 	int threadCounter = 0;
+	ExecutorService executor;
 
 	@Override
 	public boolean perform(Context context) throws DepositException {
 		int unallowed = 0;
 		File dir = null;
 		int threadLimit;
+		int delayLimit;
 		if (hasParameter("dir")) {
 			dir = new File(getParameter("dir"));
 			if (!dir.exists()) {
@@ -73,10 +76,15 @@ public class FITS extends AbstractAction {
 				}
 			}
 		}
-		if (hasParameter("fitsThreadLimit")) {
+		if (hasParameter("threadLimit")) {
 			threadLimit = Integer.valueOf(getParameter("threadLimit"));
 		} else {
 			threadLimit = 1; // default number of fits thread
+		}
+		if (hasParameter("delayLimit")) {
+			delayLimit = Integer.valueOf(getParameter("delayLimit"));
+		} else {
+			delayLimit = 1000; // default delay 1000 milliseconds
 		}
 		String fitsService = getParameter("fitsService");
 		if (fitsService == null)
@@ -108,20 +116,24 @@ public class FITS extends AbstractAction {
 				try {
 					// threading of Fits -Start
 					URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath());
-					ExecutorService executor = Executors.newFixedThreadPool(threadLimit);
+					executor = Executors.newFixedThreadPool(threadLimit);
 					TaskLimitSemaphore obj = new TaskLimitSemaphore(executor, threadLimit);
-					while (threadCounter < threadLimit) {
-						threadCounter++;
-						obj.submit(() -> {
-							logger.info("Thread " + threadCounter + " running. . . .");
-							result = Saxon.buildDocument(new StreamSource(call.toString()));
-							Thread.sleep(30*1000); //30 seconds
-							logger.info("Thread " + threadCounter + " Done. . . .");
-							return threadCounter;
-						});
-						executor.shutdown();
-						threadCounter--;
+					int loopCounter = threadCounter;
+					while (loopCounter < threadLimit) {
+						loopCounter++;
+						if (threadCounter<threadLimit) {
+						    obj.submit(() -> {
+								threadCounter++;
+								logger.info("Thread " + threadCounter + " running. . . .");
+								result = Saxon.buildDocument(new StreamSource(call.toString()));
+								Thread.sleep(delayLimit); 
+								logger.info("Thread " + threadCounter + " Done. . . .");
+								return threadCounter;
+							});
+							threadCounter--;
+						}
 					}
+					executor.shutdown();
 					// threading of Fits -End
 
 					// URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath());
@@ -129,7 +141,16 @@ public class FITS extends AbstractAction {
 				} catch (Exception ex) {
 					throw new DepositException(ex);
 				}
-				if (dir != null) {
+				//Check if all the threads are completed - Start
+				while(result==null) {
+				try { 
+					  executor.awaitTermination(15, TimeUnit.SECONDS);
+					} catch (InterruptedException e) {
+						throw new DepositException(e);
+					}
+				}
+				//Check if all the threads are completed - End
+				if (dir != null && result!=null) {
 					// save the FITS report for this resource
 					String name = file.getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
 					if (resource instanceof CMDResource)
@@ -142,7 +163,6 @@ public class FITS extends AbstractAction {
 					}
 					logger.debug(". FITS[" + out + "]");
 				}
-				// try-catch code
 				try {
 					// loop over /mimetypes/mimetype
 					boolean bCheck1 = false; // tells if a mimetype was found for the resource
@@ -305,14 +325,14 @@ public class FITS extends AbstractAction {
 		public <T> Future<T> submit(final Callable<T> task) throws InterruptedException {
 
 			semaphore.acquire();
-			System.out.println("semaphore.acquire()...");
+			logger.info("semaphore.acquire()...");
 
 			return executor.submit(() -> {
 				try {
 					return task.call();
 				} finally {
 					semaphore.release();
-					System.out.println("semaphore.release()...");
+					logger.info("semaphore.release()...");
 				}
 			});
 		}
