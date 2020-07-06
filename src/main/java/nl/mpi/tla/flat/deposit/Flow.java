@@ -23,6 +23,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -66,6 +67,8 @@ public class Flow {
     protected String start = null;
     
     protected String stop = null;
+    
+    protected Map<String, Semaphore> semaphores = new HashMap<>();
 
     public Flow(File spec) throws DepositException {
         this(spec,new HashMap<String,XdmValue>());
@@ -127,6 +130,9 @@ public class Flow {
                     ActionInterface actionImpl = face.newInstance();
                     actionImpl.setName(name!=null?name:clazz);
                     flow.add(new Action(actionImpl,Saxon.xpath(action, "parameter")));
+                    if (Saxon.hasAttribute(action,"sema")) {
+                        semaphores.put(actionImpl.getName(),new Semaphore(Integer.parseInt(Saxon.xpath2string(action, "@sema"))));
+                    }
                 } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
                     Flow.logger.error(" couldn't load action["+name+"]["+clazz+"]! "+e.getMessage());
                     throw new DepositException(e);
@@ -327,7 +333,14 @@ public class Flow {
             } catch (SaxonApiException e) {
                 throw new DepositException("JIT loading and expanding parameters for action["+this.action.getName()+"] failed!",e);
             }
-            return this.action.perform(context);
+            try {
+                if (semaphores.containsKey(this.getName()))
+                    semaphores.get(this.getName()).acquireUninterruptibly();
+                return this.action.perform(context);
+            } finally {
+                if (semaphores.containsKey(this.getName()))
+                    semaphores.get(this.getName()).release();
+            }
         }
         
         public void rollback(Context context,List<XdmItem> events) {
