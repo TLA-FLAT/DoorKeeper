@@ -159,7 +159,7 @@
     <repositories>
         <repository>
             <id>MPI</id>
-            <url>http://lux15.mpi.nl/nexus/content/groups/public</url>
+            <url>https://lux15.mpi.nl/nexus/content/groups/public</url>
         </repository>
         <repository>
             <id>CLARIN</id>
@@ -168,7 +168,7 @@
         <repository>
             <id>central</id>
             <name>Central Repository</name>
-            <url>http://repo.maven.apache.org/maven2</url>
+            <url>https://repo.maven.apache.org/maven2</url>
             <layout>default</layout>
             <snapshots>
                 <enabled>false</enabled>
