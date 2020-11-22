@@ -17,6 +17,7 @@
 package nl.mpi.tla.flat.deposit;
 
 import java.io.File;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -42,6 +43,8 @@ import org.slf4j.LoggerFactory;
 public class Flow {
     
     protected Boolean status = null;
+
+    protected String next = null;
     
     private File base = null;
     
@@ -60,6 +63,8 @@ public class Flow {
     protected List<Action> exceptionActions = noActions;
     
     protected List<Action> finalActions = noActions;
+    
+    protected  Map<URI,URI> pids = new LinkedHashMap<>();
     
     protected boolean rollback = false;
     
@@ -163,6 +168,10 @@ public class Flow {
         return this.status;
     }
     
+    public String getNext() {
+        return this.next;
+    }
+    
     public boolean run() throws DepositException {
         return run(null,null);
     }
@@ -175,10 +184,12 @@ public class Flow {
         if (start != null)
             this.start = start;
         if (stop != null)
-            this.stop = start;
+            this.stop = stop;
         DepositException t = null;
         try {
             if (initFlow()) {
+            	// code for retreiving pids
+            	getSavedpids();
                 status = new Boolean(mainFlow(this.start,this.stop));
             } else
                 status = new Boolean(false);
@@ -212,7 +223,8 @@ public class Flow {
         return status.booleanValue();
     }
     
-    private boolean initFlow() throws DepositException {
+
+	private boolean initFlow() throws DepositException {
         Flow.logger.debug("BEGIN  init flow");
         boolean next = true;
         for (Action action:initActions) {
@@ -230,28 +242,32 @@ public class Flow {
     
     private boolean mainFlow(String start,String stop) throws DepositException {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
-        boolean next = true;
+        boolean cont = true;
         boolean run  = (start==null);
+        if (next != start)
+            Flow.logger.warn("main flow start["+start+"] doesn't match stop/break["+next+"] from previous run");
         for (Action action:mainActions) {
+            this.next = action.getName();
             if (!run && start!=null && action.getName().equals(start))
                 run = true;
+            if (stop!=null && action.getName().equals(stop)) {
+                Flow.logger.debug("ACTION main STOP");
+                break;
+            }
             if (run) {
                 Flow.logger.debug("ACTION main flow["+action.getName()+"]");
-                next = action.perform(context);
+                cont = action.perform(context);
                 context.save();
-                if (!next) {
+                if (!cont) {
                     Flow.logger.debug("ACTION main BREAK");
-                    break;
-                }
-                if (stop!=null && action.getName().equals(stop)) {
-                    Flow.logger.debug("ACTION main STOP");
                     break;
                 }
             } else
                 Flow.logger.debug("ACTION main flow["+action.getName()+"] skipped!");
+            this.next = null;
         }
         Flow.logger.debug(" END   main flow["+next+"]");
-        return next;
+        return cont;
     }
 
     private boolean exceptionFlow(Exception e) throws DepositException {
@@ -284,6 +300,10 @@ public class Flow {
             }
         }
     }
+    
+    private void getSavedpids() {
+		context.getSave();
+	}
 
     private boolean finalFlow() throws DepositException {
         Flow.logger.debug("BEGIN  final flow");
