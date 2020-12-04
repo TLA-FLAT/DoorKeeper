@@ -255,8 +255,8 @@ public class Context {
 				fileWriter = new FileWriter(file);
 			}
 		} catch (IOException ex) {
-			this.logger.error("Couldn't create/open save pids csv file[" + file + "]", ex);
-			System.exit(1);
+			this.logger.debug("Couldn't create/open save pids csv file[" + file + "]", ex);
+			//System.exit(1);
 		}
 		if (fileWriter != null) {
 			try {
@@ -272,21 +272,21 @@ public class Context {
 					logger.info("Hashmap of pids is empty. Nothing to store into the file!");
 				}
 			} catch (IOException e) {
-				this.logger.error("Couldn't write pids to csv file["+ this.getProperty("dk-pidList", "pids.csv").toString() + "]", e);
-				System.exit(1);
+				this.logger.debug("Couldn't write pids to csv file["+ this.getProperty("dk-pidList", "pids.csv").toString() + "]", e);
+				//System.exit(1);
 			}
 		} else
-			this.logger.error("No pids saved for this run- saveEvent()!");
+			this.logger.debug("No pids saved for this run- saveEvent()!");
 	}
 
 	public String getPidFile() {
 		String filename = null;
-		this.logger.info("XdmValue= " + this.getProperty("dk-pidList", "pids.csv"));
+		this.logger.debug("XdmValue= " + this.getProperty("dk-pidList", "pids.csv"));
 		if (this.getProperty("dk-pidList", "pids.csv") != null) {
 			XdmValue pidFileProperty = this.getProperty("dk-pidList", "pids.csv");
 			filename = "./"+pidFileProperty.toString();
 		} else {
-			this.logger.info("There is no pids saved! pids.csv is not present!");
+			this.logger.debug("There is no pids saved! pids.csv is not present!");
 		}
 		return filename;
 	}
@@ -301,11 +301,11 @@ public class Context {
 				if (f.exists() && f.length() != 0) 
 					fileReader = new FileReader(file);
 				else
-					logger.info("pids.csv file does not exist in the path!");
+					logger.debug("pids.csv file does not exist in the path!");
 			}
 		} catch (IOException ex) {
-			this.logger.error("Couldn't create/open save pids csv file[" + file + "]", ex);
-			System.exit(1);
+			this.logger.debug("Couldn't create/open save pids csv file[" + file + "]", ex);
+			//System.exit(1);
 		}
 		if (fileReader != null) {
 			try {
@@ -317,11 +317,11 @@ public class Context {
 				}
 				pids = tempPids;
 			} catch (IOException | CsvException ex) {
-				this.logger.error("Couldn't read save log file[" + this.getProperty("dk-pidList", "pids.csv").toString() + "]",ex);
-				System.exit(1);
+				this.logger.debug("Couldn't read save log file[" + this.getProperty("dk-pidList", "pids.csv").toString() + "]",ex);
+				//System.exit(1);
 			}
 		} else
-			this.logger.info("No pids saved for this run!- getSave()");
+			this.logger.debug("No pids saved for this run!- getSave()");
 	}
 
 	// Rollback
