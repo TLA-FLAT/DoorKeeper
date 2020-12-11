@@ -159,6 +159,10 @@ public class Flow {
     public String getStop() {
         return this.stop;
     }
+
+    public boolean isRerun() {
+        return this.start != null;
+    }
     
     public Context getContext() {
         return this.context;
