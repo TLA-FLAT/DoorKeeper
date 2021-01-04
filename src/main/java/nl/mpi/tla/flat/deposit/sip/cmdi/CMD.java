@@ -28,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
 import javax.xml.transform.dom.DOMSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
@@ -47,6 +46,7 @@ import org.slf4j.Marker;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import java.util.regex.Pattern;
 
 /**
  *
@@ -60,7 +60,7 @@ public class CMD implements SIPInterface {
     
     public static String CMD_NS = "http://www.clarin.eu/cmd/";
     public static String LAT_NS = "http://lat.mpi.nl/";
-    
+
     protected Node self = null;
     protected File base = null;
     protected URI pid = null;
@@ -480,7 +480,7 @@ public class CMD implements SIPInterface {
             // MdSelfLink @lat:flatURI
             str = Saxon.xpath2string(Saxon.wrapNode(this.rec),"/cmd:CMD/cmd:Header/cmd:MdSelfLink/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
+                URI u = spec.toURI().resolve(str);
                 boolean m = false;
                 for(XdmItem ns:fedoraNamespaces) {
                     if (u.toString().startsWith(ns.getStringValue()+":")) {

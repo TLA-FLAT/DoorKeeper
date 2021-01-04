@@ -79,7 +79,7 @@ public class CMDResource extends Resource {
             // @lat:flatURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                URI u = (base!=null?base.resolve(str):new URI(str));
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
                     if (u.toString().startsWith(ns.getStringValue()+":")) {
