@@ -129,6 +129,22 @@ public class CMDResource extends Resource {
                     throw new DepositException("no resource URI found!");
             }
 
+            // @lat:status
+            str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:status",null,NAMESPACES);
+            if (str!=null && !str.trim().isEmpty()) {
+                //NOOP, INSERT, UPDATE, DELETE
+                if (str.trim().equalsIgnoreCase("NOOP")) {
+                        this.setStatus(Status.NOOP);
+                } else if (str.trim().equalsIgnoreCase("INSERT")) {
+                    this.setStatus(Status.INSERT);
+                } else if (str.trim().equalsIgnoreCase("UPDATE")) {
+                    this.setStatus(Status.UPDATE);
+                } else if (str.trim().equalsIgnoreCase("DELETE")) {
+                    this.setStatus(Status.DELETE);
+                } else
+                    throw new DepositException("unknown status["+str+"]!");
+            }
+
             // MIME type
             if (Saxon.xpath2boolean(Saxon.wrapNode(node),"normalize-space(cmd:ResourceType/@mimetype)!=''",null,NAMESPACES)) {
                 setMime(Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceType/@mimetype",null,NAMESPACES));
@@ -194,18 +210,21 @@ public class CMDResource extends Resource {
                         Element rt = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceType", null, NAMESPACES));
                         rt.setAttribute("mimetype", getMime());
                 }
-                if (hasFile()) {
-                    Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
+                Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
+                if (hasFile())
                     rr.setAttribute("lat:localURI",sip.getBase().getParentFile().toPath().normalize().relativize(getFile().toPath().normalize()).toString());
-                }
-                if (hasPID()) {
-                    Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
+                if (hasPID())
                     rr.setTextContent(getPID().toString());
-                }
-                if (hasFID()) {
-                    Element rr = (Element)Saxon.unwrapNode((XdmNode)Saxon.xpath(Saxon.wrapNode(node), "cmd:ResourceRef", null, NAMESPACES));
+                if (hasFID())
                     rr.setAttribute("lat:flatURI",getFID().toString());
-                }
+                if (this.isNoop())
+                    rr.setAttribute("lat:status","NOOP");
+                else if (this.isInsert())
+                    rr.setAttribute("lat:status","INSERT");
+                else if (this.isUpdate())
+                    rr.setAttribute("lat:status","UPDATE");
+                else if (this.isDelete())
+                    rr.setAttribute("lat:status","DELETE");
             } catch (SaxonApiException ex) {
                 throw new DepositException(ex);
             }
