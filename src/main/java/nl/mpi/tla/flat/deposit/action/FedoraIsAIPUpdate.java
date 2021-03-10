@@ -45,17 +45,18 @@ public class FedoraIsAIPUpdate extends FedoraAction {
                 // we have a FID and its allowed to lookup the PID (of the last version).
                 // WARN: this might lead to lost updates!
                 pid = this.lookupPID(sip.getFID(true));
-                sip.setPID(pid);
             }
             if (pid!=null) {
                 URI fid = this.lookupFID(pid);
+                if (fid == null && context.getFlow().isRerun())
+                 fid = sip.getFID(true);
                 if (fid!=null) {
                     // mark SIP as an update
                     sip.update();
                     // complete the FID
                     sip.setFID(fid);
                     sip.setFIDasOfTimeDate(this.lookupAsOfDateTime(fid));
-                    logger.info("This SIP["+pid+"] is an update of AIP["+sip.getFID()+"]!");
+                    logger.info("This SIP["+(context.getFlow().isRerun()?"rerun":"normal run")+"]["+pid+"] is an update of AIP["+sip.getFID()+"]!");
                 } else if (this.hasParameter("prefix") && pid.toString().startsWith("hdl:"+this.getParameter("prefix")+"/")) {
                     logger.error("This SIP["+pid+"] has a matching handle prefix["+this.getParameter("prefix")+"], but can't be found in the repository! It might be a PID for an old version!");
                     return false;

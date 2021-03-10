@@ -18,6 +18,8 @@ package nl.mpi.tla.flat.deposit.sip.cmdi;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.regex.Matcher;
+
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.DepositException;
@@ -84,7 +86,9 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             // @lat:flatURI
             str = ((Element)node).getAttribute("lat:flatURI");
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                URI u = new URI(str);
+                if (base!=null)
+                    u = base.resolve(str);
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
                     if (u.toString().startsWith(ns.getStringValue()+":")) {
