@@ -17,8 +17,10 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.util.Properties;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -48,48 +50,58 @@ public class Owner extends AbstractAction {
     @Override
     public boolean perform(Context context) throws DepositException {
         try {
-            // check for the policy
-            File policy = new File(getParameter("policy", "./metadata/policy.n3"));
-            if (!policy.exists()) {
-                logger.info("No access policy specified, the default policy will be used.");
-                return true;
-            } else if (!policy.isFile()) {
-                logger.error("The access policy isn't a file!");
-                return false;
-            } else if (!policy.canRead()) {
-                logger.error("The access policy can't be read!");
-                return false;
-            }
             // create the dir
             File dir = new File(getParameter("dir", "./acl"));
             if (!dir.exists()) {
                 FileUtils.forceMkdir(dir);
             }
+                        
+            if (getOverwriteProperties(context).containsKey("owner.user.name")) {
+                SaxonListener listener = new SaxonListener("ACL",MDC.get("sip"));
+                XsltTransformer owner = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
+                owner.setMessageListener(listener);
+                owner.setErrorListener(listener);
+                owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+                owner.setParameter(new QName("overwrite-user-name"), new XdmAtomicValue(getOverwriteProperties(context).getProperty("owner.user.name")));
+                owner.setInitialTemplate(new QName("overwrite"));
+                owner.transform();
+            } else {
+                // check for the policy
+                File policy = new File(getParameter("policy", "./metadata/policy.n3"));
+                if (!policy.exists()) {
+                    logger.info("No access policy specified, the default policy will be used.");
+                    return true;
+                } else if (!policy.isFile()) {
+                    logger.error("The access policy isn't a file!");
+                    return false;
+                } else if (!policy.canRead()) {
+                    logger.error("The access policy can't be read!");
+                    return false;
+                }
+                // convert policy N3 to TriX
+                // https://jena.apache.org/documentation/io/
+                Model model = ModelFactory.createDefaultModel() ;
+                model.read(policy.getAbsolutePath()) ;
+                OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"));
+                RDFDataMgr.write(trix, model, Lang.TRIX);
 
-            // convert policy N3 to TriX
-            // https://jena.apache.org/documentation/io/
-            Model model = ModelFactory.createDefaultModel() ;
-            model.read(policy.getAbsolutePath()) ;
-            OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"));
-            RDFDataMgr.write(trix, model, Lang.TRIX);
-
-            // convert trix to semantic triples using ACL/sl-trix-to-sem-triples.xsl
-            XsltTransformer trix2sem = Saxon.buildTransformer(Owner.class.getResource("/ACL/sl-trix-to-sem-triples.xsl")).load();
-            SaxonListener listener = new SaxonListener("ACL",MDC.get("sip"));
-            trix2sem.setMessageListener(listener);
-            trix2sem.setErrorListener(listener);
-            trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
-            // convert sem triples to the owner.xml
-            XsltTransformer wacl2owner = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
-            wacl2owner.setMessageListener(listener);
-            wacl2owner.setErrorListener(listener);
-            wacl2owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
-            // pipe
-            XdmDestination destination = new XdmDestination();
-            trix2sem.setDestination(wacl2owner);
-            wacl2owner.setDestination(destination);
-            trix2sem.transform();
-                
+                // convert trix to semantic triples using ACL/sl-trix-to-sem-triples.xsl
+                XsltTransformer trix2sem = Saxon.buildTransformer(Owner.class.getResource("/ACL/sl-trix-to-sem-triples.xsl")).load();
+                SaxonListener listener = new SaxonListener("ACL",MDC.get("sip"));
+                trix2sem.setMessageListener(listener);
+                trix2sem.setErrorListener(listener);
+                trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
+                // convert sem triples to the owner.xml
+                XsltTransformer wacl2owner = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
+                wacl2owner.setMessageListener(listener);
+                wacl2owner.setErrorListener(listener);
+                wacl2owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
+                // pipe
+                XdmDestination destination = new XdmDestination();
+                trix2sem.setDestination(wacl2owner);
+                wacl2owner.setDestination(destination);
+                trix2sem.transform();
+            }
         } catch (Exception e) {
             throw new DepositException("The creation of the owner file failed!", e);
         }
