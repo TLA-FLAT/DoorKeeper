@@ -44,6 +44,8 @@ public class Flow {
     
     protected Boolean status = null;
     
+    protected String next = null;
+    
     private File base = null;
     
     private static final Logger logger = LoggerFactory.getLogger(Flow.class.getName());
@@ -160,6 +162,10 @@ public class Flow {
     public String getStop() {
         return this.stop;
     }
+
+    public boolean isRerun() {
+        return this.start != null;
+    }
     
     public Context getContext() {
         return this.context;
@@ -169,6 +175,10 @@ public class Flow {
         return this.status;
     }
     
+    public String getNext() {
+        return this.next;
+    }
+
     public boolean run() throws DepositException {
         return run(null,null);
     }
@@ -236,16 +246,19 @@ public class Flow {
     
     private boolean mainFlow(String start,String stop) throws DepositException {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
-        boolean next = true;
+        boolean cont = true;
         boolean run  = (start==null);
+        if (next != start)
+            Flow.logger.warn("main flow start["+start+"] doesn't match stop/break["+next+"] from previous run");
         for (Action action:mainActions) {
+            this.next = action.getName();
             if (!run && start!=null && action.getName().equals(start))
                 run = true;
             if (run) {
                 Flow.logger.debug("ACTION main flow["+action.getName()+"]");
-                next = action.perform(context);
+                cont = action.perform(context);
                 context.save();
-                if (!next) {
+                if (!cont) {
                     Flow.logger.debug("ACTION main BREAK");
                     break;
                 }
@@ -255,9 +268,11 @@ public class Flow {
                 }
             } else
                 Flow.logger.debug("ACTION main flow["+action.getName()+"] skipped!");
-        }
-        Flow.logger.debug(" END   main flow["+next+"]");
-        return next;
+                this.next = null;
+            }
+            Flow.logger.debug(" END   main flow["+cont+"]");
+            return cont;
+    
     }
 
     private boolean exceptionFlow(Exception e) throws DepositException {
