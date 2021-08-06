@@ -14,7 +14,7 @@ $ cd ..
 
 $ git clone https://github.com/menzowindhouwer/fedora-client.git
 $ cd fedora-client
-$ mvn clean install
+$ mvn clean install # if this fails because of tests, use "mvn -DskipTests clean install"
 $ cd ..
 
 $ git clone https://github.com/meertensinstituut/EPICify.git
