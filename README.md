@@ -14,7 +14,7 @@ $ cd ..
 
 $ git clone https://github.com/menzowindhouwer/fedora-client.git
 $ cd fedora-client
-$ mvn clean install # if this fails because of tests, use "mvn -DskipTests clean install"
+$ mvn clean install
 $ cd ..
 
 $ git clone https://github.com/meertensinstituut/EPICify.git
@@ -26,6 +26,20 @@ $ git clone https://github.com/TLA-FLAT/DoorKeeper.git
 $ cd DoorKeeper
 $ mvn clean install
 ```
+
+fedora-client might fail when running `mvn clean install`. If you get the following error or a similar test related error:
+```
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:2.14:test
+```
+
+You should run `mvn -DskipTests clean install`.
+
+If you get the following error or a similar port related error:
+```
+Port number 8009 (defined with the property cargo.tomcat.ajp.port) is in use.
+```
+
+You should turn off tomcat server before running mvn by running `supervisorctl stop tomcat`. After running mvn, you can start tomcat again by running `supervisorctl start tomcat`.
 
 ## DoorKeeper command line
 The DoorKeeper can be executed from the command line. But can also be embedded in a servlet (_UPCOMMING_: [ServiceFlat](https://github.com/TheLanguageArchive/FLAT/tree/develop/docker/add-doorkeeper-to-flat/flat/deposit/ServiceFLAT)).
