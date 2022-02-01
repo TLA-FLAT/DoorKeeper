@@ -96,11 +96,15 @@ public class WorkspaceLogSetup extends AbstractAction {
                 configure.transform();
                 
                 Saxon.save(destination,logback);
-                
-                // copy user-log.xml to {$work}/logs/user-log.xml
-                Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/user-log.xml"), dir.toPath().resolve("./user-log.xml"));
-                // copy log4j.dtd to {$work}/logs/
-                Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/log4j.dtd"), dir.toPath().resolve("./log4j.dtd"));
+        
+                if (!dir.toPath().resolve("./user-log.xml").toFile().exists()) {
+                    // copy user-log.xml to {$work}/logs/user-log.xml
+                    Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/user-log.xml"), dir.toPath().resolve("./user-log.xml"));
+                }
+                if (!dir.toPath().resolve("./log4j.dtd").toFile().exists()) {
+                    // copy log4j.dtd to {$work}/logs/
+                    Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/log4j.dtd"), dir.toPath().resolve("./log4j.dtd"));
+                }
             }
             
             Logger logger = LoggerFactory.getLogger(nl.mpi.tla.flat.deposit.Flow.class);
