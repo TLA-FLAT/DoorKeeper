@@ -79,9 +79,9 @@ public class Mail extends FedoraAction {
 			XdmNode mailNode = (XdmNode) Saxon.xpathSingle(mailNodeConfig, "/mailConfig");
 
 			String sendWhenSuccess = Saxon.xpath2string(mailNode, "./sendWhenSuccess");
-			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");
-			String sendOnFailedValidation = Saxon.xpath2string(mailNode, "./sendOnFailedValidation");
-			logger.debug("sendOnFailedValidation[" + sendOnFailedValidation + "]");
+			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");	
+			String sendOnFailedValidation = Saxon.xpath2string(mailNode, "./sendOnFailedValidation"); 
+			logger.debug("sendOnFailedValidation[" + sendOnFailedValidation + "]");	
 			String server = Saxon.xpath2string(mailNode, "./server");
 			logger.debug("Server[" + server + "]");
 			String port = Saxon.xpath2string(mailNode, "./port");
@@ -128,45 +128,46 @@ public class Mail extends FedoraAction {
 				// don't send any email
 				logger.info("Outcome: " + outcome);
 				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
-				return true;
-			}
-
-			if (context.getFlow().getStop() != null) {
-				if (!swordStatus.booleanValue()) { // Validation failed
+                return true;
+            }
+			
+			if (context.getFlow().getStop()!=null) {
+				if (!swordStatus.booleanValue()) { //Validation failed
 					outcome = "FAILED";
-					if ("false".equals(sendOnFailedValidation)) { // don't send email based on param
-						logger.info("No email sent! (this was only a partial DoorKeeper run) with outcome: " + outcome);
+					if ("false".equals(sendOnFailedValidation)) { //don't send email based on param
+						logger.info("No email sent! (this was only a partial DoorKeeper run) with outcome: "+ outcome);
 						logger.info("No email sent! (mail-config.xml <sendOnFailedValidation> has value false) ");
 						return true;
-					} else {
-						sRun = "Validation"; // send email on failed validation
-						logger.info("Email sent! (this was only a partial DoorKeeper run) with outcome: " + outcome);
-						logger.info("Email sent! (mail-config.xml <sendOnFailedValidation> has value True) ");
-						if (context.getException() != null) {
-							fox.setParameter(new QName("exception"),
-									new XdmAtomicValue(context.getException().toString()));
+					}
+					else {
+						sRun = "Validation"; //send email on failed validation
+					    logger.info("Email sent! (this was only a partial DoorKeeper run) with outcome: "+ outcome);
+					    logger.info("Email sent! (mail-config.xml <sendOnFailedValidation> has value True) ");
+					    if (context.getException() != null) {
+							fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
 							String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 							fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
-						}
+					    }
 					}
-				} else { // Validation successful
-					logger.info("Outcome: " + outcome);
-					logger.info("But Code stops: " + context.getFlow().getStop());
-					logger.info("No email sent! (this was only a partial DoorKeeper run) ");
-					return true;
 				}
-			}
-
-			if (swordStatus == null || context.hasException()) {
+				else {  //Validation successful
+					logger.info("Outcome: " + outcome);
+		          	logger.info("But Code stops: " + context.getFlow().getStop());
+		          	logger.info("No email sent! (this was only a partial DoorKeeper run) ");
+		          	return true;
+				}   	  
+          }
+			
+            if (swordStatus == null || context.hasException()) {
 				outcome = "FAILED";
-				logger.info("Email sent! Normal Doorkeeper run with outcome: " + outcome);
+				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
 				fox.setParameter(new QName("exception"), new XdmAtomicValue(context.getException().toString()));
 				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
 			}
-
-			if (outcome.equals("SUCCESS")) {
-				logger.info("Email sent! Normal Doorkeeper run with outcome: " + outcome);
+			
+			if(outcome.equals("SUCCESS")) {
+				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
 				if (context.getSIP().hasPID()) {
 					String pid = context.getSIP().getPID().toString().replaceAll("hdl:", "https://hdl.handle.net/");
 					fox.setParameter(new QName("handle"), new XdmAtomicValue(pid));
