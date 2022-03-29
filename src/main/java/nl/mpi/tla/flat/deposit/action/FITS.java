@@ -71,6 +71,7 @@ import org.apache.commons.io.FileUtils;
  * @author pavi
  */
 public class FITS extends AbstractAction {
+
 	private static final Logger logger = LoggerFactory.getLogger(FITS.class);
 
 	private static final String MIMETYPE_XPATH = "distinct-values(/fits:fits/fits:identification/fits:identity/tokenize(@mimetype,'(\\s|,)+'))[.!='TBD']=$mime";

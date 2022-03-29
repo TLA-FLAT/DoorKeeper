@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2018 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -125,7 +125,7 @@ public class Mail extends FedoraAction {
 			String sRun = "Archiving";
 
 			if ("false".equals(sendWhenSuccess)) {
-                // don't send any email
+				// don't send any email
 				logger.info("Outcome: " + outcome);
 				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
                 return true;
@@ -169,14 +169,14 @@ public class Mail extends FedoraAction {
 			if(outcome.equals("SUCCESS")) {
 				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
 				if (context.getSIP().hasPID()) {
-					String pid = context.getSIP().getPID().toString().replaceAll("hdl:","https://hdl.handle.net/");
+					String pid = context.getSIP().getPID().toString().replaceAll("hdl:", "https://hdl.handle.net/");
 					fox.setParameter(new QName("handle"), new XdmAtomicValue(pid));
 				}
 			}
-			
-            fox.setParameter(new QName("outcome"), new XdmAtomicValue(outcome));
-            logger.debug("Outcome: " + outcome);
-			
+
+			fox.setParameter(new QName("outcome"), new XdmAtomicValue(outcome));
+			logger.debug("Outcome: " + outcome);
+
 			fox.setSource(new DOMSource(context.getSIP().getRecord(), context.getSIP().getBase().toURI().toString()));
 			XdmDestination destination = new XdmDestination();
 			fox.setDestination(destination);
@@ -214,7 +214,7 @@ public class Mail extends FedoraAction {
 
 			msg.setFrom(fromAddress);
 			msg.addRecipient(javax.mail.Message.RecipientType.TO, toAddress);
-			msg.setSubject(subject + userID + " - "+ outcome + " (" + sRun + ")"); //sRun = Validation or Archiving
+			msg.setSubject(subject + userID + " - " + outcome + " (" + sRun + ")"); // sRun = Validation or Archiving
 			msg.setSentDate(new Date());
 
 			msg.setContent(destination.getXdmNode().toString(), "text/html");
