@@ -17,13 +17,13 @@
 package nl.mpi.tla.flat.deposit;
 
 import java.io.File;
-import java.net.URI;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -43,7 +43,7 @@ import org.slf4j.LoggerFactory;
 public class Flow {
     
     protected Boolean status = null;
-
+    
     protected String next = null;
     
     private File base = null;
@@ -64,13 +64,13 @@ public class Flow {
     
     protected List<Action> finalActions = noActions;
     
-    protected  Map<URI,URI> pids = new LinkedHashMap<>();
-    
     protected boolean rollback = false;
     
     protected String start = null;
     
     protected String stop = null;
+    
+    protected Map<String, Semaphore> semaphores = new HashMap<>();
 
     public Flow(File spec) throws DepositException {
         this(spec,new HashMap<String,XdmValue>());
@@ -132,6 +132,9 @@ public class Flow {
                     ActionInterface actionImpl = face.newInstance();
                     actionImpl.setName(name!=null?name:clazz);
                     flow.add(new Action(actionImpl,Saxon.xpath(action, "parameter")));
+                    if (Saxon.hasAttribute(action,"sema")) {
+                        semaphores.put(actionImpl.getName(),new Semaphore(Integer.parseInt(Saxon.xpath2string(action, "@sema"))));
+                    }
                 } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
                     Flow.logger.error(" couldn't load action["+name+"]["+clazz+"]! "+e.getMessage());
                     throw new DepositException(e);
@@ -175,7 +178,7 @@ public class Flow {
     public String getNext() {
         return this.next;
     }
-    
+
     public boolean run() throws DepositException {
         return run(null,null);
     }
@@ -188,12 +191,10 @@ public class Flow {
         if (start != null)
             this.start = start;
         if (stop != null)
-            this.stop = stop;
+            this.stop = start;
         DepositException t = null;
         try {
             if (initFlow()) {
-            	// code for retreiving pids
-            	getSavedpids();
                 status = new Boolean(mainFlow(this.start,this.stop));
             } else
                 status = new Boolean(false);
@@ -227,8 +228,7 @@ public class Flow {
         return status.booleanValue();
     }
     
-
-	private boolean initFlow() throws DepositException {
+    private boolean initFlow() throws DepositException {
         Flow.logger.debug("BEGIN  init flow");
         boolean next = true;
         for (Action action:initActions) {
@@ -254,10 +254,6 @@ public class Flow {
             this.next = action.getName();
             if (!run && start!=null && action.getName().equals(start))
                 run = true;
-            if (stop!=null && action.getName().equals(stop)) {
-                Flow.logger.debug("ACTION main STOP");
-                break;
-            }
             if (run) {
                 Flow.logger.debug("ACTION main flow["+action.getName()+"]");
                 cont = action.perform(context);
@@ -266,12 +262,17 @@ public class Flow {
                     Flow.logger.debug("ACTION main BREAK");
                     break;
                 }
+                if (stop!=null && action.getName().equals(stop)) {
+                    Flow.logger.debug("ACTION main STOP");
+                    break;
+                }
             } else
                 Flow.logger.debug("ACTION main flow["+action.getName()+"] skipped!");
-            this.next = null;
-        }
-        Flow.logger.debug(" END   main flow["+next+"]");
-        return cont;
+                this.next = null;
+            }
+            Flow.logger.debug(" END   main flow["+cont+"]");
+            return cont;
+    
     }
 
     private boolean exceptionFlow(Exception e) throws DepositException {
@@ -304,10 +305,6 @@ public class Flow {
             }
         }
     }
-    
-    private void getSavedpids() {
-		context.getSave();
-	}
 
     private boolean finalFlow() throws DepositException {
         Flow.logger.debug("BEGIN  final flow");
@@ -351,7 +348,14 @@ public class Flow {
             } catch (SaxonApiException e) {
                 throw new DepositException("JIT loading and expanding parameters for action["+this.action.getName()+"] failed!",e);
             }
-            return this.action.perform(context);
+            try {
+                if (semaphores.containsKey(this.getName()))
+                    semaphores.get(this.getName()).acquireUninterruptibly();
+                return this.action.perform(context);
+            } finally {
+                if (semaphores.containsKey(this.getName()))
+                    semaphores.get(this.getName()).release();
+            }
         }
         
         public void rollback(Context context,List<XdmItem> events) {
