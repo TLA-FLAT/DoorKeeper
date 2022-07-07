@@ -420,10 +420,10 @@ public class FITS extends AbstractAction {
 			}
 		}
 
-		logger.info("Execution of all threads successfully completed! We can now safely close the executor.");
+		logger.debug("Execution of all threads successfully completed! We can now safely close the executor.");
 		// Check if all the threads are completed - End
 		executor.shutdown();
-		logger.info("Executor shutdown done!");
+		logger.debug("Executor shutdown done!");
 
 		if (unallowed > 0)
 			logger.error("{} resources were not allowed!", unallowed);

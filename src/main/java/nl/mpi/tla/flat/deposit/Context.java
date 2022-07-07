@@ -268,9 +268,9 @@ public class Context {
 					}
 					saveLog.close();
 				}
-				else {
-					logger.info("Hashmap of pids is empty. Nothing to store into the file!");
-				}
+				//else {
+				//	logger.info("Hashmap of pids is empty. Nothing to store into the file!");
+				//} #Not required anymore. It was used for logging during testing phase
 			} catch (IOException e) {
 				this.logger.debug("Couldn't write pids to csv file["+ this.getProperty("dk-pidList", "pids.csv").toString() + "]", e);
 				//System.exit(1);
