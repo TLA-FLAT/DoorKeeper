@@ -27,9 +27,10 @@ import org.apache.commons.codec.digest.DigestUtils;
 public class FilesMarked {
 
     private String[] marked = {};
+    private String token = "";
 
     public String[] getMarked() {
-        return marked;
+        return this.marked;
     }
 
     public void setMarked(String[] marked) {
@@ -38,11 +39,19 @@ public class FilesMarked {
 
     public boolean isMarked(String filename) {
 
-      String hex = this.generateMd5(filename);
-      return Arrays.asList(this.marked).contains(hex);
+        String hex = this.generateMd5(filename);
+        return Arrays.asList(this.marked).contains(hex);
+    }
+
+    public String getToken()  {
+        return this.token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
     }
 
     private String generateMd5(String filename) {
-      return DigestUtils.md5Hex(filename);
+        return DigestUtils.md5Hex(filename);
     }
 }

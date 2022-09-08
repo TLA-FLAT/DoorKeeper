@@ -83,10 +83,9 @@ class FileEncryptedChecker {
 
       } else {
 
-          String raw = "{\"marked\": []}";
+          String raw = "{\"marked\": [], \"token\": \"\"}";
           encoded = raw.getBytes();
       }
-
 
       String json = new String(encoded, StandardCharsets.UTF_8);
 
