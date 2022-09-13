@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ import java.util.stream.Stream;
 import net.sf.saxon.trans.XPathException;
 import net.sf.saxon.value.SequenceType;
 import net.sf.saxon.value.StringValue;
-import net.sf.saxon.om.StructuredQName; 
+import net.sf.saxon.om.StructuredQName;
 import net.sf.saxon.om.Sequence;
 import net.sf.saxon.expr.XPathContext;
 import net.sf.saxon.lib.ExtensionFunctionCall;
@@ -54,17 +54,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class SaxonExtensionFunctions {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(SaxonExtensionFunctions.class.getName());
 
     /**
-     * Registers with Saxon 9.2+ all the extension functions 
+     * Registers with Saxon 9.2+ all the extension functions
      * <p>This method must be invoked once per TransformerFactory.
      *
      * @param factory the TransformerFactory pointing to
-     * Saxon 9.2+ extension function registry 
-     * (that is, a <tt>net.sf.saxon.Configuration</tt>). 
-     * This object must be an instance of 
+     * Saxon 9.2+ extension function registry
+     * (that is, a <tt>net.sf.saxon.Configuration</tt>).
+     * This object must be an instance of
      * <tt>net.sf.saxon.TransformerFactoryImpl</tt>.
      */
     public static void registerAll(Configuration config) {
@@ -76,17 +76,18 @@ public final class SaxonExtensionFunctions {
         config.registerExtensionFunction(new FindBagBaseDefinition());
         config.registerExtensionFunction(new MD5Definition());
         config.registerExtensionFunction(new FileSizeDefinition());
+        config.registerExtensionFunction(new GenerateAltIdsDefinition());
     }
 
     // -----------------------------------------------------------------------
     // sx:fileExists
     // -----------------------------------------------------------------------
 
-    public static final class FileExistsDefinition 
+    public static final class FileExistsDefinition
                         extends ExtensionFunctionDefinition {
         public StructuredQName getFunctionQName() {
-            return new StructuredQName("sx", 
-                                       "java:nl.mpi.tla.saxon", 
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
                                        "fileExists");
         }
 
@@ -105,7 +106,7 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.SINGLE_BOOLEAN;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
@@ -123,6 +124,68 @@ public final class SaxonExtensionFunctions {
                     } catch(Exception e) {
                         logger.error("sx:fileExists failed!",e);
                     }
+                    return seq;
+                }
+            };
+        }
+    }
+
+
+    // -----------------------------------------------------------------------
+    // sx:generateAltIds
+    //
+    // This Saxon extension provides the cmd2fox.xsl file with the ability to
+    // determine whether a certain file in the files list has been marked for
+    // encryption or not.
+    //
+    // It has only 2 arguments, $base and $resTitle, $base providing the root path
+    // of the bundle being ingested and $resTitle providing the filename of the resource.
+    // This filename will then be used to generate a md5 hash so FileEncryptedChecker.java
+    // can determine whether the file is encrypted or not using flat_encryption.json generated
+    // by flat_deposit module in drupal.
+    // -----------------------------------------------------------------------
+
+    public static final class GenerateAltIdsDefinition
+                        extends ExtensionFunctionDefinition {
+        public StructuredQName getFunctionQName() {
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
+                                       "generateAltIds");
+        }
+
+        public int getMinimumNumberOfArguments() {
+            return 2;
+        }
+
+        public int getMaximumNumberOfArguments() {
+            return 2;
+        }
+
+        public SequenceType[] getArgumentTypes() {
+            return new SequenceType[] { SequenceType.SINGLE_STRING, SequenceType.SINGLE_STRING };
+        }
+
+        public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
+            return SequenceType.SINGLE_STRING;
+        }
+
+        public boolean dependsOnFocus() {
+           return false;
+        }
+
+        public ExtensionFunctionCall makeCallExpression() {
+            return new ExtensionFunctionCall() {
+                @Override
+                public Sequence call(XPathContext context, Sequence[] arguments) throws XPathException {
+
+                    Sequence seq = null;
+
+                    try {
+                        seq = (new XdmAtomicValue(FileEncryptedChecker.isMarked(arguments) ? "YES" : "NO")).getUnderlyingValue();
+                    } catch(Exception e) {
+                        logger.error("sx:generateAltIds failed!",e);
+                    }
+
                     return seq;
                 }
             };
@@ -156,11 +219,11 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.OPTIONAL_STRING;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
-        
+
         protected Optional<Path> findFirstFile(Path dir,String fle) {
             try (Stream<Path> stream = Files.find(dir,Integer.MAX_VALUE, new BiPredicate<Path, BasicFileAttributes>() {
                 @Override
@@ -200,16 +263,16 @@ public final class SaxonExtensionFunctions {
             };
         }
     }
-    
+
     // -----------------------------------------------------------------------
     // sx:uuid
     // -----------------------------------------------------------------------
 
-    public static final class UUIDDefinition 
+    public static final class UUIDDefinition
                         extends ExtensionFunctionDefinition {
         public StructuredQName getFunctionQName() {
-            return new StructuredQName("sx", 
-                                       "java:nl.mpi.tla.saxon", 
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
                                        "uuid");
         }
 
@@ -228,7 +291,7 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.SINGLE_STRING;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
@@ -253,11 +316,11 @@ public final class SaxonExtensionFunctions {
     // sx:checkURL
     // -----------------------------------------------------------------------
 
-    public static final class CheckURLDefinition 
+    public static final class CheckURLDefinition
                         extends ExtensionFunctionDefinition {
         public StructuredQName getFunctionQName() {
-            return new StructuredQName("sx", 
-                                       "java:nl.mpi.tla.saxon", 
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
                                        "checkURL");
         }
 
@@ -276,7 +339,7 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.SINGLE_BOOLEAN;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
@@ -303,7 +366,7 @@ public final class SaxonExtensionFunctions {
             };
         }
     }
-    
+
     // -----------------------------------------------------------------------
     // sx:evaluate
     // -----------------------------------------------------------------------
@@ -331,7 +394,7 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.ANY_SEQUENCE;
         }
-        
+
         public boolean dependsOnFocus() {
            return true;
         }
@@ -341,7 +404,7 @@ public final class SaxonExtensionFunctions {
                 @Override
                 public Sequence call(XPathContext context, Sequence[] arguments) throws XPathException {
                     Sequence seq = null;
-                    try {                
+                    try {
                         NodeInfo    node = (NodeInfo) arguments[0].head();
                         StringValue path = (StringValue) arguments[1].head();
                         NodeInfo    ns   = node;
@@ -367,7 +430,7 @@ public final class SaxonExtensionFunctions {
             };
         }
     }
-    
+
     // -----------------------------------------------------------------------
     // flt:findBagBase
     // -----------------------------------------------------------------------
@@ -395,11 +458,11 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.OPTIONAL_STRING;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
-        
+
         protected Optional<Path> findBagBase(Path bag) {
             try (Stream<Path> stream = Files.find(bag,Integer.MAX_VALUE, new BiPredicate<Path, BasicFileAttributes>() {
                 @Override
@@ -439,16 +502,16 @@ public final class SaxonExtensionFunctions {
             };
         }
     }
-    
+
     // -----------------------------------------------------------------------
     // sx:md5
     // -----------------------------------------------------------------------
 
-    public static final class MD5Definition 
+    public static final class MD5Definition
                         extends ExtensionFunctionDefinition {
         public StructuredQName getFunctionQName() {
-            return new StructuredQName("sx", 
-                                       "java:nl.mpi.tla.saxon", 
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
                                        "md5");
         }
 
@@ -467,7 +530,7 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.SINGLE_STRING;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
@@ -490,16 +553,16 @@ public final class SaxonExtensionFunctions {
             };
         }
     }
-    
+
     // -----------------------------------------------------------------------
     // sx:fileSize
     // -----------------------------------------------------------------------
 
-    public static final class FileSizeDefinition 
+    public static final class FileSizeDefinition
                         extends ExtensionFunctionDefinition {
         public StructuredQName getFunctionQName() {
-            return new StructuredQName("sx", 
-                                       "java:nl.mpi.tla.saxon", 
+            return new StructuredQName("sx",
+                                       "java:nl.mpi.tla.saxon",
                                        "fileSize");
         }
 
@@ -518,7 +581,7 @@ public final class SaxonExtensionFunctions {
         public SequenceType getResultType(SequenceType[] suppliedArgTypes) {
             return SequenceType.SINGLE_INTEGER;
         }
-        
+
         public boolean dependsOnFocus() {
            return false;
         }
