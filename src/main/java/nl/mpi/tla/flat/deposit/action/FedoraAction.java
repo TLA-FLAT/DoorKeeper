@@ -16,18 +16,24 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import com.yourmediashelf.fedora.client.FedoraClient;
-import static com.yourmediashelf.fedora.client.FedoraClient.*;
-import com.yourmediashelf.fedora.client.FedoraCredentials;
-import com.yourmediashelf.fedora.client.request.FedoraRequest;
-import com.yourmediashelf.fedora.client.response.RiSearchResponse;
+import org.fcrepo.client.*;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.util.Date;
 import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.slf4j.Logger;
@@ -40,21 +46,19 @@ abstract public class FedoraAction extends AbstractAction {
     private static String user = null;
     
     private XMLConfiguration fedoraConfig = null;
-
+    
+    private static FcrepoClient fedoraClient = null;
+    
     public void connect(Context context) throws DepositException {
         try {
             fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));        
 
-            String user = fedoraConfig.getString("userName");
-            if (!FedoraRequest.isDefaultClientSet() || this.user==null || this.user!=user ) {
-                logger.debug("Fedora Commons["+fedoraConfig.getString("localServer")+"]["+user+":"+fedoraConfig.getString("userPass")+"]");
-                FedoraCredentials credentials = new FedoraCredentials(fedoraConfig.getString("localServer"), fedoraConfig.getString("userName"), fedoraConfig.getString("userPass"));
-                FedoraClient fedora = new FedoraClient(credentials);
-                fedora.debug(this.getParameter("fedoraDebug","false").equals("true"));
-                FedoraRequest.setDefaultClient(fedora);
-                this.user = user;
+            if (fedoraClient == null) {
+                user = fedoraConfig.getString("userName");
+                String pass = fedoraConfig.getString("userPass");            
+                fedoraClient = FcrepoClient.client()/*.credentials(user, pass)*/.build();
             }
-            logger.debug("Fedora Commons repository["+FedoraClient.describeRepository().xml(true).execute()+"]");
+            
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
@@ -64,52 +68,90 @@ abstract public class FedoraAction extends AbstractAction {
         return this.user;
     }
     
+    public XdmNode sparql(String query) throws DepositException {
+        XdmNode result = null;
+        try {
+            logger.debug("SPARQL query["+query+"]");
+            String endpoint = fedoraConfig.getString("tripleStore");
+            logger.debug("SPARQL endpoint["+endpoint+"]");
+            HttpClient client = HttpClient.newBuilder()
+                .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .header("Content-Type", "application/sparql-query")
+                .POST(BodyPublishers.ofString(query))
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+            HttpResponse<InputStream> response = client.send(request, BodyHandlers.ofInputStream());
+            if (response.statusCode()==200) {
+                result = Saxon.buildDocument(new StreamSource(response.body()));
+            } else
+                throw new DepositException("Unexpected status["+response.statusCode()+"] while querying Fedora Commons!");
+        } catch(IOException | InterruptedException | SaxonApiException e) {
+            throw new DepositException("Connecting to Fedora Commons failed!",e);
+        }
+        return result;
+    }
+    
     public URI lookupFID(URI pid) throws DepositException {
         URI fid = null;
         try {
-            String sparql = "SELECT ?fid WHERE { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+pid.toString().replace("hdl:","https://hdl.handle.net/")+"\" } ";
-            logger.debug("SPARQL["+sparql+"]");
-            RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
-            if (resp.getStatus()==200) {
-                XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
-                logger.debug("RESULT["+tpl.toString()+"]");
-                String f = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:fid/@uri)");
-                if (f!=null && !f.isEmpty())
-                    fid = new URI(f.replace("info:fedora/",""));
-            } else
-                throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
-        } catch(Exception e) {
-            throw new DepositException("Connecting to Fedora Commons failed!",e);
+            String query = "SELECT ?fid WHERE { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+pid.toString().replace("hdl:","https://hdl.handle.net/")+"\" } ";
+            XdmNode tpl = sparql(query);
+            logger.debug("RESULT["+tpl.toString()+"]");
+            String f = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);
+            if (f!=null && !f.isEmpty()) {
+                String rest = fedoraConfig.getString("localServer");
+                fid = new URI(f.replaceAll(rest+"/",""));
+            }
+        } catch(URISyntaxException | SaxonApiException e) {
+            throw new DepositException(e);
         }
+        logger.debug("found["+fid+"]");
         return fid;
     }
     
     public URI lookupPID(URI fid) throws DepositException {
         URI pid = null;
         try {
-            String sparql = "SELECT ?pid WHERE { <info:fedora/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
-            logger.debug("SPARQL["+sparql+"]");
-            RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
-            if (resp.getStatus()==200) {
-                XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
-                logger.debug("RESULT["+tpl.toString()+"]");
-                String p = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:pid[starts-with(.,'https://hdl.handle.net/')])");
-                if (p!=null && !p.isEmpty())
-                    pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
-            } else
-                throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
-        } catch(Exception e) {
-            throw new DepositException("Connecting to Fedora Commons failed!",e);
+            String rest = fedoraConfig.getString("localServer");
+            String query = "SELECT ?pid WHERE { <"+rest+"/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
+            XdmNode tpl = sparql(query);
+            logger.debug("RESULT["+tpl.toString()+"]");
+            String p = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:pid[starts-with(.,'https://hdl.handle.net/')])");
+            if (p!=null && !p.isEmpty())
+                pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
+        } catch(URISyntaxException | SaxonApiException e) {
+            throw new DepositException(e);
         }
         return pid;
     }
     
+    public XdmNode fcrepo(URI fid) throws DepositException {
+        XdmNode result = null;
+        try (FcrepoResponse response = new GetBuilder(fid, fedoraClient)
+            .accept("application/rdf+xml")
+            .perform()) {
+                result = Saxon.buildDocument(new StreamSource(response.getBody()));
+            } catch (Exception e) {
+                 throw new DepositException(e);   
+            }
+        return result;
+    }
+    
     public Date lookupAsOfDateTime(URI fid) throws DepositException {
+        Date res = null;
         try {
-            return getObjectProfile(fid.toString().replaceAll("#.*","")).execute().getLastModifiedDate();
+            String date = Saxon.xpath2string(
+                    fcrepo(
+                            new URI(fid.toString().replaceAll("#.*",""))
+                    ),
+                    "//rdf:Description[@rdf:about='"+fid+"']/view:lastModifiedDate",null,Global.NAMESPACES);
+            res = Global.asOfDateTime(date);
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
+        return res;
     }
     
 }

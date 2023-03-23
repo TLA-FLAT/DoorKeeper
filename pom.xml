@@ -62,17 +62,11 @@
 			<version>2.4</version>
 		</dependency>
 		<!-- Fedora Commons Deposit -->
-		<dependency>
-			<groupId>com.yourmediashelf.fedora.client</groupId>
-			<artifactId>fedora-client-core</artifactId>
-			<version>0.8-SNAPSHOT</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.slf4j</groupId>
-					<artifactId>log4j-over-slf4j</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+                <dependency>
+                    <groupId>org.fcrepo.client</groupId>
+                    <artifactId>fcrepo-java-client</artifactId>
+                    <version>6.2.0</version>
+                </dependency>
 		<!-- EASY Bag -->
 		<dependency>
 			<groupId>gov.loc</groupId>
