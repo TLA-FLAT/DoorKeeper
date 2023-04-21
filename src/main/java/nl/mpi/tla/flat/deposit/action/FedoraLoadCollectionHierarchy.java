@@ -16,11 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreams;
-import static com.yourmediashelf.fedora.client.FedoraClient.getObjectProfile;
-import static com.yourmediashelf.fedora.client.FedoraClient.riSearch;
-import com.yourmediashelf.fedora.client.response.RiSearchResponse;
-import com.yourmediashelf.fedora.generated.management.DatastreamProfile;
+import org.fcrepo.client.*;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -37,6 +33,7 @@ import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMD;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDCollection;
+import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import org.slf4j.LoggerFactory;
 
@@ -81,17 +78,16 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 }
             } else if (sip.isUpdate() && sip.hasFID()) {
                 // fetch collections
-                String sparql = "SELECT ?fid WHERE { <info:fedora/"+sip.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
+                String sparql = "SELECT ?fid WHERE { <"+fedoraConfig.getString("localBase")+"/"+sip.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
                 logger.debug("SPARQL["+sparql+"]");
-                RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
-                if (resp.getStatus()==200) {
-                    XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
-                    logger.debug("RESULT["+tpl.toString()+"]");
-                    for (Iterator<XdmItem> iter=Saxon.xpathIterator(tpl,"normalize-space(//*:results/*:result/*:fid/@uri)");iter.hasNext();) {
+                XdmNode res = sparql(sparql);
+                if (res !=null) {
+                    logger.debug("RESULT["+res.toString()+"]");
+                    for (Iterator<XdmItem> iter=Saxon.xpathIterator(res,"normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);iter.hasNext();) {
                         XdmItem n = iter.next();
                         String f = n.getStringValue();
                         if (f!=null && !f.isEmpty()) {
-                            URI fid = new URI(f.replace("info:fedora/",""));
+                            URI fid = new URI(f.replace(fedoraConfig.getString("localBase")+"/",""));
                             if (!fid.toString().startsWith("islandora:")) {
                                 URI pid = lookupPID(fid);
                                 CMDCollection col = new CMDCollection(pid, fid, namespace, namespaces);
@@ -105,11 +101,11 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                         }
                     }
                 } else
-                    throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
+                    throw new DepositException("No result while querying the tripple store!");
             } else
                 logger.debug("This SIP["+sip.getBase()+"] has no Collections or FID!");
             for (Collection col:sip.getCollections()) {
-                loadParentCollections(new ArrayDeque<>(Arrays.asList(col.getFID())),col, namespace, namespaces);
+                loadParentCollections(new ArrayDeque<URI>(Arrays.asList(col.getFID())),col, namespace, namespaces);
             }
         } catch (DepositException ex) {
             throw ex;
@@ -121,17 +117,16 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
     
     private void loadParentCollections(Deque<URI> hist,Collection col, String namespace, XdmValue namespaces) throws Exception {
         // fetch parent collections
-        String sparql = "SELECT ?fid WHERE { <info:fedora/"+col.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
+        String sparql = "SELECT ?fid WHERE { <"+fedoraConfig.getString("localBase")+"/"+col.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
         logger.debug("SPARQL["+sparql+"]");
-        RiSearchResponse resp = riSearch(sparql).format("sparql").execute();
-        if (resp.getStatus()==200) {
-            XdmNode tpl = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
-            logger.debug("RESULT["+tpl.toString()+"]");
-            for (Iterator<XdmItem> iter=Saxon.xpathIterator(tpl,"normalize-space(//*:results/*:result/*:fid/@uri)");iter.hasNext();) {
+        XdmNode res = sparql(sparql);
+        if (res !=null) {
+            logger.debug("RESULT["+res.toString()+"]");
+            for (Iterator<XdmItem> iter=Saxon.xpathIterator(res,"normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);iter.hasNext();) {
                 XdmItem n = iter.next();
                 String f = n.getStringValue();
                 if (f!=null && !f.isEmpty()) {
-                    URI fid = new URI(f.replace("info:fedora/","").replaceAll("#.*",""));
+                    URI fid = new URI(f.replace(fedoraConfig.getString("localBase")+"/","").replaceAll("#.*",""));
                     if (hasCMDDatastream(fid)) {
                         URI pid = lookupPID(fid);
                         CMDCollection pcol = new CMDCollection(pid,fid,namespace,namespaces);
@@ -141,7 +136,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 }
             }
         } else
-            throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
+            throw new DepositException("No result while querying the tripple store!");
         // fetch ancestor collections
         for (Collection pcol:col.getParentCollections()) {
             if (hasCMDDatastream(pcol.getFID(true))) {
@@ -167,8 +162,9 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 else 
                     throw new DepositException("Unknown Collection["+col+"]!");
                 if (hasCMDDatastream(fid)) {
-                    Date asof = getObjectProfile(fid.toString()).execute().getLastModifiedDate();
-                    col.setFIDasOfTimeDate(asof);
+                    URI uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
+                    String asof = Saxon.xpath2string(fcrepo(fid),"//rdf:Description[@rdf:about='"+uri.toString()+"']/fedora:lastModified",null,Global.NAMESPACES);
+                    col.setFIDasOfTimeDate(Global.asOfDateTime(asof));
                     logger.debug("Fedora Collection datastream["+(col.hasPID()?col.getPID():"")+"]->["+col.getFID()+"]=["+fid+"][CMD]["+asof+"] completed!");
                 }
             }
@@ -179,11 +175,11 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
     
     protected boolean hasCMDDatastream(URI fid) throws DepositException {
         try {
-            for(DatastreamProfile p:getDatastreams(fid.toString()).execute().getDatastreamProfiles()) {
-                if (p.getDsID().equals("CMD"))
-                    return true;
-            }
-            return false;
+            XdmNode info = fcrepo(fid);
+            URI uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
+            boolean res = Saxon.xpath2boolean(info, "//rdf:Description[@rdf:about='"+uri.toString()+"']/ldp:contains[@rdf:resource='"+uri.toString()+"/CMD']", null, Global.NAMESPACES);
+            logger.debug("hasCMDDatastream["+fid+"]["+uri+"]["+res+"]");
+            return res;
         } catch(Exception e) {
             throw new DepositException("Looking for the CMD datastream of Collection["+fid+"] failed!",e);
         }

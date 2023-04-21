@@ -144,7 +144,7 @@ public class FITS extends AbstractAction {
 					logger.debug("resource[" + file + "] mimetype?");
 					result = null;
 					try {
-						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath());
+						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath().replaceAll(" ","+"));
 						if (threadCounter <= threadLimit) {
 							future = obj.submit(() -> {
 								threadCounter = threadCounter + 1;

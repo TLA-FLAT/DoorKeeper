@@ -35,7 +35,7 @@ public class Global {
     static {
         NAMESPACES.put("cmd", CMD_NS);
         NAMESPACES.put("dc", "http://purl.org/dc/elements/1.1/");
-        NAMESPACES.put("fedora", "http://fedora.info/definitions/v4/repository#");     
+        NAMESPACES.put("fedora", "http://fedora.info/definitions/v4/repository#");
         NAMESPACES.put("fits", "http://hul.harvard.edu/ois/xml/ns/fits/fits_output");
         NAMESPACES.put("flat", "java:nl.mpi.tla.flat");
         NAMESPACES.put("foxml", "info:fedora/fedora-system:def/foxml#");
@@ -50,6 +50,7 @@ public class Global {
         NAMESPACES.put("srx", "http://www.w3.org/2005/sparql-results#");
         NAMESPACES.put("view", "info:fedora/fedora-system:def/view#");        
         NAMESPACES.put("xs", "http://www.w3.org/2001/XMLSchema");
+        NAMESPACES.put("ldp", "http://www.w3.org/ns/ldp#");
     };
     
     static public String asOfDateTime(Date date) {

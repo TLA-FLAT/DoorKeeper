@@ -45,9 +45,9 @@ abstract public class FedoraAction extends AbstractAction {
     
     private static String user = null;
     
-    private XMLConfiguration fedoraConfig = null;
+    protected XMLConfiguration fedoraConfig = null;
     
-    private static FcrepoClient fedoraClient = null;
+    protected static FcrepoClient fedoraClient = null;
     
     public void connect(Context context) throws DepositException {
         try {
@@ -86,9 +86,9 @@ abstract public class FedoraAction extends AbstractAction {
             if (response.statusCode()==200) {
                 result = Saxon.buildDocument(new StreamSource(response.body()));
             } else
-                throw new DepositException("Unexpected status["+response.statusCode()+"] while querying Fedora Commons!");
+                throw new DepositException("Unexpected status["+response.statusCode()+"] while querying the tripple store!");
         } catch(IOException | InterruptedException | SaxonApiException e) {
-            throw new DepositException("Connecting to Fedora Commons failed!",e);
+            throw new DepositException("Connecting to the tripple store failed!",e);
         }
         return result;
     }
@@ -101,7 +101,7 @@ abstract public class FedoraAction extends AbstractAction {
             logger.debug("RESULT["+tpl.toString()+"]");
             String f = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);
             if (f!=null && !f.isEmpty()) {
-                String rest = fedoraConfig.getString("localServer");
+                String rest = fedoraConfig.getString("localBase");
                 fid = new URI(f.replaceAll(rest+"/",""));
             }
         } catch(URISyntaxException | SaxonApiException e) {
@@ -114,7 +114,7 @@ abstract public class FedoraAction extends AbstractAction {
     public URI lookupPID(URI fid) throws DepositException {
         URI pid = null;
         try {
-            String rest = fedoraConfig.getString("localServer");
+            String rest = fedoraConfig.getString("localBase");
             String query = "SELECT ?pid WHERE { <"+rest+"/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             XdmNode tpl = sparql(query);
             logger.debug("RESULT["+tpl.toString()+"]");
@@ -128,25 +128,35 @@ abstract public class FedoraAction extends AbstractAction {
     }
     
     public XdmNode fcrepo(URI fid) throws DepositException {
-        XdmNode result = null;
-        try (FcrepoResponse response = new GetBuilder(fid, fedoraClient)
+        XdmNode res = null;
+        URI uri = null;
+        try {
+            uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
+        } catch (Exception e) {
+            throw new DepositException(e);   
+        }
+        logger.debug("FCREPO["+uri.toString()+"]");
+        try (FcrepoResponse response = new GetBuilder(uri, fedoraClient)
             .accept("application/rdf+xml")
             .perform()) {
-                result = Saxon.buildDocument(new StreamSource(response.getBody()));
+                res = Saxon.buildDocument(new StreamSource(response.getBody()));
+                logger.debug("FCREPO response["+res.toString()+"]");
             } catch (Exception e) {
                  throw new DepositException(e);   
             }
-        return result;
+        return res;
     }
     
     public Date lookupAsOfDateTime(URI fid) throws DepositException {
         Date res = null;
         try {
+            URI uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
             String date = Saxon.xpath2string(
                     fcrepo(
                             new URI(fid.toString().replaceAll("#.*",""))
                     ),
-                    "//rdf:Description[@rdf:about='"+fid+"']/view:lastModifiedDate",null,Global.NAMESPACES);
+                    "//rdf:Description[@rdf:about='"+uri.toString()+"']/fedora:lastModified",null,Global.NAMESPACES);
+            logger.debug("lookupAsOfDateTime["+date+"]");
             res = Global.asOfDateTime(date);
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
