@@ -16,8 +16,6 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreamDissemination;
-import com.yourmediashelf.fedora.client.response.FedoraResponse;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
@@ -94,14 +92,11 @@ public class PurgeUpdates extends FedoraAction {
                     
                     logger.debug("checksum["+checksum+"] for Resource["+res.getURI()+"]");
                     
-                    // get repository checksum (from FC DO DC)                    
-                    FedoraResponse resp = getDatastreamDissemination(res.getFID().toString(),"DC").execute();
-                    if (resp.getStatus()!=200)
-                        throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
-                        
-                    XdmNode fc = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
-                    logger.debug("DC["+fc.toString()+"]");
-                    String fcChecksum = Saxon.xpath2string(fc, "normalize-space(//dc:identifier[starts-with(.,'md5:')])",null,Global.NAMESPACES).replace("md5:","");
+                    // get repository checksum (from FC DO DC)  
+                    XdmNode info = fcrepo(res.getFID());
+                    if (info == null)
+                        throw new DepositException("Resource metadata couldn't be retrieved from Fedora Commons!");
+                    String fcChecksum = Saxon.xpath2string(info, "normalize-space(//dc:identifier[starts-with(.,'md5:')])",null,Global.NAMESPACES).replace("md5:","");
 
                     if (fcChecksum.isEmpty())
                         throw new DepositException("Stored checksum for Resource["+res.getURI()+"] is unknown!");
