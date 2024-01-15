@@ -17,22 +17,35 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import nl.mpi.tla.flat.deposit.Context;
-import org.slf4j.Logger;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import java.util.Iterator;
 
 /**
  *
- * @author menzowi
+ * @author menzowi, pautri
  */
 public class WorkspaceLogCleanup extends AbstractAction {
-    
-    private static final Logger logger = LoggerFactory.getLogger(WorkspaceLogCleanup.class.getName());
-    
+
+    private static final LoggerContext ctx = (LoggerContext) LoggerFactory.getILoggerFactory();
+    private static final Logger logger = ctx.getLogger("nl.mpi.tla.flat.deposit");
+
     @Override
     public boolean perform(Context context) {
+
+        for (Iterator<Appender<ILoggingEvent>> index = logger.iteratorForAppenders(); index.hasNext();) {
+            Appender<ILoggingEvent> appender = index.next();
+            if (appender.getName().equals("USER") || appender.getName().equals("DEVEL")) {
+                appender.stop();
+            }
+        }
+
         MDC.remove("sip");
         return true;
     }
-    
+
 }
