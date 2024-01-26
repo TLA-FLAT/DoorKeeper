@@ -50,6 +50,7 @@ public class Global {
         NAMESPACES.put("srx", "http://www.w3.org/2005/sparql-results#");
         NAMESPACES.put("view", "info:fedora/fedora-system:def/view#");        
         NAMESPACES.put("xs", "http://www.w3.org/2001/XMLSchema");
+        NAMESPACES.put("xsi", "http://www.w3.org/2001/XMLSchema-instance");
         NAMESPACES.put("ldp", "http://www.w3.org/ns/ldp#");
     };
     

@@ -34,7 +34,7 @@ import nl.mpi.tla.util.Saxon;
 import nl.mpi.tla.util.SaxonListener;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.io.FileUtils;
-import org.apache.jena.ext.com.google.common.io.Files;
+import com.google.common.io.Files;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.Lang;

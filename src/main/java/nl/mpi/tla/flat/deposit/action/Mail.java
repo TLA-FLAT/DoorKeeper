@@ -45,7 +45,7 @@ import nl.mpi.tla.util.Saxon;
 import nl.mpi.tla.util.SaxonListener;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.apache.jena.ext.com.google.common.base.Throwables;
+import com.google.common.base.Throwables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;

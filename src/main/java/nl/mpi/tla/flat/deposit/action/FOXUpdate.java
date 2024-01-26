@@ -30,7 +30,7 @@ import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
 import nl.mpi.tla.util.Saxon;
 import nl.mpi.tla.util.SaxonListener;
-import org.apache.jena.ext.com.google.common.io.Files;
+import com.google.common.io.Files;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;

@@ -79,8 +79,9 @@ public class Owner extends AbstractAction {
                 }
                 // convert policy N3 to TriX
                 // https://jena.apache.org/documentation/io/
-                Model model = ModelFactory.createDefaultModel() ;
-                model.read(policy.getAbsolutePath()) ;
+                Model model = ModelFactory.createDefaultModel();
+                logger.debug("policy["+policy.getAbsolutePath()+"]");
+                model.read(policy.getAbsolutePath(),"TURTLE");
                 OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"));
                 RDFDataMgr.write(trix, model, Lang.TRIX);
 
@@ -102,9 +103,11 @@ public class Owner extends AbstractAction {
                 wacl2owner.setDestination(destination);
                 trix2sem.transform();
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            logger.debug("The creation of the owner file failed! ["+e+"]");
             throw new DepositException("The creation of the owner file failed!", e);
         }
+        logger.debug("Does the owner file exist?");
         return true;
     }
 

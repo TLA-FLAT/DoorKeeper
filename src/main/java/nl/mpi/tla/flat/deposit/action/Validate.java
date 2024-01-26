@@ -51,8 +51,8 @@ public class Validate extends AbstractAction {
                  FileUtils.forceMkdir(cache);
             
             Document rec = context.getSIP().getRecord();
-            String xsd = Saxon.xpath2string(Saxon.wrapNode(rec), "/*/@xs:schemaLocation']", null, NAMESPACES).replaceAll(".* ","");
-            logger.debug("XSD schema location[%s]",xsd);
+            String xsd = Saxon.xpath2string(Saxon.wrapNode(rec), "/*/@xsi:schemaLocation", null, NAMESPACES).replaceAll(".* ","");
+            logger.debug("XSD schema location["+xsd+"]");
 
             return false;
         } catch (Exception ex) {
