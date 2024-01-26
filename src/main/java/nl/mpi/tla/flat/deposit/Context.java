@@ -44,7 +44,7 @@ import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.action.ActionInterface;
 import nl.mpi.tla.flat.deposit.context.ImportPropertiesInterface;
 import nl.mpi.tla.flat.deposit.util.Global;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Marker;
@@ -93,6 +93,7 @@ public class Context {
 	public Context(Flow flow, XdmNode spec, Map<String, XdmValue> params) throws DepositException {
 		this.flow = flow;
 		props.putAll(params);
+                System.err.println("props["+props+"]");
 		loadNamespaces(spec);
 		loadProperties(spec);
 		getSave();
@@ -127,8 +128,9 @@ public class Context {
 
 	private void importProperties(XdmNode spec) throws SaxonApiException, DepositException {
 		for (XdmItem imp : Saxon.xpath(spec, "/flow/config/import", props)) {
-			String prefix = Saxon.xpath2string(imp, "@prefix");
-			String clazz = Saxon.xpath2string(imp, "@class");
+                    System.err.println("imp["+imp.toString()+"]");
+			String prefix = Saxon.xpath2string(imp, "@prefix",props);
+			String clazz = Saxon.xpath2string(imp, "@class",props);
 			try {
 				Class<ImportPropertiesInterface> face = (Class<ImportPropertiesInterface>) Class.forName(clazz);
 				ImportPropertiesInterface importer = face.newInstance();

@@ -34,7 +34,7 @@ import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMD;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDCollection;
 import nl.mpi.tla.flat.deposit.util.Global;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 import org.slf4j.LoggerFactory;
 
 /**

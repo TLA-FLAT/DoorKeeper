@@ -29,8 +29,8 @@ import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.util.Saxon;
-import nl.mpi.tla.flat.deposit.util.SaxonListener;
+import nl.mpi.tla.util.Saxon;
+import nl.mpi.tla.util.SaxonListener;
 import org.apache.commons.io.FileUtils;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
@@ -142,7 +142,7 @@ public class ACL extends AbstractAction {
             wacl2acl.transform();
             Saxon.save(destination, new File(dir + "/policy.acl"));
 
-            // convert intermediate ACl to XACM using ACL/ACL2XACML.xsl or an override
+            // convert intermediate ACl to XACML using ACL/ACL2XACML.xsl or an override
             XsltTransformer acl2xacml = null;
             if (this.hasParameter("acl2xacml")) {
                 File x = new File(this.getParameter("acl2xacml"));

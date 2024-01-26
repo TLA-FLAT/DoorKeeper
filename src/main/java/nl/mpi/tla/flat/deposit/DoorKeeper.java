@@ -47,6 +47,7 @@ public class DoorKeeper {
         else
             params.put(name,val);
         logger.debug("parameter["+name+"]["+params.get(name)+"]");
+        System.err.println("parameter["+name+"]["+params.get(name)+"]");
     }
 
     public static void main(String[] args) {

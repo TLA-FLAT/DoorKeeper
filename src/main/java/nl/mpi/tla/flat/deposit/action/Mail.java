@@ -41,8 +41,8 @@ import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
-import nl.mpi.tla.flat.deposit.util.Saxon;
-import nl.mpi.tla.flat.deposit.util.SaxonListener;
+import nl.mpi.tla.util.Saxon;
+import nl.mpi.tla.util.SaxonListener;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.jena.ext.com.google.common.base.Throwables;

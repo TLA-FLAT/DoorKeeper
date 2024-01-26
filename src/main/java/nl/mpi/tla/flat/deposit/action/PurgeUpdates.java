@@ -35,7 +35,7 @@ import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import nl.mpi.tla.flat.deposit.util.Global;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 
 /**
  * This action sets the status to NOOP for local resources from which the checksums is equivalent to the one in the repository
