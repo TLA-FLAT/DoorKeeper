@@ -54,7 +54,7 @@ public class Validate extends AbstractAction {
             String xsd = Saxon.xpath2string(Saxon.wrapNode(rec), "/*/@xsi:schemaLocation", null, NAMESPACES).replaceAll(".* ","");
             logger.debug("XSD schema location["+xsd+"]");
 
-            return false;
+            return true;
         } catch (Exception ex) {
             throw new DepositException(ex);
         }
