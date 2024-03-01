@@ -286,7 +286,7 @@ public class Context {
 		this.logger.debug("XdmValue= " + this.getProperty("dk-pidList", "pids.csv"));
 		if (this.getProperty("dk-pidList", "pids.csv") != null) {
 			XdmValue pidFileProperty = this.getProperty("dk-pidList", "pids.csv");
-			filename = "./"+pidFileProperty.toString();
+			filename = Path.of(pidFileProperty.toString().startsWith(System.getProperty("file.separator"))?"":".",pidFileProperty.toString()).toString();
 		} else {
 			this.logger.debug("There is no pids saved! pids.csv is not present!");
 		}
