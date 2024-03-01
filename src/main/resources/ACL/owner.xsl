@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cmd="http://www.clarin.eu/cmd/" xmlns:lat="http://lat.mpi.nl/" xmlns:sem="http://marklogic.com/semantics" xmlns:functx="http://www.functx.com" exclude-result-prefixes="xs cmd lat sem functx" version="3.0">
 
+    <xsl:output omit-xml-declaration="yes"/>
+
     <xsl:param name="acl-base" select="'.'"/>
     <xsl:param name="overwrite-user-name" select="()"/>
 
-    <xsl:variable name="debug" select="false()" static="yes"/>
+    <xsl:variable name="debug" select="true()" static="yes"/>
 
     <xsl:variable name="t" select="/"/>
     <xsl:key name="t-subject" match="sem:triple" use="sem:subject"/>
@@ -41,7 +43,7 @@
             <xsl:otherwise>
                 <xsl:message use-when="$debug">DBG: flat[<xsl:value-of select="$flat"/>]</xsl:message>
                 <xsl:message use-when="$debug">DBG: owner[<xsl:value-of select="$owner"/>]</xsl:message>
-                <xsl:result-document href="{$acl-base}/owner.xml">
+                <xsl:result-document href="{$acl-base}/owner.xml" omit-xml-declaration="yes">
                     <user>
                         <xsl:for-each select="key('t-subject', $owner, $t)[sem:predicate = $foaf-account]/sem:object">
                             <xsl:variable name="account" select="."/>
@@ -65,7 +67,7 @@
 
     <xsl:template name="overwrite">
         <xsl:message>WRN: owner overwrite[<xsl:value-of select="$overwrite-user-name"/>]</xsl:message>
-        <xsl:result-document href="{$acl-base}/owner.xml">
+        <xsl:result-document href="{$acl-base}/owner.xml" omit-xml-declaration="yes">
             <user>
                 <name>
                     <xsl:value-of select="$overwrite-user-name"/>
