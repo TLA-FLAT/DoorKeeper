@@ -19,6 +19,7 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import javax.xml.transform.Source;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.URIResolver;
@@ -138,6 +139,7 @@ public class ACL extends AbstractAction {
                 wacl2acl.setParameter(new QName("default-roles"), this.params.get("default-role"));
             wacl2acl.setSource(new StreamSource(dir +"/policy.sem"));
             destination = new XdmDestination();
+            destination.setBaseURI(new URI("file:///void/null"));
             wacl2acl.setDestination(destination);
             wacl2acl.transform();
             Saxon.save(destination, new File(dir + "/policy.acl"));
@@ -171,6 +173,7 @@ public class ACL extends AbstractAction {
             }
             acl2xacml.setSource(new StreamSource(dir +"/policy.acl"));
             destination = new XdmDestination();
+            destination.setBaseURI(new URI("file:///void/null"));
             acl2xacml.setDestination(destination);
             acl2xacml.transform();
         } catch (Exception e) {

@@ -143,6 +143,7 @@ public class FOXCreate extends AbstractAction {
             // go
             fox.setSource(new DOMSource(context.getSIP().getRecord(),context.getSIP().getBase().toURI().toString()));
             XdmDestination destination = new XdmDestination();
+            destination.setBaseURI(new URI("file:///void/null"));
             fox.setDestination(destination);
             fox.transform();
             
