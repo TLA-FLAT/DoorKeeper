@@ -29,7 +29,7 @@
   
   
   <xd:doc>Root</xd:doc>
-  <xsl:template match="/TriX/graph[triple]">
+  <xsl:template match="/trix/graph[triple]">
     <sem:triples>
       <xsl:apply-templates select="triple" mode="trix2sem"/>
     </sem:triples>
