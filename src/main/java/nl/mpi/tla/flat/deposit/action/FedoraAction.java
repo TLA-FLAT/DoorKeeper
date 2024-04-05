@@ -118,7 +118,7 @@ abstract public class FedoraAction extends AbstractAction {
             String query = "SELECT ?pid WHERE { <"+rest+"/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             XdmNode tpl = sparql(query);
             logger.debug("RESULT["+tpl.toString()+"]");
-            String p = Saxon.xpath2string(tpl, "normalize-space(//*:results/*:result/*:pid[starts-with(.,'https://hdl.handle.net/')])");
+            String p = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='pid']/srx:literal[starts-with(.,'https://hdl.handle.net/')])");
             if (p!=null && !p.isEmpty())
                 pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
         } catch(URISyntaxException | SaxonApiException e) {
@@ -164,4 +164,23 @@ abstract public class FedoraAction extends AbstractAction {
         return res;
     }
     
+    public InputStream getBinaryDataStream(URI fid,String ds) throws DepositException {
+        try {
+            FcrepoResponse response = new GetBuilder(fid.resolve(new URI("./"+ds)), fedoraClient).perform();
+            return response.getBody();
+        } catch(Exception e) {
+            throw new DepositException("Interacting with Fedora Commons for ["+fid+"]["+ds+"] failed!",e);
+        }
+    }
+    
+    public XdmNode getCMDDataStream(URI fid) throws DepositException {
+        try {
+            FcrepoResponse response = new GetBuilder(fid.resolve(new URI("./CMD")), fedoraClient).perform();
+            if (response.getContentType().equals("application/x-cmdi+xml"))
+                return Saxon.buildDocument(new StreamSource(response.getBody()));
+        } catch(Exception e) {
+            throw new DepositException("Interacting with Fedora Commons for ["+fid+"][CMD] failed!",e);
+        }
+        return null;
+    }
 }

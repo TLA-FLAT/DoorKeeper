@@ -16,9 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.getDatastreamDissemination;
-import com.yourmediashelf.fedora.client.FedoraClientException;
-import com.yourmediashelf.fedora.client.response.FedoraResponse;
+import org.fcrepo.client.*;
 import java.io.File;
 import java.io.InputStream;
 import java.net.URI;
@@ -44,8 +42,8 @@ import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.util.Global;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
-import nl.mpi.tla.flat.deposit.util.Saxon;
-import nl.mpi.tla.flat.deposit.util.SaxonListener;
+import nl.mpi.tla.util.Saxon;
+import nl.mpi.tla.util.SaxonListener;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -115,10 +113,8 @@ public class UpdateCollections extends FedoraAction {
                         if (col.getFID().toString().startsWith(ns.getStringValue()+":")) {
                             try {
                                 // load the collection's CMD
-                                FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
-                                if (res.getStatus()==200) {
-                                    InputStream str = res.getEntityInputStream();
-                                    XdmNode old = Saxon.buildDocument(new StreamSource(str));
+                                XdmNode old = getCMDDataStream(col.getFID(true));
+                                if (old!=null) {
                                     String oldPID = (col.hasPID()?col.getPID().toString():Saxon.xpath2string(old, "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES));
                                     upsert.setSource(old.asSource());
                                     XdmDestination destination = new XdmDestination();
@@ -146,12 +142,9 @@ public class UpdateCollections extends FedoraAction {
                                     } else
                                         col.setPID(new URI(oldPID));
                                 } else
-                                    throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
-                            } catch(FedoraClientException e) {
-                                if (e.getStatus()==404) {
-                                    logger.debug("Collection["+col.getFID()+"] status["+e.getStatus()+"] has no CMD datastream.");                            
-                                } else
-                                    throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
+                                    throw new DepositException("no CMD for FID["+col.getFID(true)+"]!");
+                            } catch(Exception e) {
+                                throw new DepositException("Unexpected error["+e.getMessage()+"] while querying Fedora Commons!",e);
                             }
                         }
                     }
@@ -168,8 +161,8 @@ public class UpdateCollections extends FedoraAction {
     private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart, String namespace, XdmValue namespaces) throws Exception {
         try {
             // load the collection's CMD
-            FedoraResponse res = getDatastreamDissemination(col.getFID(true).toString(),"CMD").execute();
-            if (res.getStatus()==200) {
+            XdmNode old = getCMDDataStream(col.getFID(true));
+            if (old!=null) {
                 // set parameters
                 upsert.clearParameters();
                 upsert.setParameter(new QName("fid"),new XdmAtomicValue(fidPart));
@@ -180,8 +173,6 @@ public class UpdateCollections extends FedoraAction {
                 if (this.hasParameter("try-fix-pid"))
                     upsert.setParameter(new QName("try-fix-pid"),new XdmAtomicValue(this.getParameter("try-fix-pid").toLowerCase().contains("t")));
 
-                InputStream str = res.getEntityInputStream();
-                XdmNode old = Saxon.buildDocument(new StreamSource(str));
                 String oldPID = Saxon.xpath2string(old, "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
                 upsert.setSource(old.asSource());
                 XdmDestination destination = new XdmDestination();
@@ -214,19 +205,17 @@ public class UpdateCollections extends FedoraAction {
                 } else
                     col.setPID(new URI(oldPID));
             } else {
-                throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+                throw new DepositException("no CMD for FID["+col.getFID(true)+"]!");
             }
-        } catch(FedoraClientException e) {
-            if (e.getStatus()==404)
-                logger.debug("Collection["+col.getFID()+"] status["+e.getStatus()+"] has no CMD datastream.");
-            else
-                throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
+        } catch(Exception e) {
+            throw new DepositException("Unexpected error["+e.getMessage()+"] while querying Fedora Commons!",e);
         }
     }
     
     private XsltTransformer dc = null;
     
-    private void updateDC(File fox, URI fid, URI pid) throws FedoraClientException, SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
+    private void updateDC(File fox, URI fid, URI pid) throws SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
+        /*
         FedoraResponse res = getDatastreamDissemination(fid.toString(),"DC").execute();
         if (res.getStatus()==200) {
             InputStream str = res.getEntityInputStream();
@@ -249,6 +238,7 @@ public class UpdateCollections extends FedoraAction {
             }
         } else
             throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
+        */
     }
     
 }
