@@ -24,7 +24,7 @@ import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.util.Global;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 
 /**
  * Class used to retrieve the name to use for the dataset base folder.

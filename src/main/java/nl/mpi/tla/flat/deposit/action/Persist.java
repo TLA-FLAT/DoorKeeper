@@ -42,7 +42,7 @@ import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicies;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicy;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicyLoader;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistencePolicyMatcher;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 
 /**
  *

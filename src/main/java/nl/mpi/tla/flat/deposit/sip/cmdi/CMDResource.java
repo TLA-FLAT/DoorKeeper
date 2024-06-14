@@ -26,7 +26,7 @@ import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.DepositException;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;

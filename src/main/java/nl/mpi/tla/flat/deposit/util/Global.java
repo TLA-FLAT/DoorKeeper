@@ -34,13 +34,24 @@ public class Global {
     
     static {
         NAMESPACES.put("cmd", CMD_NS);
-        NAMESPACES.put("lat", LAT_NS);
         NAMESPACES.put("dc", "http://purl.org/dc/elements/1.1/");
+        NAMESPACES.put("fedora", "http://fedora.info/definitions/v4/repository#");
         NAMESPACES.put("fits", "http://hul.harvard.edu/ois/xml/ns/fits/fits_output");
         NAMESPACES.put("flat", "java:nl.mpi.tla.flat");
         NAMESPACES.put("foxml", "info:fedora/fedora-system:def/foxml#");
+        NAMESPACES.put("lat", LAT_NS);
+        NAMESPACES.put("ldp", "http://www.w3.org/ns/ldp#");
+        NAMESPACES.put("model", "info:fedora/fedora-system:def/model#");
+        NAMESPACES.put("oai", "http://www.openarchives.org/OAI/2.0/");
+        NAMESPACES.put("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+        NAMESPACES.put("relsext", "info:fedora/fedora-system:def/relations-external#");
+        NAMESPACES.put("onto-relsext", "http://islandora.ca/ontology/relsext#");
         NAMESPACES.put("sx", "java:nl.mpi.tla.saxon");
+        NAMESPACES.put("srx", "http://www.w3.org/2005/sparql-results#");
+        NAMESPACES.put("view", "info:fedora/fedora-system:def/view#");        
         NAMESPACES.put("xs", "http://www.w3.org/2001/XMLSchema");
+        NAMESPACES.put("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+        NAMESPACES.put("ldp", "http://www.w3.org/ns/ldp#");
     };
     
     static public String asOfDateTime(Date date) {

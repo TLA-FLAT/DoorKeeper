@@ -19,6 +19,7 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import javax.xml.transform.Source;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.URIResolver;
@@ -29,8 +30,8 @@ import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.util.Saxon;
-import nl.mpi.tla.flat.deposit.util.SaxonListener;
+import nl.mpi.tla.util.Saxon;
+import nl.mpi.tla.util.SaxonListener;
 import org.apache.commons.io.FileUtils;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
@@ -138,11 +139,12 @@ public class ACL extends AbstractAction {
                 wacl2acl.setParameter(new QName("default-roles"), this.params.get("default-role"));
             wacl2acl.setSource(new StreamSource(dir +"/policy.sem"));
             destination = new XdmDestination();
+            destination.setBaseURI(new URI("file:///void/null"));
             wacl2acl.setDestination(destination);
             wacl2acl.transform();
             Saxon.save(destination, new File(dir + "/policy.acl"));
 
-            // convert intermediate ACl to XACM using ACL/ACL2XACML.xsl or an override
+            // convert intermediate ACl to XACML using ACL/ACL2XACML.xsl or an override
             XsltTransformer acl2xacml = null;
             if (this.hasParameter("acl2xacml")) {
                 File x = new File(this.getParameter("acl2xacml"));
@@ -171,6 +173,7 @@ public class ACL extends AbstractAction {
             }
             acl2xacml.setSource(new StreamSource(dir +"/policy.acl"));
             destination = new XdmDestination();
+            destination.setBaseURI(new URI("file:///void/null"));
             acl2xacml.setDestination(destination);
             acl2xacml.transform();
         } catch (Exception e) {

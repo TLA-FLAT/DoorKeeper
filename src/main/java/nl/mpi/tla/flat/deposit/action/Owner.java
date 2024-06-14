@@ -17,10 +17,9 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
-import java.util.Properties;
+import java.net.URI;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -28,8 +27,8 @@ import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.util.Saxon;
-import nl.mpi.tla.flat.deposit.util.SaxonListener;
+import nl.mpi.tla.util.Saxon;
+import nl.mpi.tla.util.SaxonListener;
 import org.apache.commons.io.FileUtils;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
@@ -80,8 +79,9 @@ public class Owner extends AbstractAction {
                 }
                 // convert policy N3 to TriX
                 // https://jena.apache.org/documentation/io/
-                Model model = ModelFactory.createDefaultModel() ;
-                model.read(policy.getAbsolutePath()) ;
+                Model model = ModelFactory.createDefaultModel();
+                logger.debug("policy["+policy.getAbsolutePath()+"]");
+                model.read(policy.getAbsolutePath(),"TURTLE");
                 OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"));
                 RDFDataMgr.write(trix, model, Lang.TRIX);
 
@@ -98,13 +98,16 @@ public class Owner extends AbstractAction {
                 wacl2owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
                 // pipe
                 XdmDestination destination = new XdmDestination();
+                destination.setBaseURI(new URI("file:///void/null"));
                 trix2sem.setDestination(wacl2owner);
                 wacl2owner.setDestination(destination);
                 trix2sem.transform();
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            logger.debug("The creation of the owner file failed! ["+e+"]");
             throw new DepositException("The creation of the owner file failed!", e);
         }
+        logger.debug("Does the owner file exist?");
         return true;
     }
 

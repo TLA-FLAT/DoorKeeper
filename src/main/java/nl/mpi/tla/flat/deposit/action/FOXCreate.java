@@ -36,8 +36,8 @@ import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
-import nl.mpi.tla.flat.deposit.util.SaxonListener;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.SaxonListener;
+import nl.mpi.tla.util.Saxon;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
@@ -143,6 +143,7 @@ public class FOXCreate extends AbstractAction {
             // go
             fox.setSource(new DOMSource(context.getSIP().getRecord(),context.getSIP().getBase().toURI().toString()));
             XdmDestination destination = new XdmDestination();
+            destination.setBaseURI(new URI("file:///void/null"));
             fox.setDestination(destination);
             fox.transform();
             

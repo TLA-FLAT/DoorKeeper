@@ -62,7 +62,7 @@ import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 import org.apache.commons.io.FileUtils;
 
 /**
@@ -144,7 +144,7 @@ public class FITS extends AbstractAction {
 					logger.debug("resource[" + file + "] mimetype?");
 					result = null;
 					try {
-						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath());
+						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath().replaceAll(" ","+"));
 						if (threadCounter <= threadLimit) {
 							future = obj.submit(() -> {
 								threadCounter = threadCounter + 1;

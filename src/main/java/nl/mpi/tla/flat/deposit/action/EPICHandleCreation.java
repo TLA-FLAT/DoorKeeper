@@ -28,7 +28,7 @@ import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 
 import org.apache.commons.configuration.XMLConfiguration;
 import org.slf4j.Logger;
@@ -94,7 +94,7 @@ public class EPICHandleCreation extends AbstractAction {
             
             boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
 
-            PIDService ps = new PIDService(xConfig, null);
+            PIDService ps = PIDService.create(xConfig, null);
             
             if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
 
@@ -267,7 +267,7 @@ public class EPICHandleCreation extends AbstractAction {
 	        boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
                 String tombstone = xConfig.getString("tombstone");
 	        
-	        PIDService ps = new PIDService(xConfig, null);
+	        PIDService ps = PIDService.create(xConfig, null);
 	        
 	        for (ListIterator<XdmItem> iter = events.listIterator(events.size()); iter.hasPrevious();) {
 	            XdmItem event = iter.previous();
