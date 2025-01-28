@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -36,14 +36,14 @@ import org.slf4j.LoggerFactory;
 abstract public class FedoraAction extends AbstractAction {
 
     private static final Logger logger = LoggerFactory.getLogger(FedoraAction.class.getName());
-    
+
     private static String user = null;
-    
+
     private XMLConfiguration fedoraConfig = null;
 
     public void connect(Context context) throws DepositException {
         try {
-            fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));        
+            fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));
 
             String user = fedoraConfig.getString("userName");
             if (!FedoraRequest.isDefaultClientSet() || this.user==null || this.user!=user ) {
@@ -59,11 +59,11 @@ abstract public class FedoraAction extends AbstractAction {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
     }
-    
+
     public String getFedoraUser() {
         return this.user;
     }
-    
+
     public URI lookupFID(URI pid) throws DepositException {
         URI fid = null;
         try {
@@ -83,7 +83,7 @@ abstract public class FedoraAction extends AbstractAction {
         }
         return fid;
     }
-    
+
     public URI lookupPID(URI fid) throws DepositException {
         URI pid = null;
         try {
@@ -103,7 +103,7 @@ abstract public class FedoraAction extends AbstractAction {
         }
         return pid;
     }
-    
+
     public Date lookupAsOfDateTime(URI fid) throws DepositException {
         try {
             return getObjectProfile(fid.toString().replaceAll("#.*","")).execute().getLastModifiedDate();
@@ -111,5 +111,5 @@ abstract public class FedoraAction extends AbstractAction {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
     }
-    
+
 }

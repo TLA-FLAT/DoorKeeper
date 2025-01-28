@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -46,17 +46,17 @@ import org.slf4j.LoggerFactory;
  * @author pavsri
  */
 public class FedoraLoadCollectionHierarchy extends FedoraAction {
-    
+
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(FedoraLoadCollectionHierarchy.class.getName());
-    
+
     @Override
-    public boolean perform(Context context) throws DepositException {       
+    public boolean perform(Context context) throws DepositException {
         try {
             connect(context);
-            
+
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
             XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
-            
+
             SIPInterface sip = context.getSIP();
             if (sip.hasCollections()) {
                 // check if known collections are complete
@@ -115,10 +115,10 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             throw ex;
         } catch (Exception ex) {
             throw new DepositException(ex);
-        }        
+        }
         return true;
     }
-    
+
     private void loadParentCollections(Deque<URI> hist,Collection col, String namespace, XdmValue namespaces) throws Exception {
         // fetch parent collections
         String sparql = "SELECT ?fid WHERE { <info:fedora/"+col.getFID(true).toString()+"> <info:fedora/fedora-system:def/relations-external#isMemberOfCollection> ?fid } ";
@@ -155,7 +155,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             }
         }
     }
-    
+
     protected void completeFID(Collection col) throws DepositException {
         try {
             if (col!=null) {
@@ -164,7 +164,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                     fid = col.getFID(true);
                 else if (col.hasPID())
                     fid = this.lookupFID(col.getPID());
-                else 
+                else
                     throw new DepositException("Unknown Collection["+col+"]!");
                 if (hasCMDDatastream(fid)) {
                     Date asof = getObjectProfile(fid.toString()).execute().getLastModifiedDate();
@@ -176,7 +176,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             throw new DepositException("Completing the FID of Collection["+col+"] failed!",e);
         }
     }
-    
+
     protected boolean hasCMDDatastream(URI fid) throws DepositException {
         try {
             for(DatastreamProfile p:getDatastreams(fid.toString()).execute().getDatastreamProfiles()) {

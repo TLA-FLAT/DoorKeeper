@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -43,17 +43,17 @@ import net.sf.saxon.s9api.XdmValue;
  * @author pavsri
  */
 public class EPICHandleCreation extends AbstractAction {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(EPICHandleCreation.class.getName());
 
     @Override
     public boolean perform(Context context) throws DepositException {
-        
+
         try {
-            
+
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
             XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
-        	
+
             String fedora = this.getParameter("fedoraConfig");
             String epic   = this.getParameter("epicConfig");
 
@@ -89,13 +89,13 @@ public class EPICHandleCreation extends AbstractAction {
                 return false;
             }
             logger.debug("EPIC configuration["+config.getAbsolutePath()+"]");
-            
+
             XMLConfiguration xConfig = new XMLConfiguration(config);
-            
+
             boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
 
             PIDService ps = new PIDService(xConfig, null);
-            
+
             if (context.getSIP().hasPID() && context.getSIP().hasFID()) {
 
                 String fid = context.getSIP().getFID().toString().replaceAll("#.*","");
@@ -134,13 +134,13 @@ public class EPICHandleCreation extends AbstractAction {
                     String pid    = col.getPID().toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
                     String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
                     String uuid   = pid.replaceAll(".*/","");
-                    
+
                     String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
 
                     logger.info("Lookup handle["+prefix+"/"+uuid+"]");
                     String cur    = (isTest?null:ps.getPIDLocation(prefix+"/"+uuid));
                     logger.info("Looked up handle["+prefix+"/"+uuid+"] -> URI["+cur+"]");
-                    
+
                     if (cur == null) {
                         logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
                         context.registerRollbackEvent(this, "epic creation", "uuid", uuid, "loc", loc);
@@ -188,7 +188,7 @@ public class EPICHandleCreation extends AbstractAction {
                     }
                 }
             }
-            
+
             Map<URI,URI> pids = context.getPIDs();
             for (URI pid:pids.keySet()) {
                 URI red = pids.get(pid);
@@ -214,7 +214,7 @@ public class EPICHandleCreation extends AbstractAction {
                 }
                 if (c)
                     continue;
-                    
+
                 String pidStr = pid.toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
                 String prefix = pidStr.replaceAll("hdl:([^/]*)/.*","$1");
                 String uuid   = pidStr.replaceAll(".*/","");
@@ -222,7 +222,7 @@ public class EPICHandleCreation extends AbstractAction {
                 logger.info("Lookup handle["+prefix+"/"+uuid+"]");
                 String cur    = (isTest?null:ps.getPIDLocation(prefix+"/"+uuid));
                 logger.info("Looked up handle["+prefix+"/"+uuid+"] -> URI["+cur+"]");
-                    
+
                 if (cur == null) {
                     logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+red+"]");
                     context.registerRollbackEvent(this, "epic creation", "uuid", uuid, "loc", red.toString());
@@ -238,7 +238,7 @@ public class EPICHandleCreation extends AbstractAction {
         } catch(Exception e) {
             throw new DepositException(e);
         }
-        
+
         return true;
     }
     public void rollback(Context context, List<XdmItem> events) {
@@ -248,7 +248,7 @@ public class EPICHandleCreation extends AbstractAction {
         try {
                 epic = this.getParameter("epicConfig");
 	    	File config = new File(epic);
-	    	
+
 	        if (!config.exists()) {
 	            logger.error("The EPIC configuration["+epic+"] doesn't exist!");
 	            return;
@@ -259,16 +259,16 @@ public class EPICHandleCreation extends AbstractAction {
 	            logger.error("The EPIC configuration["+epic+"] can't be read!");
 	            return;
 	        }
-	        
+
 	        logger.debug("EPIC configuration["+config.getAbsolutePath()+"]");
-	        
+
 	        XMLConfiguration xConfig = new XMLConfiguration(config);
-	        
+
 	        boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
                 String tombstone = xConfig.getString("tombstone");
-	        
+
 	        PIDService ps = new PIDService(xConfig, null);
-	        
+
 	        for (ListIterator<XdmItem> iter = events.listIterator(events.size()); iter.hasPrevious();) {
 	            XdmItem event = iter.previous();
 	            try {
@@ -276,7 +276,7 @@ public class EPICHandleCreation extends AbstractAction {
 	                if (tpe.equals("epic creation")) {
 	                	String uuid = Saxon.xpath2string(event, "param[@name='uuid']/@value");
 	                	String loc = Saxon.xpath2string(event, "param[@name='loc']/@value");
-	                	
+
 	                	if(delMode){
 	                		try {
 	                			ps.deleteHandle(uuid);
@@ -287,7 +287,7 @@ public class EPICHandleCreation extends AbstractAction {
 	                			logger.info("Rollback for deleting the handle[" + uuid + "] for event[" + tpe + "]not possible. Hence opting for tombstone");
 	                		}
 	                	}
-	                	
+
 	                	if(!delMode) {
 	                		ps.updateLocation(uuid, tombstone);
 	                		logger.debug("rollback action[" + this.getName() + "] event[" + tpe + "] updated handle [" + uuid + "]" + " to " + tombstone);
@@ -297,7 +297,7 @@ public class EPICHandleCreation extends AbstractAction {
 		                	String uuid = Saxon.xpath2string(event, "param[@name='uuid']/@value");
 		                	String loc = Saxon.xpath2string(event, "param[@name='loc']/@value");
 		                	String cur = Saxon.xpath2string(event, "param[@name='cur']/@value");
-		                	
+
 		                	ps.updateLocation(uuid, cur);
 	                		logger.debug("rollback action[" + this.getName() + "] event[" + tpe + "] updated handle [" + uuid + "]" + " to " + cur);
 	                }
@@ -308,14 +308,14 @@ public class EPICHandleCreation extends AbstractAction {
 	                logger.error("rollback action[" + this.getName() + "] event[" + event + "] failed!", ex);
 	            }
 	        }
-	        
+
 		} catch (Exception e) {
 			 logger.error("rollback action[" + this.getName() + " failed!", e);
 		}
 
 
-    	
-        
+
+
     }
     }
 }

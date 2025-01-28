@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.util.StatusPrinter;
 import java.io.File;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.UUID;
@@ -43,9 +42,9 @@ import org.slf4j.MDC;
  * @author menzowi
  */
 public class WorkspaceLogSetup extends AbstractAction {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(WorkspaceLogSetup.class.getName());
-    
+
     @Override
     public boolean perform(Context context) {
         if (MDC.get("sip")==null)
@@ -66,19 +65,19 @@ public class WorkspaceLogSetup extends AbstractAction {
                     return false;
                 }
             }
-                        
+
             File dir = new File(getParameter("dir","./logs"));
             if (!dir.exists())
                 FileUtils.forceMkdir(dir);
-            
+
             File logback = dir.toPath().resolve("./logback.xml").toFile();
-            
+
             if (!logback.exists()) {
                 // create {$work}/logs/logback-dk.xml
                 logback = dir.toPath().resolve("./logback-dk.xml").toFile();
                 if (logback.exists())
                     logback.delete();
-                
+
                 XsltTransformer configure = Saxon.buildTransformer(WorkspaceLogSetup.class.getResource("/WorkspaceLog/config-log.xsl")).load();
                 SaxonListener listener = new SaxonListener("WorkspaceLogSetup", MDC.get("sip"));
                 configure.setMessageListener(listener);
@@ -86,17 +85,17 @@ public class WorkspaceLogSetup extends AbstractAction {
 
                 configure.setParameter(new QName("dir"), new XdmAtomicValue(dir.toString()));
                 configure.setParameter(new QName("sip"), new XdmAtomicValue(MDC.get("sip")));
-                
+
                 Source in = (config!=null?new StreamSource(config):new StreamSource(WorkspaceLogSetup.class.getResource("/WorkspaceLog/empty-config.xml").toString()));
                 configure.setSource(in);
-                
+
                 XdmDestination destination = new XdmDestination();
                 configure.setDestination(destination);
-                
+
                 configure.transform();
-                
+
                 Saxon.save(destination,logback);
-        
+
                 if (!dir.toPath().resolve("./user-log.xml").toFile().exists()) {
                     // copy user-log.xml to {$work}/logs/user-log.xml
                     Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/user-log.xml"), dir.toPath().resolve("./user-log.xml"));
@@ -106,7 +105,7 @@ public class WorkspaceLogSetup extends AbstractAction {
                     Files.copy(FOXCreate.class.getResourceAsStream("/WorkspaceLog/log4j.dtd"), dir.toPath().resolve("./log4j.dtd"));
                 }
             }
-            
+
             Logger logger = LoggerFactory.getLogger(nl.mpi.tla.flat.deposit.Flow.class);
             LoggerContext logctxt = (LoggerContext) LoggerFactory.getILoggerFactory();
             JoranConfigurator configurator = new JoranConfigurator();
@@ -120,10 +119,10 @@ public class WorkspaceLogSetup extends AbstractAction {
                 "But you can never leave!\"\n"
             );
         } catch (Exception ex) {
-            this.logger.error("Couldn't setup the deposit log!",ex);
+            logger.error("Couldn't setup the deposit log!",ex);
             return false;
         }
         return true;
     }
-    
+
 }

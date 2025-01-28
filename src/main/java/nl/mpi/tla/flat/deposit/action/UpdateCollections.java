@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -56,19 +56,19 @@ import org.slf4j.MDC;
  * @author pavsri
  */
 public class UpdateCollections extends FedoraAction {
-    
+
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(UpdateCollections.class.getName());
-    
+
     private File dir = null;
     private File first = null;
-    
+
     private XsltTransformer upsert = null;
-    
+
     @Override
-    public boolean perform(Context context) throws DepositException {       
+    public boolean perform(Context context) throws DepositException {
         try {
             connect(context);
-            
+
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
             XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
 
@@ -76,20 +76,20 @@ public class UpdateCollections extends FedoraAction {
             dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
                  FileUtils.forceMkdir(dir);
-            
+
             if (this.hasParameter("firstDir")) {
                 first = new File(getParameter("firstDir"));
                 if (!first.exists())
                      FileUtils.forceMkdir(first);
             } else
                 first = dir;
-                
+
 
             // prep the stylesheet
             upsert = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/upsert-collection.xsl")).load();
             SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
             upsert.setMessageListener(listener);
-            upsert.setErrorListener(listener);            
+            upsert.setErrorListener(listener);
             upsert.setParameter(new QName("fid"),new XdmAtomicValue(context.getSIP().getFID()));
             upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(context.getSIP().getPID()));
             if (context.getSIP().isUpdate()) {
@@ -149,7 +149,7 @@ public class UpdateCollections extends FedoraAction {
                                     throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
                             } catch(FedoraClientException e) {
                                 if (e.getStatus()==404) {
-                                    logger.debug("Collection["+col.getFID()+"] status["+e.getStatus()+"] has no CMD datastream.");                            
+                                    logger.debug("Collection["+col.getFID()+"] status["+e.getStatus()+"] has no CMD datastream.");
                                 } else
                                     throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
                             }
@@ -161,10 +161,10 @@ public class UpdateCollections extends FedoraAction {
             }
         } catch (Exception ex) {
             throw new DepositException(ex);
-        }        
+        }
         return true;
     }
-    
+
     private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart, String namespace, XdmValue namespaces) throws Exception {
         try {
             // load the collection's CMD
@@ -223,9 +223,9 @@ public class UpdateCollections extends FedoraAction {
                 throw new DepositException("Unexpected status["+e.getStatus()+"] while querying Fedora Commons!",e);
         }
     }
-    
+
     private XsltTransformer dc = null;
-    
+
     private void updateDC(File fox, URI fid, URI pid) throws FedoraClientException, SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
         FedoraResponse res = getDatastreamDissemination(fid.toString(),"DC").execute();
         if (res.getStatus()==200) {
@@ -250,5 +250,5 @@ public class UpdateCollections extends FedoraAction {
         } else
             throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
     }
-    
+
 }
