@@ -232,7 +232,7 @@ public class FITS extends AbstractAction {
 								try {
 									// loop over /mimetypes/mimetype
 									boolean bCheck1 = false; // tells if a mimetype was found for the resource
-									ThreadLocal<Logger> threadLogger = ThreadLocal.withInitial(() -> logger);
+									Logger threadLogger = logger;
 									for (Iterator<XdmItem> iter = Saxon.xpathIterator(mimetypes, "/mimetypes/mimetype",
 											null, NAMESPACES); iter.hasNext();) {
 										XdmItem mt = iter.next();
@@ -249,18 +249,18 @@ public class FITS extends AbstractAction {
 													// no xpath, so fall back to the default xpath
 													xp = MIMETYPE_XPATH;
 												}
-												threadLogger.get().debug(". . . assertions[" + xp + "] check");
+												threadLogger.debug(". . . assertions[" + xp + "] check");
 												// evaluate xpath
 												Map<String, XdmValue> vars = new HashMap<>();
 												vars.put("mime", new XdmAtomicValue(mime));
 												if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
 													// the assertions XPath failed, continue to the next
 													// /mimetypes/mimetype
-													threadLogger.get().debug(". . . assertions[" + xp + "] check failed");
+													threadLogger.debug(". . . assertions[" + xp + "] check failed");
 													bCheck2 = null;
 													break;
 												}
-												threadLogger.get().debug(". . . assertions[" + xp + "] check succeeded");
+												threadLogger.debug(". . . assertions[" + xp + "] check succeeded");
 												// the assertions XPath succeeded, check the assertions for this
 												// mimetype
 												Boolean bCheck3 = true; // tells if all mimetype assertions succeeded
@@ -275,18 +275,18 @@ public class FITS extends AbstractAction {
 														bCheck3 = Saxon.xpath2boolean(result, axp, null, NAMESPACES);
 														if (!bCheck3) {
 															// assertion fails, print the AVT log message
-															threadLogger.get().debug(". . . . assert[" + axp + "] check failed");
-															threadLogger.get().error(
+															threadLogger.debug(". . . . assert[" + axp + "] check failed");
+															threadLogger.error(
 																	"File '{}' has a mimetype '{}' which is ALLOWED in this repository, but fails an assertion!",
 																	file, mime);
-																	threadLogger.get().error("Message from FITS file: " + Saxon.avt(
+																	threadLogger.error("Message from FITS file: " + Saxon.avt(
 																	Saxon.xpath2string(a, "@message"), result,
 																	context.getProperties(), NAMESPACES));
 															// break out of the assertion loop
 															break;
 														}
 														// assertion is positive, go to next
-														threadLogger.get().debug(". . . . assert[" + axp + "] check succeeded");
+														threadLogger.debug(". . . . assert[" + axp + "] check succeeded");
 													} else {
 														// the assertion xpath does not exist
 														throw new DepositException(
@@ -297,11 +297,11 @@ public class FITS extends AbstractAction {
 												}
 												if (!bCheck3) {
 													// some assertion of this assertions failed
-													threadLogger.get().debug(". . . assertions[" + xp + "] failed");
+													threadLogger.debug(". . . assertions[" + xp + "] failed");
 													bCheck2 = Boolean.FALSE;
 													break;
 												} else
-													threadLogger.get().debug(". . . assertions[" + xp + "] succeeded");
+													threadLogger.debug(". . . assertions[" + xp + "] succeeded");
 											}
 										} else {
 											// no assertions, use just the path
@@ -315,37 +315,37 @@ public class FITS extends AbstractAction {
 											vars.put("mime", new XdmAtomicValue(mime));
 											if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
 												// the assertions XPath failed, continue to the next /mimetypes/mimetype
-												threadLogger.get().debug(". . . assertions[" + xp + "] check failed");
+												threadLogger.debug(". . . assertions[" + xp + "] check failed");
 												bCheck2 = null;
 												continue;
 											}
-											threadLogger.get().debug(". . . assertions[" + xp + "] check succeeded");
+											threadLogger.debug(". . . assertions[" + xp + "] check succeeded");
 										}
 										if (bCheck2 == null) {
-											threadLogger.get().debug(". . continue to next mimetype");
+											threadLogger.debug(". . continue to next mimetype");
 											continue;
 										}
 										if (bCheck2.booleanValue()) {
 											// all assertions succeeded
-											threadLogger.get().debug(". . mimetype[" + mime + "] succeeded");
+											threadLogger.debug(". . mimetype[" + mime + "] succeeded");
 											bCheck1 = true;
-											threadLogger.get().info(
+											threadLogger.info(
 													"Resource[{}] has a mimetype which is ALLOWED in this repository and satisfies all assertions: '{}'",
 													file, mime);
 											if (resource.hasMime() && !resource.getMime().equals(mime)) {
 												logger.warn("Resource mimetype changed from '{}' to '{}'",
 														resource.getMime(), mime);
 											}
-											threadLogger.get().debug("Setting resource mimetype to '{}'", mime);
+											threadLogger.debug("Setting resource mimetype to '{}'", mime);
 											resource.setMime(mime);
 										} else
-											threadLogger.get().debug(". . mimetype[" + mime + "] failed");
+											threadLogger.debug(". . mimetype[" + mime + "] failed");
 										break;
 									}
 
 									if (!bCheck1) {
 										// no mimetype was found, look for the otherwise
-										threadLogger.get().debug(". mimetypes failed, checking otherwise");
+										threadLogger.debug(". mimetypes failed, checking otherwise");
 										XdmItem o = Saxon.xpathSingle(mimetypes, "/mimetypes/otherwise");
 										if (o != null) {
 											// check for an xpath
@@ -356,26 +356,26 @@ public class FITS extends AbstractAction {
 												if (!fallback.equals("")) {
 													// use the non-empty fallback value as mimetype for the resource
 													bCheck1 = true;
-													threadLogger.get().error("Use fallback mimetype[{}] for resource[{}]", fallback,
+													threadLogger.error("Use fallback mimetype[{}] for resource[{}]", fallback,
 															file);
 													if (resource.hasMime() && !resource.getMime().equals(fallback)) {
-														threadLogger.get().warn("Resource mimetype changed from '{}' to '{}'",
+														threadLogger.warn("Resource mimetype changed from '{}' to '{}'",
 																resource.getMime(), fallback);
 													}
-													threadLogger.get().debug("Setting resource mimetype to '{}'", fallback);
+													threadLogger.debug("Setting resource mimetype to '{}'", fallback);
 													resource.setMime(fallback);
 												}
 											}
 										} else
-											threadLogger.get().debug(". mimetypes failed, no otherwise");
+											threadLogger.debug(". mimetypes failed, no otherwise");
 
 										if (!bCheck1) {
 											// no allowed or fallback mimetype was found for this resource
-											threadLogger.get().debug(". mimetypes failed");
-											threadLogger.get().error("No mimetype found for resource[{}]", file);
+											threadLogger.debug(". mimetypes failed");
+											threadLogger.error("No mimetype found for resource[{}]", file);
 											unallowed++;
 										} else
-											threadLogger.get().debug(". mimetypes succeeded");
+											threadLogger.debug(". mimetypes succeeded");
 									}
 								} catch (Exception ex) {
 									throw new DepositException(ex);
