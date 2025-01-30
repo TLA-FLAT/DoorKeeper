@@ -237,7 +237,7 @@ public class FITS extends AbstractAction {
 											null, NAMESPACES); iter.hasNext();) {
 										XdmItem mt = iter.next();
 										String mime = Saxon.xpath2string(mt, "normalize-space(@value)");
-										threadLogger.get().debug(". . mimetype[" + mime + "] check");
+										threadLogger.debug(". . mimetype[" + mime + "] check");
 										Boolean bCheck2 = Boolean.TRUE; // tells if all assertion groups succeeded
 										if (Saxon.xpath2boolean(mt, "exists(assertions)")) {
 											for (Iterator<XdmItem> iter2 = Saxon.xpathIterator(mt, "assertions", null,
