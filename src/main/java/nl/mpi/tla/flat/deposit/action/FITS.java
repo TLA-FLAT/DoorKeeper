@@ -232,12 +232,7 @@ public class FITS extends AbstractAction {
 								try {
 									// loop over /mimetypes/mimetype
 									boolean bCheck1 = false; // tells if a mimetype was found for the resource
-									ThreadLocal<Logger> threadLogger = new ThreadLocal<Logger>() {
-										@Override
-										protected Logger initialValue() {
-											return LoggerFactory.getLogger(FITS.class);
-										}
-									};
+									ThreadLocal<Logger> threadLogger = ThreadLocal.withInitial(() -> logger);
 									for (Iterator<XdmItem> iter = Saxon.xpathIterator(mimetypes, "/mimetypes/mimetype",
 											null, NAMESPACES); iter.hasNext();) {
 										XdmItem mt = iter.next();
