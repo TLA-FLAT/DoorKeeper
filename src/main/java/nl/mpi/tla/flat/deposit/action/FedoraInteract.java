@@ -34,6 +34,7 @@ import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.Saxon;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,32 +80,37 @@ public class FedoraInteract extends FedoraAction {
 			}
 
 			// - <fid>.<asof>.props (props -> modify (some) properties)
-			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
-			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
+                        
+                        // TODO: look also at src/main/resources/FedoraInteract/props2upd.xsl
+                        String sparql= """
+                            PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                            DELETE { ?ds <%s> '%s' }
+                            INSERT { ?ds <%s> '%s'}
+                            WHERE  { ?ds dc:identifier = '%s'""".indent(2);
+
+                        File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
+			for (File propfile : propfiles) {
+				String fid = propfile.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
+                                XdmNode ds = fcrepo(new URI(fid));
 				try {
-					String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
+					String epoch = propfile.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
 					Date asof = new Date(Long.parseLong(epoch));
-					logger.debug("Properties[" + fox + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
-					XdmNode props = Saxon.buildDocument(new StreamSource(fox));
+					logger.debug("Properties[" +  propfile + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
+					XdmNode props = Saxon.buildDocument(new StreamSource(propfile));
 					for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES); iter.hasNext();) {
 						XdmItem prop = iter.next();
 						String name = Saxon.xpath2string(prop, "@NAME");
-						String value = Saxon.xpath2string(prop, "@VALUE");
-						if (name.equals("info:fedora/fedora-system:def/model#label")) {
-
-							context.registerRollbackEvent(this, "property", "fid", fid, "prop", "label", "old", getObjectProfile(fid).execute().getLabel(), "new", value, "last", Global.asOfDateTime(getObjectProfile(fid).execute().getLastModifiedDate()));
-
-							FedoraResponse res = modifyObject(fid).lastModifiedDate(asof).label(value).execute();
-							if (res.getStatus() != 200)
-								throw new DepositException("Unexpected status[" + res.getStatus()+ "] while interacting with Fedora Commons!");
-						}
+						String newval = Saxon.xpath2string(prop, "@VALUE");
+                                                String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+name+"']");
+						context.registerRollbackEvent(this, "property", "fid", fid, "prop", name, "old",oldval, "new", newval);
+                                                String rest = fedoraConfig.getString("localBase");
+                                                String rfid = rest+"/"+fid;
+                                                        
+                                                sparql=sparql.formatted(name,oldval,name,newval,rfid);
+                                                FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
 					}
-				} catch (FedoraClientException e) {
-					if (e.getStatus() == 404) {
-						throw new DepositException("FedoraObject[" + fid + "] wasn't created!", e);
-					} else
-						throw new DepositException("Unexpected status[" + e.getStatus() + "] while querying Fedora Commons!", e);
+				} catch (Exception e) {
+                                        throw new DepositException("Unexpected response[" + e + "] while querying Fedora Commons!", e);
 				}
 
 			}
@@ -138,6 +144,8 @@ public class FedoraInteract extends FedoraAction {
 		}
 		return true;
 	}
+        
+        //TODO: remove old methods vvvv
 
 	protected void upsertDatastream(Context context, File fox, String fid, String dsid, String ext) throws DepositException {
 		try {
