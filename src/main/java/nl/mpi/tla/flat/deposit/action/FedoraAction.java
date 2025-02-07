@@ -118,7 +118,7 @@ abstract public class FedoraAction extends AbstractAction {
             String query = "SELECT ?pid WHERE { <"+rest+"/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             XdmNode tpl = sparql(query);
             logger.debug("RESULT["+tpl.toString()+"]");
-            String p = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='pid']/srx:literal[starts-with(.,'https://hdl.handle.net/')])");
+            String p = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='pid']/srx:literal[starts-with(.,'https://hdl.handle.net/')])",null,Global.NAMESPACES);
             if (p!=null && !p.isEmpty())
                 pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
         } catch(URISyntaxException | SaxonApiException e) {
@@ -131,7 +131,7 @@ abstract public class FedoraAction extends AbstractAction {
         XdmNode res = null;
         URI uri = null;
         try {
-            uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
+            uri = new URI("http://islandora.traefik.me:8081/fcrepo/rest/"+fid.toString());
         } catch (Exception e) {
             throw new DepositException(e);   
         }

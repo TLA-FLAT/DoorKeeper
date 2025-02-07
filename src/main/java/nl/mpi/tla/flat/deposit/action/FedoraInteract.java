@@ -16,17 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import static com.yourmediashelf.fedora.client.FedoraClient.*;
-import com.yourmediashelf.fedora.client.FedoraClientException;
-import com.yourmediashelf.fedora.client.request.AddDatastream;
-import com.yourmediashelf.fedora.client.request.ModifyDatastream;
-import com.yourmediashelf.fedora.client.response.AddDatastreamResponse;
-import com.yourmediashelf.fedora.client.response.FedoraResponse;
-import com.yourmediashelf.fedora.client.response.GetDatastreamHistoryResponse;
-import com.yourmediashelf.fedora.client.response.IngestResponse;
-import com.yourmediashelf.fedora.client.response.GetDatastreamResponse;
-import com.yourmediashelf.fedora.client.response.ModifyDatastreamResponse;
-import com.yourmediashelf.fedora.generated.management.DatastreamProfile;
+import org.fcrepo.client.*;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.net.URI;
@@ -43,7 +33,7 @@ import nl.mpi.tla.flat.deposit.sip.Collection;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
-import nl.mpi.tla.flat.deposit.util.Saxon;
+import nl.mpi.tla.util.Saxon;
 import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,11 +59,14 @@ public class FedoraInteract extends FedoraAction {
 			// <fid>.xml (FOXML -> ingest)
 			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.xml")));
 			for (File fox : foxs) {
+                            
 				String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD","");
 				String dsid = (fox.getName().endsWith("_CMD.xml") ? "CMD" : "OBJ");
 				logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
+                                logger.debug("TODO: ingest not yet implemented!");
 
-				context.registerRollbackEvent(this, "ingest", "fid", fid);
+				/*
+                                context.registerRollbackEvent(this, "ingest", "fid", fid);
 
 				IngestResponse iResponse = ingest().format("info:fedora/fedora-system:FOXML-1.1").content(fox).logMessage("Initial ingest").ignoreMime(true).execute();
 				if (iResponse.getStatus() != 201)
@@ -82,6 +75,7 @@ public class FedoraInteract extends FedoraAction {
 				fid = completeFID(sip, new URI(fid), asof).toString();
 				logger.info("Created FedoraObject[" + iResponse.getPid() + "][" + iResponse.getLocation() + "][" + dsid+ "][" + asof + "]");
 				logger.debug("Should match FID[" + fid + "]");
+                                */
 			}
 
 			// - <fid>.<asof>.props (props -> modify (some) properties)
