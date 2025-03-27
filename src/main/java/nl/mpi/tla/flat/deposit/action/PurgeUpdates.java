@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -50,13 +50,13 @@ public class PurgeUpdates extends FedoraAction {
     public boolean perform(Context context) throws DepositException {
 
         try {
-            
+
             // connect to Fedora
             connect(context);
-            
+
             String ext = getParameter("ext",".FITS.xml");
             String xp  = getParameter("path","normalize-space(//fits:md5checksum)");
-            
+
             Path dir = Paths.get(getParameter("dir","./fits")).toAbsolutePath();
             if (!dir.toFile().exists())
                 throw new DepositException("directory["+dir+"] doesn't exist!");
@@ -64,15 +64,15 @@ public class PurgeUpdates extends FedoraAction {
                 throw new DepositException("directory["+dir+"] isn't a directory!");
             if (!dir.toFile().canRead())
                 throw new DepositException("directory["+dir+"] can't be read!");
-            
+
             SIPInterface sip = context.getSIP();
             Set<Resource> resources = context.getSIP().getResources();
-            
+
             for (Resource res:resources) {
                 if (res.isUpdate()) {
                     if (!res.hasFID())
                         throw new DepositException("Update of Resource["+res.getURI()+"] but location in the Repository is unknown!");
-                    
+
                     // get local checksum
                     String name = res.getFile().getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
                     if (res instanceof CMDResource)
@@ -85,27 +85,27 @@ public class PurgeUpdates extends FedoraAction {
                         throw new DepositException("file for Resource["+res.getURI()+"] isn't a file!");
                     if (!f.canRead())
                         throw new DepositException("file for Resource["+res.getURI()+"] can't be read!");
-                    
+
                     XdmNode fd = Saxon.buildDocument(new StreamSource(f));
                     String checksum = Saxon.xpath2string(fd,xp,null,Global.NAMESPACES);
-                    
+
                     if (checksum.isEmpty())
                         throw new DepositException("checksum for Resource["+res.getURI()+"] is unknown!");
-                    
+
                     logger.debug("checksum["+checksum+"] for Resource["+res.getURI()+"]");
-                    
-                    // get repository checksum (from FC DO DC)                    
+
+                    // get repository checksum (from FC DO DC)
                     FedoraResponse resp = getDatastreamDissemination(res.getFID().toString(),"DC").execute();
                     if (resp.getStatus()!=200)
                         throw new DepositException("Unexpected status["+resp.getStatus()+"] while querying Fedora Commons!");
-                        
+
                     XdmNode fc = Saxon.buildDocument(new StreamSource(resp.getEntityInputStream()));
                     logger.debug("DC["+fc.toString()+"]");
                     String fcChecksum = Saxon.xpath2string(fc, "normalize-space(//dc:identifier[starts-with(.,'md5:')])",null,Global.NAMESPACES).replace("md5:","");
 
                     if (fcChecksum.isEmpty())
                         throw new DepositException("Stored checksum for Resource["+res.getURI()+"] is unknown!");
-                    
+
                     logger.debug("FC checksum["+fcChecksum+"] for Resource["+res.getURI()+"]");
 
                     if (fcChecksum.equals(checksum)) {
@@ -116,11 +116,11 @@ public class PurgeUpdates extends FedoraAction {
 
                 }
             }
-            
+
         } catch (Exception ex) {
             throw new DepositException("Couldn't complete CMDI resource mapping", ex);
         }
         return true;
     }
-    
+
 }

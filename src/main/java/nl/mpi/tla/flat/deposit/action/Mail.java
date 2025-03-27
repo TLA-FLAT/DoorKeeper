@@ -25,27 +25,20 @@ import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import javax.xml.transform.dom.DOMSource;
-
-import java.io.File;
-import java.net.URI;
-
 import javax.xml.transform.stream.StreamSource;
-
+import java.io.File;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XdmNode;
-import net.sf.saxon.s9api.XdmValue;
 import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.util.Saxon;
 import nl.mpi.tla.flat.deposit.util.SaxonListener;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.apache.jena.ext.com.google.common.base.Throwables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -79,9 +72,9 @@ public class Mail extends FedoraAction {
 			XdmNode mailNode = (XdmNode) Saxon.xpathSingle(mailNodeConfig, "/mailConfig");
 
 			String sendWhenSuccess = Saxon.xpath2string(mailNode, "./sendWhenSuccess");
-			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");	
-			String sendOnFailedValidation = Saxon.xpath2string(mailNode, "./sendOnFailedValidation"); 
-			logger.debug("sendOnFailedValidation[" + sendOnFailedValidation + "]");	
+			logger.debug("sendWhenSuccess[" + sendWhenSuccess + "]");
+			String sendOnFailedValidation = Saxon.xpath2string(mailNode, "./sendOnFailedValidation");
+			logger.debug("sendOnFailedValidation[" + sendOnFailedValidation + "]");
 			String server = Saxon.xpath2string(mailNode, "./server");
 			logger.debug("Server[" + server + "]");
 			String port = Saxon.xpath2string(mailNode, "./port");
@@ -130,7 +123,7 @@ public class Mail extends FedoraAction {
 				logger.info("No email sent! (mail-config.xml <sendWhenSuccess> has value false) ");
                 return true;
             }
-			
+
 			if (context.getFlow().getStop()!=null) {
 				if (!swordStatus.booleanValue()) { //Validation failed
 					outcome = "FAILED";
@@ -155,9 +148,9 @@ public class Mail extends FedoraAction {
 		          	logger.info("But Code stops: " + context.getFlow().getStop());
 		          	logger.info("No email sent! (this was only a partial DoorKeeper run) ");
 		          	return true;
-				}   	  
+				}
           }
-			
+
             if (swordStatus == null || context.hasException()) {
 				outcome = "FAILED";
 				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
@@ -165,7 +158,7 @@ public class Mail extends FedoraAction {
 				String stackTrace = ExceptionUtils.getFullStackTrace(context.getException());
 				fox.setParameter(new QName("stacktrace"), new XdmAtomicValue(stackTrace));
 			}
-			
+
 			if(outcome.equals("SUCCESS")) {
 				logger.info("Email sent! Normal Doorkeeper run with outcome: "+ outcome);
 				if (context.getSIP().hasPID()) {

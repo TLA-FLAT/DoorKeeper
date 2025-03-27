@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,10 +17,7 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -28,6 +25,7 @@ import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -41,19 +39,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.IntConsumer;
-import java.util.stream.IntStream;
 
-import javax.swing.text.Document;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,7 +99,7 @@ public class FITS extends AbstractAction {
 			threadLimit = 1; // default number of fits thread
 		}
 		if (hasParameter("waitLimit")) {
-			waitLimit = Integer.valueOf(getParameter("threadLimit"));
+			waitLimit = Integer.valueOf(getParameter("waitLimit"));
 		} else {
 			waitLimit = 15; // default waiting of fits thread
 		}
@@ -118,7 +111,7 @@ public class FITS extends AbstractAction {
 		}
 		URL fitsURL = null;
 		try {
-			fitsURL = new URL(fitsService);
+			fitsURL = URI.create(fitsService).toURL();
 		} catch (MalformedURLException ex) {
 			throw new DepositException(ex);
 		}
@@ -144,7 +137,7 @@ public class FITS extends AbstractAction {
 					logger.debug("resource[" + file + "] mimetype?");
 					result = null;
 					try {
-						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath());
+						URL call = fitsURL.toURI().resolve("examine?file=" + file.getAbsolutePath()).toURL();
 						if (threadCounter <= threadLimit) {
 							future = obj.submit(() -> {
 								threadCounter = threadCounter + 1;
@@ -239,12 +232,13 @@ public class FITS extends AbstractAction {
 								try {
 									// loop over /mimetypes/mimetype
 									boolean bCheck1 = false; // tells if a mimetype was found for the resource
+									Logger threadLogger = logger;
 									for (Iterator<XdmItem> iter = Saxon.xpathIterator(mimetypes, "/mimetypes/mimetype",
 											null, NAMESPACES); iter.hasNext();) {
 										XdmItem mt = iter.next();
 										String mime = Saxon.xpath2string(mt, "normalize-space(@value)");
-										logger.debug(". . mimetype[" + mime + "] check");
-										Boolean bCheck2 = new Boolean(true); // tells if all assertion groups succeeded
+										threadLogger.debug(". . mimetype[" + mime + "] check");
+										Boolean bCheck2 = Boolean.TRUE; // tells if all assertion groups succeeded
 										if (Saxon.xpath2boolean(mt, "exists(assertions)")) {
 											for (Iterator<XdmItem> iter2 = Saxon.xpathIterator(mt, "assertions", null,
 													NAMESPACES); iter2.hasNext();) {
@@ -255,18 +249,18 @@ public class FITS extends AbstractAction {
 													// no xpath, so fall back to the default xpath
 													xp = MIMETYPE_XPATH;
 												}
-												logger.debug(". . . assertions[" + xp + "] check");
+												threadLogger.debug(". . . assertions[" + xp + "] check");
 												// evaluate xpath
-												Map vars = new HashMap();
+												Map<String, XdmValue> vars = new HashMap<>();
 												vars.put("mime", new XdmAtomicValue(mime));
 												if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
 													// the assertions XPath failed, continue to the next
 													// /mimetypes/mimetype
-													logger.debug(". . . assertions[" + xp + "] check failed");
+													threadLogger.debug(". . . assertions[" + xp + "] check failed");
 													bCheck2 = null;
 													break;
 												}
-												logger.debug(". . . assertions[" + xp + "] check succeeded");
+												threadLogger.debug(". . . assertions[" + xp + "] check succeeded");
 												// the assertions XPath succeeded, check the assertions for this
 												// mimetype
 												Boolean bCheck3 = true; // tells if all mimetype assertions succeeded
@@ -281,18 +275,18 @@ public class FITS extends AbstractAction {
 														bCheck3 = Saxon.xpath2boolean(result, axp, null, NAMESPACES);
 														if (!bCheck3) {
 															// assertion fails, print the AVT log message
-															logger.debug(". . . . assert[" + axp + "] check failed");
-															logger.error(
+															threadLogger.debug(". . . . assert[" + axp + "] check failed");
+															threadLogger.error(
 																	"File '{}' has a mimetype '{}' which is ALLOWED in this repository, but fails an assertion!",
 																	file, mime);
-															logger.error("Message from FITS file: " + Saxon.avt(
+																	threadLogger.error("Message from FITS file: " + Saxon.avt(
 																	Saxon.xpath2string(a, "@message"), result,
 																	context.getProperties(), NAMESPACES));
 															// break out of the assertion loop
 															break;
 														}
 														// assertion is positive, go to next
-														logger.debug(". . . . assert[" + axp + "] check succeeded");
+														threadLogger.debug(". . . . assert[" + axp + "] check succeeded");
 													} else {
 														// the assertion xpath does not exist
 														throw new DepositException(
@@ -303,11 +297,11 @@ public class FITS extends AbstractAction {
 												}
 												if (!bCheck3) {
 													// some assertion of this assertions failed
-													logger.debug(". . . assertions[" + xp + "] failed");
-													bCheck2 = new Boolean(false);
+													threadLogger.debug(". . . assertions[" + xp + "] failed");
+													bCheck2 = Boolean.FALSE;
 													break;
 												} else
-													logger.debug(". . . assertions[" + xp + "] succeeded");
+													threadLogger.debug(". . . assertions[" + xp + "] succeeded");
 											}
 										} else {
 											// no assertions, use just the path
@@ -317,41 +311,41 @@ public class FITS extends AbstractAction {
 												xp = MIMETYPE_XPATH;
 											}
 											// evaluate xpath
-											Map vars = new HashMap();
+											Map<String, XdmValue> vars = new HashMap<>();
 											vars.put("mime", new XdmAtomicValue(mime));
 											if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
 												// the assertions XPath failed, continue to the next /mimetypes/mimetype
-												logger.debug(". . . assertions[" + xp + "] check failed");
+												threadLogger.debug(". . . assertions[" + xp + "] check failed");
 												bCheck2 = null;
 												continue;
 											}
-											logger.debug(". . . assertions[" + xp + "] check succeeded");
+											threadLogger.debug(". . . assertions[" + xp + "] check succeeded");
 										}
 										if (bCheck2 == null) {
-											logger.debug(". . continue to next mimetype");
+											threadLogger.debug(". . continue to next mimetype");
 											continue;
 										}
 										if (bCheck2.booleanValue()) {
 											// all assertions succeeded
-											logger.debug(". . mimetype[" + mime + "] succeeded");
+											threadLogger.debug(". . mimetype[" + mime + "] succeeded");
 											bCheck1 = true;
-											logger.info(
+											threadLogger.info(
 													"Resource[{}] has a mimetype which is ALLOWED in this repository and satisfies all assertions: '{}'",
 													file, mime);
 											if (resource.hasMime() && !resource.getMime().equals(mime)) {
 												logger.warn("Resource mimetype changed from '{}' to '{}'",
 														resource.getMime(), mime);
 											}
-											logger.debug("Setting resource mimetype to '{}'", mime);
+											threadLogger.debug("Setting resource mimetype to '{}'", mime);
 											resource.setMime(mime);
 										} else
-											logger.debug(". . mimetype[" + mime + "] failed");
+											threadLogger.debug(". . mimetype[" + mime + "] failed");
 										break;
 									}
 
 									if (!bCheck1) {
 										// no mimetype was found, look for the otherwise
-										logger.debug(". mimetypes failed, checking otherwise");
+										threadLogger.debug(". mimetypes failed, checking otherwise");
 										XdmItem o = Saxon.xpathSingle(mimetypes, "/mimetypes/otherwise");
 										if (o != null) {
 											// check for an xpath
@@ -362,26 +356,26 @@ public class FITS extends AbstractAction {
 												if (!fallback.equals("")) {
 													// use the non-empty fallback value as mimetype for the resource
 													bCheck1 = true;
-													logger.error("Use fallback mimetype[{}] for resource[{}]", fallback,
+													threadLogger.error("Use fallback mimetype[{}] for resource[{}]", fallback,
 															file);
 													if (resource.hasMime() && !resource.getMime().equals(fallback)) {
-														logger.warn("Resource mimetype changed from '{}' to '{}'",
+														threadLogger.warn("Resource mimetype changed from '{}' to '{}'",
 																resource.getMime(), fallback);
 													}
-													logger.debug("Setting resource mimetype to '{}'", fallback);
+													threadLogger.debug("Setting resource mimetype to '{}'", fallback);
 													resource.setMime(fallback);
 												}
 											}
 										} else
-											logger.debug(". mimetypes failed, no otherwise");
+											threadLogger.debug(". mimetypes failed, no otherwise");
 
 										if (!bCheck1) {
 											// no allowed or fallback mimetype was found for this resource
-											logger.debug(". mimetypes failed");
-											logger.error("No mimetype found for resource[{}]", file);
+											threadLogger.debug(". mimetypes failed");
+											threadLogger.error("No mimetype found for resource[{}]", file);
 											unallowed++;
 										} else
-											logger.debug(". mimetypes succeeded");
+											threadLogger.debug(". mimetypes succeeded");
 									}
 								} catch (Exception ex) {
 									throw new DepositException(ex);
@@ -400,37 +394,45 @@ public class FITS extends AbstractAction {
 				logger.debug("ERROR in one of the threads! Abort execution! (isAnyError) --> " + isAnyError);
 			}
 		}
-		// Check if all the threads are completed - Start
-		while (threadCounter > 0) {
-			try {
-				logger.debug("Threadcounter > 0 ---> " + threadCounter + " > 0");
-				logger.debug("Wait for all threads to finish (" + waitLimit + " seconds). . . . . . . . . . . . . . . .");
-				executor.awaitTermination(waitLimit, TimeUnit.SECONDS);
-			} catch (InterruptedException e) {
-				throw new DepositException(e);
+		// Initiate an orderly shutdown
+		executor.shutdown();
+
+		// Wait for all threads to complete or timeout
+		boolean terminated;
+		try {
+			terminated = executor.awaitTermination(waitLimit, TimeUnit.SECONDS);
+			if (!terminated) {
+				logger.error("Executor did not terminate in {} seconds", waitLimit);
+				executor.shutdownNow(); // Force shutdown
+				throw new DepositException("Thread execution timed out");
 			}
+		} catch (InterruptedException e) {
+			throw new DepositException("Thread execution was interrupted", e);
 		}
 
+		// Check results from all futures
 		for (Future<Integer> fut : list) {
 			try {
-				// because Future.get() waits for task to get completed
-				logger.info(new Date() + "::" + fut.get());
+				synchronized (FITS.class) {
+					Integer threadResult = fut.get(); // Get results or exception
+					logger.info(new Date() + "::Thread completed with counter=" + threadResult);
+				}
 			} catch (InterruptedException | ExecutionException e) {
-				throw new DepositException("Exception occurred from thread with msg: " + e);
+				logger.error("Thread execution failed: " + e.getMessage());
 			}
 		}
 
-		logger.debug("Execution of all threads successfully completed! We can now safely close the executor.");
-		// Check if all the threads are completed - End
+		logger.debug("All threads completed successfully");
 		executor.shutdown();
 		logger.debug("Executor shutdown done!");
 
-		if (unallowed > 0)
+		if (unallowed > 0) {
 			logger.error("{} resources were not allowed!", unallowed);
+		}
 		return (unallowed == 0);
 	}
 
-	public class TaskLimitSemaphore {
+	class TaskLimitSemaphore {
 
 		private final ExecutorService executor;
 		private final Semaphore semaphore;
@@ -439,37 +441,45 @@ public class FITS extends AbstractAction {
 			this.executor = executor;
 			this.semaphore = new Semaphore(limit);
 		}
-
 		public <T> Future<T> submit(final Callable<T> task) throws Exception {
 			Future<T> future = null;
-			logger.debug("isAnyError Boolean value inside thread: "+isAnyError);
-			if (isAnyError) {
-				throw new Exception("ERROR! So don't acquire anymore threads!");
-			} else {
-				semaphore.acquire();
-				logger.debug("semaphore.acquire()...");
-			}
-			try {
-				future = executor.submit(() -> {
-					try {
-						return task.call();
-					} finally {
-						semaphore.release();
-						logger.debug("semaphore.release()...");
-						threadCounter--;
-						logger.debug("Thread counter decreased to --> " + threadCounter + " . . . . . . .");
-
+			synchronized (FITS.class) {
+				logger.debug("isAnyError Boolean value inside thread: " + isAnyError);
+				if (isAnyError) {
+					throw new Exception("ERROR! So don't acquire anymore threads!");
+				}
+				try {
+					semaphore.acquire();
+					logger.debug("semaphore.acquire()...");
+					future = executor.submit((Callable<T>) () -> {
+						try {
+							return task.call();
+						} catch (Exception e) {
+							synchronized (FITS.class) {
+								isAnyError = true;
+								logger.debug("set isAnyError TRUE");
+							}
+							threadCounter--;
+							logger.debug("ERROR: Thread counter decreased to --> " + threadCounter + " . . . . . . .");
+							throw new Exception("ERROR occurred in thread! -> " + e);
+						} finally {
+							semaphore.release();
+							logger.debug("semaphore.release()...");
+							synchronized (FITS.class) {
+								threadCounter--;
+								logger.debug("Thread counter decreased to --> " + threadCounter + " . . . . . . .");
+							}
+						}
+					});
+				} catch (Exception e) {
+					synchronized (FITS.class) {
+						isAnyError = true;
+						logger.debug("set isAnyError TRUE");
 					}
-				});
-			} catch (Exception e) {
-				isAnyError = true;
-				semaphore.release();
-				logger.debug("ERROR: semaphore.release()...");
-				threadCounter--;
-				logger.debug("ERROR: Thread counter decreased to --> " + threadCounter + " . . . . . . .");
-				throw new Exception("ERROR occurred in thread! -> " + e);
+					throw e;
+				}
 			}
 			return future;
 		}
+		}
 	}
-}

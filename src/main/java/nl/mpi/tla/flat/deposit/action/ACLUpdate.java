@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2018 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -46,17 +46,17 @@ import org.slf4j.MDC;
  * @author menzowi
  */
 public class ACLUpdate extends FedoraAction {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ACLUpdate.class.getName());
-    
+
     private static XsltTransformer strip = null;
 
     @Override
     public boolean perform(Context context) throws DepositException {
         try {
-            
+
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
-            
+
             connect(context);
 
             File dir = new File(getParameter("dir","./acl"));
@@ -65,7 +65,7 @@ public class ACLUpdate extends FedoraAction {
             }
 
             SIPInterface sip = context.getSIP();
-            
+
             // check owner.xml
             File owner = new File(dir + "/owner.xml");
             if (!owner.exists()) {
@@ -93,9 +93,9 @@ public class ACLUpdate extends FedoraAction {
                 own.transform();
                 Saxon.save(destination,owner);
             }
-            
+
             // check POLICY and RELS-EXT
-            if (sip.isUpdate()) {                
+            if (sip.isUpdate()) {
                 this.check(dir,sip.getFID(true).toString(),"AIP");
                 for (Resource res:sip.getResources()) {
                     if (res.isInsert()) {
@@ -120,7 +120,7 @@ public class ACLUpdate extends FedoraAction {
         }
         return true;
     }
-    
+
     void check(File dir,String fid,String tpe) throws Exception {
         // POLICY
         File policy = new File(dir + "/"+fid.replaceAll("[^a-zA-Z0-9]", "_")+".xml");
@@ -169,5 +169,5 @@ public class ACLUpdate extends FedoraAction {
             }
         }
     }
-    
+
 }

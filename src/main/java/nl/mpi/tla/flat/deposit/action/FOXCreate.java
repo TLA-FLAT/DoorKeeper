@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -56,10 +56,10 @@ public class FOXCreate extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
         URIResolver org = Saxon.getXsltCompiler().getURIResolver();
         try {
-            
+
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
             XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
-            
+
             // check for the user profile
             File owner = new File(getParameter("owner"));
             if (!owner.exists()) {
@@ -73,7 +73,7 @@ public class FOXCreate extends AbstractAction {
                 return false;
             }
             XMLConfiguration profile = new XMLConfiguration(owner);
-            
+
             File fedora = new File(getParameter("fedoraConfig"));
             if (!fedora.exists()) {
                 logger.error("The Fedora configuration["+fedora+"] doesn't exist!");
@@ -86,24 +86,24 @@ public class FOXCreate extends AbstractAction {
                 return false;
             }
             logger.debug("Fedora configuration["+fedora.getAbsolutePath()+"]");
-            
+
             File dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
                 FileUtils.forceMkdir(dir);
 
-            
+
             if (hasParameter("jar_cmd2fox")) {
                 Saxon.getXsltCompiler().setURIResolver(new JarURIResolver(org,new File(getParameter("jar_cmd2fox"))));
             }
-            
+
             File xsl = new File(getParameter("cmd2fox"));
             XsltExecutable cmd2fox = Saxon.buildTransformer(xsl);
-            
+
             XsltTransformer fox = cmd2fox.load();
             SaxonListener listener = new SaxonListener("FOXCreate",MDC.get("sip"));
             fox.setMessageListener(listener);
             fox.setErrorListener(listener);
-            
+
             // fixed parameters
             fox.setParameter(new QName("owner"), new XdmAtomicValue(profile.getString("name")));
             fox.setParameter(new QName("fox-base"), new XdmAtomicValue(dir.toString()));
@@ -111,7 +111,7 @@ public class FOXCreate extends AbstractAction {
             fox.setParameter(new QName("repository"), new XdmAtomicValue((new XMLConfiguration(fedora)).getString("publicServer")));
             fox.setParameter(new QName("namespace"), new XdmAtomicValue(namespace));
             fox.setParameter(new QName("namespaces"), namespaces);
-            
+
             // optional parameters
             if (hasParameter("management"))
                 fox.setParameter(new QName("management-dir"), params.get("management"));
@@ -133,19 +133,19 @@ public class FOXCreate extends AbstractAction {
                 fox.setParameter(new QName("license-uri"), params.get("license-uri"));
             if (hasParameter("overwrite-resource-label"))
                 fox.setParameter(new QName("overwrite-resource-label"),new XdmAtomicValue(getParameter("overwrite-resource-label").toLowerCase().contains("t")));
-            
+
             // additional parameters
             for (String param:this.params.keySet()) {
                 if (param.startsWith("xsl-param-"))
                     fox.setParameter(new QName(param.replaceFirst("^xsl-param-","")), params.get(param));
             }
-            
+
             // go
             fox.setSource(new DOMSource(context.getSIP().getRecord(),context.getSIP().getBase().toURI().toString()));
             XdmDestination destination = new XdmDestination();
             fox.setDestination(destination);
             fox.transform();
-            
+
             String fid = Saxon.xpath2string(destination.getXdmNode(),"/*/@PID").replaceAll("#.*","").replaceAll("[^a-zA-Z0-9]", "_");
             File out = new File(dir + "/"+fid+"_CMD.xml");
             if (out.exists()) {
@@ -153,7 +153,7 @@ public class FOXCreate extends AbstractAction {
             }
             TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
             logger.info("created FOX["+out.getAbsolutePath()+"]");
-            
+
             XdmNode cmd = Saxon.buildDocument(new StreamSource(new File(dir+"/"+fid+"_CMD.xml")));
             XdmItem self = Saxon.xpathSingle(cmd,"//cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
             if (self!=null) {
@@ -179,23 +179,23 @@ public class FOXCreate extends AbstractAction {
         }
         return true;
     }
-    
+
     static class JarURIResolver implements URIResolver {
-        
+
         private URIResolver resolver = null;
         private File xsl = null;
-        
+
         public JarURIResolver(URIResolver resolver, File xsl) {
             this.resolver = resolver;
             this.xsl = xsl;
         }
-        
+
         public Source resolve(String href,String base) throws TransformerException {
             if (href.equals("jar:cmd2fox.xsl") && xsl!=null) {
                 return new javax.xml.transform.stream.StreamSource(this.xsl);
             } else {
                 return resolver.resolve(href,base);
             }
-        }        
+        }
     }
 }

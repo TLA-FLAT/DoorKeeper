@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -80,7 +80,7 @@ public class FedoraUser extends AbstractAction {
                 logger.error("The fedora config can't be read!");
                 return false;
             }
-            
+
             // check for the user-specific Fedora config
             File usr = new File(getParameter("userFedoraConfig"));
             if (usr.exists() && !usr.isFile()) {
@@ -90,26 +90,26 @@ public class FedoraUser extends AbstractAction {
                 logger.error("The user-specific fedora config can't be written!");
                 return false;
             }
-            
+
             // get the user and the temp pass
             XMLConfiguration userProfile = new XMLConfiguration(user);
             //String pass = UUID.randomUUID().toString();
-            
+
             // export the php script to a tmp dir
             File tmp = Files.createTempDir();
-            File php = tmp.toPath().resolve("./pass.php").toFile();            
+            File php = tmp.toPath().resolve("./pass.php").toFile();
             FileUtils.copyURLToFile(FedoraUser.class.getResource("/FedoraUser/pass.php"), php);
 
             // exec the drush script
             ProcessBuilder pb = new ProcessBuilder(getParameter("drush"), "php-script", "pass", "--script-path="+tmp, userProfile.getString("name")/*, pass*/);
             pb.directory(new File(getParameter("drupal")));
             pb.redirectErrorStream(true);
-            
+
             Process process = pb.start();
             InputStream is = process.getInputStream();
             InputStreamReader isr = new InputStreamReader(is);
             BufferedReader br = new BufferedReader(isr);
- 
+
             logger.debug("Setting up the user-specific access to fedora:");
             String pass = null;
             String line;
@@ -129,7 +129,7 @@ public class FedoraUser extends AbstractAction {
                 logger.error("Failed to set up the user-specific access to fedora! No pass :-(");
                 res = false;
             }
-            
+
             // clean up the tmp dir
             php.delete();
             tmp.delete();
@@ -145,9 +145,9 @@ public class FedoraUser extends AbstractAction {
             XdmDestination destination = new XdmDestination();
             embed.setDestination(destination);
             embed.transform();
-            
+
             Saxon.save(destination.getXdmNode().asSource(),usr);
-                        
+
         } catch (Exception e) {
             throw new DepositException("Setting up the user-specific access to fedora failed!", e);
         }
