@@ -131,7 +131,7 @@ abstract public class FedoraAction extends AbstractAction {
         XdmNode res = null;
         URI uri = null;
         try {
-            uri = new URI("http://islandora.traefik.me:8081/fcrepo/rest/"+fid.toString());
+            uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
         } catch (Exception e) {
             throw new DepositException(e);   
         }
