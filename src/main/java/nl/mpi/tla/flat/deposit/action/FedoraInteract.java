@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,13 @@ import org.fcrepo.client.*;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
@@ -46,25 +48,25 @@ import nl.mpi.tla.flat.deposit.util.Global;
  */
 public class FedoraInteract extends FedoraAction {
 
-    private static final Logger logger = LoggerFactory.getLogger(FedoraInteract.class.getName());
+	private static final Logger logger = LoggerFactory.getLogger(FedoraInteract.class.getName());
 
-    @Override
-    public boolean perform(Context context) throws DepositException {
-        try {
-            connect(context);
+	@Override
+	public boolean perform(Context context) throws DepositException {
+		try {
+			connect(context);
 
-            SIPInterface sip = context.getSIP();
+			SIPInterface sip = context.getSIP();
 
-            File dir = new File(this.getParameter("dir", "./fox"));
+			File dir = new File(this.getParameter("dir", "./fox"));
 
-            // <fid>.xml (FOXML -> ingest)
-            File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.xml")));
-            for (File fox : foxs) {
-
-                String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD","");
-                String dsid = (fox.getName().endsWith("_CMD.xml") ? "CMD" : "OBJ");
-                logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
-                logger.debug("TODO: ingest not yet implemented!");
+			// <fid>.xml (FOXML -> ingest)
+			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.xml")));
+			for (File fox : foxs) {
+                            
+				String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD","");
+				String dsid = (fox.getName().endsWith("_CMD.xml") ? "CMD" : "OBJ");
+				logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
+                                logger.debug("TODO: ingest not yet implemented!");
 
 				/*
                                 context.registerRollbackEvent(this, "ingest", "fid", fid);
@@ -77,65 +79,38 @@ public class FedoraInteract extends FedoraAction {
 				logger.info("Created FedoraObject[" + iResponse.getPid() + "][" + iResponse.getLocation() + "][" + dsid+ "][" + asof + "]");
 				logger.debug("Should match FID[" + fid + "]");
                                 */
-            }
+			}
 
-            // - <fid>.<asof>.props (props -> modify (some) properties)
+			// - <fid>.<asof>.props (props -> modify (some) properties)
+                        File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
+			for (File propfile : propfiles) {
+				String fid = propfile.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
+                                XdmNode ds = fcrepo(new URI(fid));
+				try {
+					String epoch = propfile.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
+					Date asof = new Date(Long.parseLong(epoch));
+					logger.debug("Properties[" +  propfile + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
+					XdmNode props = Saxon.buildDocument(new StreamSource(propfile));
+					for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES); iter.hasNext();) {
+						XdmItem prop = iter.next();
+						String name = Saxon.xpath2string(prop, "@NAME");
+						String val = Saxon.xpath2string(prop, "@VALUE");
+                                                if (name.equals("info:fedora/fedora-system:def/model#state")) {
+                                                    val = switch(val) {
+                                                        case "A" -> "Active";
+                                                        case "I" -> "Inactive";
+                                                        case "D" -> "Deleted";
+                                                        default -> val;
+                                                    };
+                                                }
+                                                upsertProperty(context,ds,fid,name,val);
+					}
+				} catch (Exception e) {
+                                        throw new DepositException("Unexpected response[" + e + "] while querying Fedora Commons!", e);
+				}
 
-            // TODO: look also at src/main/resources/FedoraInteract/props2upd.xsl
-            String sparql= """
-                            PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                            DELETE { ?ds <%s> '%s' }
-                            INSERT { ?ds <%s> '%s' }
-                            WHERE  {
-                                ?ds dc:identifier '%s' .
-                                ?ds <%s> ?label .
-                                FILTER (!(langMatches(lang(?label),"%s")))
-                            }
-                        """.indent(2);
-
-            File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
-            for (File propfile : propfiles) {
-                String fid = propfile.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
-                XdmNode ds = fcrepo(new URI(fid));
-                try {
-                    String epoch = propfile.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
-                    Date asof = new Date(Long.parseLong(epoch));
-                    logger.debug("Properties[" +  propfile + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
-                    XdmNode props = Saxon.buildDocument(new StreamSource(propfile));
-                    for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES); iter.hasNext();) {
-                        XdmItem prop = iter.next();
-                        String name = Saxon.xpath2string(prop, "@NAME");
-                        String newval = Saxon.xpath2string(prop, "@VALUE");
-                        String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+name+"']");
-
-                        logger.debug("Processing {}", name);
-
-                        if (name.equals("info:fedora/fedora-system:def/model#state")) {
-                            logger.debug("It's the state");
-                            newval = switch (newval) {
-                                case "I" -> "Inactive";
-                                case "A" -> "Active";
-                                case "D" -> "Deleted";
-                                default -> newval;
-                            };
-                            logger.debug("New value: {}", newval);
-                        }
-
-                        String lang = "*"; // TODO: Look up the language of newval
-
-                        context.registerRollbackEvent(this, "property", "fid", fid, "prop", name, "old",oldval, "new", newval);
-                        String rest = fedoraConfig.getString("localBase");
-                        String rfid = rest+"/"+fid;
-
-                        sparql=sparql.formatted(name, oldval, name, newval, rfid, name, lang);
-                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
-                    }
-                } catch (Exception e) {
-                    throw new DepositException("Unexpected response[" + e + "] while querying Fedora Commons!", e);
-                }
-
-            }
-			/*
+			}
+                        /*
 
 			// - <fid>.<dsid>.file ... create/modify DS
 			// - <fid>.<dsid>.<ext>... create/modify DS
@@ -148,27 +123,155 @@ public class FedoraInteract extends FedoraAction {
 				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + ext + "]");
 				upsertDatastream(context, fox, fid, dsid, ext);
 			}
+                        */
 
 			// - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
 			// - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
 			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
 				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
-				String dsid = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
+				String ds = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$", "$1");
 				Date asof = new Date(Long.parseLong(epoch));
 				String ext = fox.getName().replaceFirst("^.*\\.(.*)$", "$1");
-				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + epoch + "=" + asof + "][" + ext + "]");
-				updateDatastream(context, fox, fid, dsid, asof, ext);
+				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + ds + "][" + epoch + "=" + asof + "][" + ext + "]");
+				upsertDatastream(context, fox, fid, ds, ext);
 			}
-			 */
-        } catch (Exception e) {
-            throw new DepositException("The actual deposit in Fedora failed!", e);
+		} catch (Exception e) {
+			throw new DepositException("The actual deposit in Fedora failed!", e);
+		}
+		return true;
+	}
+        
+        protected void upsertProperty(Context context, String fid, String prop, String val)  throws DepositException {
+            try {
+                upsertProperty(context,fcrepo(new URI(fid)),fid,prop,val);
+            } catch (Exception ex) {
+                throw new DepositException(ex);
+            }
         }
-        return true;
-    }
+        
+        protected void upsertProperty(Context context, XdmNode ds, String fid, String prop, String val)  throws DepositException {
+            try {
+                if (prop.equals("http://purl.org/dc/elements/1.1/identifier"))
+                    upsertIdentifier(context,ds,fid,val);
+                String rest = fedoraConfig.getString("localServer");
+                String rfid = rest+"/"+fid;
+                String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']");
+                if (oldval.strip().equals("")) {
+                    // insert
+                   String sparql_template= """
+                     PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                     INSERT { ?ds <%s> '%s' }
+                     WHERE  { ?ds dc:identifier '%s' }""".indent(2);
+                   context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "val", val);
+                    String sparql=sparql_template.formatted(prop,val,fid);
+                    logger.debug("rfid[" +rfid + "] prop["+prop+"] val["+val+"] sparql["+sparql+"]");                                                        
+                    FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                } else if (!oldval.strip().equals(val.strip())) {
+                    // update
+                   String sparql_template= """
+                     PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                     DELETE { ?ds <%s> '%s' }
+                     INSERT { ?ds <%s> '%s' }
+                     WHERE  { ?ds dc:identifier '%s' }""".indent(2);
+                   context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "old", oldval, "new", val);
+                    String sparql=sparql_template.formatted(prop,oldval,prop,val,fid);
+                    logger.debug("rfid[" +rfid + "] prop["+prop+"] old["+oldval+"] new["+val+"] sparql["+sparql+"]");                                                        
+                    FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                } else {
+                    // skip
+                    logger.debug("SKIP: rfid[" +rfid + "] prop["+prop+"] old["+oldval+"] new["+val+"] noop");
+                }
+             } catch (Exception ex) {
+                throw new DepositException(ex);
+            }
+       }
 
-    //TODO: remove old methods vvvv
+        protected void upsertIdentifier(Context context, XdmNode ds, String fid, String val)  throws DepositException {
+            try {
+                String rest = fedoraConfig.getString("localServer");
+                String rfid = rest+"/"+fid;
+                String pre = val.replaceAll("(.+:).*", "$1");
+                logger.debug("MENZO: pre[" + pre + "]");
+                if (val.startsWith("md5:")) {
+                    String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='http://purl.org/dc/elements/1.1/identifier'][starts-with(.,'md5:')]");
+                    if (oldval.strip().equals("")) {
+                        // insert
+                       String sparql_template= """
+                         PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                         INSERT { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
+                         WHERE  { ?ds dc:identifier '%s' }""".indent(2);
+                       context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "val", val);
+                        String sparql=sparql_template.formatted(val,fid);
+                        logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] val["+val+"] sparql["+sparql+"]");                                                        
+                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                    } else if (!oldval.strip().equals(val.strip())) {
+                        // update
+                       String sparql_template= """
+                         PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                         DELETE { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
+                         INSERT { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
+                         WHERE  { ?ds dc:identifier '%s' }""".indent(2);
+                       context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "old", oldval, "new", val);
+                        String sparql=sparql_template.formatted(oldval,val,fid);
+                        logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] old["+oldval+"] new["+val+"] sparql["+sparql+"]");                                                        
+                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                    } else
+                        logger.debug("SKIP: rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] old["+oldval+"] new["+val+"] noop");
+                } else
+                    logger.debug("SKIP: rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] new["+val+"] not md5");
+            } catch (Exception ex) {
+                throw new DepositException(ex);
+            }
+        }
+        protected void upsertDatastream(Context context, File fox, String fid, String ds, String ext) throws DepositException {
+            try {
+                Boolean exists = fcrepo_exists(new URI(fid),ds);
+                if (exists!=null && exists.booleanValue())
+                    updateDatastream(context, fox, fid, ds, ext);
+                else
+                    insertDatastream(context, fox, fid, ds, ext);
+            } catch (Exception e) {
+                throw new DepositException(e);   
+            }
+        }
+        
+        protected void insertDatastream(Context context, File fox, String fid, String ds, String ext) throws DepositException {
+            logger.debug("TODO: insertDatastream["+ds+"] not yet implemented!");
+            // what to do with the various dsid's?
+            // DC -> verwerken in de RDF voor de FID, e.g. dc:identifier naar de md5:...
+            // CMD -> nieuwe binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy
+            // OBJ -> nieuwe binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy
+            // RELS-EXT -> verwerken in de RDF voor de FID, e.g. isConstituentOf
+            // TN -> skip
+        }
+        
+        void updateDatastream(Context context, File fox, String fid, String ds, String ext) throws DepositException {
+            if (ds.equals("DC")) {
+                try {
+                    XdmNode dc = Saxon.buildDocument(new StreamSource(fox));
+                    for (Iterator<XdmItem> iter = Saxon.xpathIterator(dc, "//dc:*", null, NAMESPACES); iter.hasNext();) {
+                        XdmItem prop = iter.next();
+                        String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())");
+                        String val = Saxon.xpath2string(prop, ".");
+                        upsertProperty(context,fid,name,val);
+                    }
+                } catch (Exception ex) {
+                    throw new DepositException(ex);
+                }
+
+            } else
+                logger.debug("TODO: updateDatastream["+ds+"] not yet implemented!");
+            // what to do with the various dsid's?
+            // DC
+            // CMD -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
+            // OBJ -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
+            // RELS-EXT
+            // TN
+        }
+        
+        //TODO: remove old methods vvvv
 /*
 	protected void upsertDatastream(Context context, File fox, String fid, String dsid, String ext) throws DepositException {
 		try {
@@ -234,6 +337,7 @@ public class FedoraInteract extends FedoraAction {
 		}
 	}
 
+        
 	void updateDatastream(Context context, File fox, String fid, String dsid, String ext) throws DepositException {
 		updateDatastream(context, fox, fid, dsid, null, ext);
 	}
@@ -241,7 +345,7 @@ public class FedoraInteract extends FedoraAction {
 	void updateDatastream(Context context, File fox, String fid, String dsid, Date asof, String ext)
 			throws DepositException {
 		try {
-			context.registerRollbackEvent(this, "update", "fid", fid, "dsid", dsid, "last", Global.asOfDateTime(getDatastream(fid, dsid).execute().getLastModifiedDate()));
+// TODO:			context.registerRollbackEvent(this, "update", "fid", fid, "dsid", dsid, "last", Global.asOfDateTime(getDatastream(fid, dsid).execute().getLastModifiedDate()));
 
 			SIPInterface sip = context.getSIP();
 			ModifyDatastreamResponse mdsResponse = null;
@@ -466,5 +570,5 @@ public class FedoraInteract extends FedoraAction {
             }
             return nxt;
         }
- */
+*/
 }

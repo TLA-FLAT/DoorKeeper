@@ -27,6 +27,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -79,6 +80,7 @@ abstract public class FedoraAction extends AbstractAction {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
                 .header("Content-Type", "application/sparql-query")
+                .header("Accept", "application/sparql-results+xml")
                 .POST(BodyPublishers.ofString(query))
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
@@ -127,6 +129,35 @@ abstract public class FedoraAction extends AbstractAction {
         return pid;
     }
     
+    public Boolean fcrepo_exists(URI fid,String ds) throws DepositException {
+        URI uri = fid;
+        if (ds!=null && !ds.isBlank() && !ds.isEmpty())
+            try {
+               uri = new URI(fid.toString()+"/"+ds);
+            } catch (Exception e) {
+                throw new DepositException(e);   
+            }
+        return fcrepo_exists(uri);
+    }
+    
+    public Boolean fcrepo_exists(URI fid) throws DepositException {
+        Boolean res = null;
+        URI uri = null;
+        try {
+            uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
+        } catch (Exception e) {
+            throw new DepositException(e);   
+        }
+        logger.debug("FCREPO["+uri.toString()+"]");
+        try (FcrepoResponse response = new HeadBuilder(uri, fedoraClient)
+            .perform()) {
+                logger.debug("FCREPO code["+response.getStatusCode()+"]");
+                res = new Boolean(response.getStatusCode() == 200);
+            } catch (Exception e) {
+                 throw new DepositException(e);   
+            }
+        return res;
+    }
     public XdmNode fcrepo(URI fid) throws DepositException {
         XdmNode res = null;
         URI uri = null;
@@ -139,6 +170,7 @@ abstract public class FedoraAction extends AbstractAction {
         try (FcrepoResponse response = new GetBuilder(uri, fedoraClient)
             .accept("application/rdf+xml")
             .perform()) {
+                logger.debug("FCREPO code["+response.getStatusCode()+"]");
                 res = Saxon.buildDocument(new StreamSource(response.getBody()));
                 logger.debug("FCREPO response["+res.toString()+"]");
             } catch (Exception e) {
