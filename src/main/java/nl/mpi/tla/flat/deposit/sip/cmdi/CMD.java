@@ -70,9 +70,7 @@ public class CMD implements SIPInterface {
     
     protected Set<Resource> resources = new LinkedHashSet();
     protected Set<Collection> collections = new LinkedHashSet();
-    
-    protected Map<String,String> namespaces = new LinkedHashMap<>();
-    
+        
     protected boolean dirty = false;
     
     protected boolean update = false;
@@ -148,6 +146,8 @@ public class CMD implements SIPInterface {
         if (fid.toString().startsWith(namespace+":")) {
             this.fid = fid;
         } else {
+            logger.debug("CMD.namespace["+namespace+"]");
+            logger.debug("CMD.namespaces["+fedoraNamespaces+"]");
             for(XdmItem ns:fedoraNamespaces) {
                 if (fid.toString().startsWith(ns.getStringValue()+":")) {
                     logger.warn("the FID["+fid+"] has a known namespace, but it's not the active namespace["+namespace+"]!");

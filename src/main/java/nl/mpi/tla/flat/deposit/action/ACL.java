@@ -159,7 +159,7 @@ public class ACL extends AbstractAction {
                 }
                 acl2xacml =  Saxon.buildTransformer(x).load();
             } else {
-                acl2xacml =  Saxon.buildTransformer(ACL.class.getResource("/ACL/ACL2XACML.xsl")).load();
+                acl2xacml =  Saxon.buildTransformer(ACL.class.getResource("/ACL/ACL2WebAC.xsl")).load();
             }
             acl2xacml.setMessageListener(listener);
             acl2xacml.setErrorListener(listener);
