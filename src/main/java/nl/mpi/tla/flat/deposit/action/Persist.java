@@ -91,6 +91,7 @@ public class Persist extends AbstractAction {
                     // 0 is used for the initial ingest (cf FC version numbers)
                     int v = 1;
                     File o = newResourceFile;
+                    logger.debug("first resource[" + newResourceFile.getName() + "]");
                     while (newResourceFile.exists()) {
                         try {
                             context.addPID(new URI("hdl:1234/5678."+v), new URI("file:"+newResourceFile.toString()));
@@ -99,7 +100,9 @@ public class Persist extends AbstractAction {
                             throw new DepositException(e);
                         }
                         newResourceFile = new File(o.toString()+"."+(v++));
+                        logger.debug("next resource[" + newResourceFile.getName() + "]");
                     }
+                    logger.debug("last resource[" + newResourceFile.getName() + "]");
                     // move the file to its persistent place
                     context.registerRollbackEvent(this, "mv", "src", res.getFile().toPath().toString(),"dst",newResourceFile.toPath().toString());
                     Files.move(res.getFile().toPath(), newResourceFile.toPath());
