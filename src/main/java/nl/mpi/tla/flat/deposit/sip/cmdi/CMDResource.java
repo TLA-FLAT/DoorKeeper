@@ -63,7 +63,7 @@ public class CMDResource extends Resource {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
                         this.setFID(u);
                         m = true;
                     }
@@ -82,7 +82,7 @@ public class CMDResource extends Resource {
                 URI u = (base!=null?base.resolve(str):new URI(str));
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
                         this.setFID(u);
                         m = true;
                     }
@@ -103,7 +103,7 @@ public class CMDResource extends Resource {
                 URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
                         this.setFID(u);
                         m = true;
                     }
@@ -193,7 +193,7 @@ public class CMDResource extends Resource {
     public void setFID(URI fid) throws DepositException {
         boolean m = false;
         for(XdmItem ns:namespaces) {
-            if (fid.toString().startsWith(ns+":")) {
+            if (fid.toString().startsWith(ns+"_")) {
                 super.setFID(fid);
                 m = true;
             }
