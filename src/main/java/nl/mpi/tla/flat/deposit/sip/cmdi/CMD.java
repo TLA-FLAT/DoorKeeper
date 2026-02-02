@@ -143,13 +143,13 @@ public class CMD implements SIPInterface {
             }
             logger.warn("SIP["+this.base+"] has already a Fedora Commons PID["+this.fid+"]! new Fedora Commons PID["+fid+"]");
         }
-        if (fid.toString().startsWith(namespace+":")) {
+        if (fid.toString().startsWith(namespace+"_")) {
             this.fid = fid;
         } else {
             logger.debug("CMD.namespace["+namespace+"]");
             logger.debug("CMD.namespaces["+fedoraNamespaces+"]");
             for(XdmItem ns:fedoraNamespaces) {
-                if (fid.toString().startsWith(ns.getStringValue()+":")) {
+                if (fid.toString().startsWith(ns.getStringValue()+"_")) {
                     logger.warn("the FID["+fid+"] has a known namespace, but it's not the active namespace["+namespace+"]!");
                 }
             }
@@ -462,7 +462,7 @@ public class CMD implements SIPInterface {
                 logger.debug("MdSelfLink["+str+"]["+u+"]["+u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*")+"]");
                 boolean m = false;
                 for(XdmItem ns:fedoraNamespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
                         this.setFID(u);
                         m = true;
                     }
@@ -483,7 +483,7 @@ public class CMD implements SIPInterface {
                 URI u = spec.toURI().resolve(str);
                 boolean m = false;
                 for(XdmItem ns:fedoraNamespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
                         this.setFID(u);
                         m = true;
                     }
@@ -503,7 +503,7 @@ public class CMD implements SIPInterface {
                 URI u = spec.toURI().resolve(new URI(null,null,str,null,null));
                 boolean m = false;
                 for(XdmItem ns:fedoraNamespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+":")) {
+                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
                         this.setFID(u);
                         m = true;
                     }
