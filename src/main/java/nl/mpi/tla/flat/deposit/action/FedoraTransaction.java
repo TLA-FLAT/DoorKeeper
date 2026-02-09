@@ -63,23 +63,17 @@ public class FedoraTransaction extends FedoraAction {
             }
             try {
                 connect(context);
-                //sip = context.getSIP();
-
-                // TODO look at the action name via this.getName() and determine what to do 
-                // store the transaction response uri via context.putInMemory
 
                 String actionName = this.getName(); 
 
                 if ("startTransaction".equals(actionName)) {
-                    logger.debug("Inside startTransaction.......");
                     try {
                         URI startUri = URI.create(fedoraConfig.getString("localServer")+"/fcr:tx");
                         logger.debug("StartUri--"+startUri);
                         TransactionalFcrepoClient transClient = fedoraClient.startTransactionClient(startUri);
                         URI transLocation = transClient.getTransactionURI();
                         context.putInMemory("transLocation",transLocation);
-                        logger.debug("TransLocaton: "+transLocation);
-                        logger.debug("TransLocaton context: "+context.getFromMemory("transLocation"));
+                        logger.debug("Transaction Location from context memory: "+context.getFromMemory("transLocation"));
                         context.registerRollbackEvent(this,"TransLocation","putInMemory",transLocation.toString());
                     }
                     catch (Exception e) {
@@ -88,29 +82,23 @@ public class FedoraTransaction extends FedoraAction {
                 }
                     
                 if ("commitTransaction".equals(actionName)) {
-                    
-                    //bring uri from the context memory and then append fcr:commit to it. 
                     String contextUri = context.getFromMemory("transLocation").toString();
                     logger.debug("Commit-- ContextUri--->"+contextUri);
-                    URI commitUri = URI.create(contextUri+"/fcr:commit");
-                    try (FcrepoResponse response = new PostBuilder(commitUri, fedoraClient).perform()) {
+                    URI commitUri = URI.create(contextUri);
+                    try (FcrepoResponse response = new PutBuilder(commitUri, fedoraClient).perform()) {
                         logger.debug("Transaction commit status: {}", response.getStatusCode());
+                        
+                        switch (response.getStatusCode()) {
+                            case 404 -> logger.error("Commit Transaction statuscode:"+response.getStatusCode()+"-> Not Found: if the transaction doesn't exist");
+                            case 409 -> logger.error("Commit Transaction statuscode:"+response.getStatusCode()+"-> Conflict: Transaction did not commit successfully");
+                            case 410 -> logger.error("Commit Transaction statuscode:"+response.getStatusCode()+"-> Gone: Transaction expired");
+                            default -> {
+                                logger.debug("Successfully committed the trasaction!");
+                            }
+                        }
                     }
                     catch (Exception e) {
                         throw new DepositException("Commit Transaction Error: ", e);
-                    }
-                }
-                    
-                if ("rollbackTransaction".equals(actionName)) {
-                    //use the uri from the memory and append fcr:rollback to it
-                    String contextUri = context.getFromMemory("transLocation").toString();
-                    logger.debug("rollback-- ContextUri--->"+contextUri);
-                    URI rollbackUri = URI.create(contextUri+"/fcr:rollback");
-                    try (FcrepoResponse response = new PostBuilder(rollbackUri, fedoraClient).perform()) {
-                        logger.debug("Transaction rollback status: {}", response.getStatusCode());
-                    }
-                    catch (Exception e) {
-                        throw new DepositException("Rollback Transaction Error: ", e);
                     }
                 }
             } catch (Exception e) {
@@ -119,29 +107,33 @@ public class FedoraTransaction extends FedoraAction {
             return true;
 	}
         
-	public void rollback(Context context, List<XdmItem> events) {
-            if (events.size() > 0) {
-                for (ListIterator<XdmItem> iter = events.listIterator(events.size()); iter.hasPrevious();) {
-                        XdmItem event = iter.previous();
-                        try {
-                                String tpe = Saxon.xpath2string(event, "@type");
-                                if(tpe=="TransLocation"){
-                                    String contextUri = context.getFromMemory("transLocation").toString();
-                                    logger.debug("rollback-- ContextUri--->"+contextUri);
-                                    URI rollbackUri = URI.create(contextUri+"/fcr:rollback");
-                                    try (FcrepoResponse response = new PostBuilder(rollbackUri, fedoraClient).perform()) {
-                                        logger.debug("Transaction rollback status: {}", response.getStatusCode());
-                                    }
-                                    catch (Exception e) {
-                                        throw new DepositException("Rollback Transaction Error: ", e);
+        public void rollback(Context context,List<XdmItem> events) {
+            for (ListIterator<XdmItem> iter = events.listIterator(events.size());iter.hasPrevious();) {
+                XdmItem event = iter.previous();
+                try {
+                        String tpe = Saxon.xpath2string(event, "@type");
+                        if(tpe.equals("TransLocation")){
+                            String contextUri = context.getFromMemory("transLocation").toString();
+                            logger.debug("rollback-- ContextUri--->"+contextUri);
+                            URI rollbackUri = URI.create(contextUri);
+                            try (FcrepoResponse response = new DeleteBuilder(rollbackUri, fedoraClient).perform()) {
+                                logger.debug("Transaction rollback status: {}", response.getStatusCode());
+                                switch (response.getStatusCode()) {
+                                    case 404 -> logger.error("Rollback Transaction statuscode:"+response.getStatusCode()+"-> Not Found: if the transaction doesn't exist");
+                                    case 410 -> logger.error("Rollback Transaction statuscode:"+response.getStatusCode()+"-> Gone: if the transaction has already been committed or rolled back");
+                                    default -> {
+                                        logger.debug("Successfully rolled the trasaction back!");
                                     }
                                 }
+                            }
+                            catch (Exception e) {
+                                throw new DepositException("Rollback Transaction Error: ", e);
+                            }
                         }
-                        catch (Exception ex) {
-                                logger.error("rollback action[" + this.getName() + "] event[" + event + "] failed!", ex);
-                        }
-                }
+                    }
+                    catch (Exception ex) {
+                            logger.error("rollback action[" + this.getName() + "] event[" + event + "] failed!", ex);
+                    }
             }
-                       
         }
 }
