@@ -63,7 +63,7 @@ public class FedoraInteract extends FedoraAction {
 			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.xml")));
 			for (File fox : foxs) {
                             
-				String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD","");
+				String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "$1_").replace("_CMD","");
 				String dsid = (fox.getName().endsWith("_CMD.xml") ? "CMD" : "OBJ");
 				logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
                                 logger.debug("TODO: ingest not yet implemented!");
@@ -84,7 +84,7 @@ public class FedoraInteract extends FedoraAction {
 			// - <fid>.<asof>.props (props -> modify (some) properties)
                         File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
 			for (File propfile : propfiles) {
-				String fid = propfile.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
+				String fid = propfile.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1_").replace("_CMD", "");
                                 XdmNode ds = fcrepo(new URI(fid));
 				try {
 					String epoch = propfile.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
@@ -129,7 +129,7 @@ public class FedoraInteract extends FedoraAction {
 			// - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
 			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1_").replace("_CMD", "");
 				String ds = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$", "$1");
 				Date asof = new Date(Long.parseLong(epoch));
@@ -260,11 +260,26 @@ public class FedoraInteract extends FedoraAction {
                 } catch (Exception ex) {
                     throw new DepositException(ex);
                 }
-
+            }
+            if (ds.equals("OBJ")) {
+                try {
+                    String rest = fedoraConfig.getString("localServer");
+                    String rfid = rest+"/"+fid+"/"+ds;
+                    XdmNode loc = Saxon.buildDocument(new StreamSource(fox));
+                    String content = Saxon.xpath2string(loc,"/foxml:datastreamVersion/foxml:contentLocation[1]/@REF",null,NAMESPACES);
+                    String mime = Saxon.xpath2string(loc,"/foxml:datastreamVersion/@MIMETYPE",null,NAMESPACES);
+                    logger.debug("UPDATE external content["+rfid+"] set to ["+content+"]["+mime+"]");
+                    FcrepoResponse response = (new PostBuilder(new URI(rfid),fedoraClient)).externalContent(new URI(content), mime, "proxy").perform();
+                    logger.debug("FCREPO code["+response.getStatusCode()+"]");
+                    if (response.getStatusCode() != 200)
+                         throw new DepositException("can't update the external content of ["+rfid+"]");   
+                } catch (Exception ex) {
+                    throw new DepositException(ex);
+                }
             } else
                 logger.debug("TODO: updateDatastream["+ds+"] not yet implemented!");
             // what to do with the various dsid's?
-            // DC
+            // DC  -> DONE
             // CMD -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
             // OBJ -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
             // RELS-EXT
