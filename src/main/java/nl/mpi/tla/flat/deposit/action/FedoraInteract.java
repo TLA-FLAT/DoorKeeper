@@ -269,9 +269,9 @@ public class FedoraInteract extends FedoraAction {
                     String content = Saxon.xpath2string(loc,"/foxml:datastreamVersion/foxml:contentLocation[1]/@REF",null,NAMESPACES);
                     String mime = Saxon.xpath2string(loc,"/foxml:datastreamVersion/@MIMETYPE",null,NAMESPACES);
                     logger.debug("UPDATE external content["+rfid+"] set to ["+content+"]["+mime+"]");
-                    FcrepoResponse response = (new PostBuilder(new URI(rfid),fedoraClient)).externalContent(new URI(content), mime, "proxy").perform();
+                    FcrepoResponse response = (new PutBuilder(new URI(rfid),fedoraClient)).externalContent(new URI(content), mime, "proxy").perform();
                     logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                    if (response.getStatusCode() != 200)
+                    if (response.getStatusCode() > 300)
                          throw new DepositException("can't update the external content of ["+rfid+"]");   
                 } catch (Exception ex) {
                     throw new DepositException(ex);
@@ -281,9 +281,10 @@ public class FedoraInteract extends FedoraAction {
             // what to do with the various dsid's?
             // DC  -> DONE
             // CMD -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
-            // OBJ -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
-            // RELS-EXT
-            // TN
+            //         NEW: cmdi opslaan? versioning in de persists?
+            // OBJ -> DONE
+            // RELS-EXT ->  a la other props?
+            // TN -> external location update
         }
         
         //TODO: remove old methods vvvv
