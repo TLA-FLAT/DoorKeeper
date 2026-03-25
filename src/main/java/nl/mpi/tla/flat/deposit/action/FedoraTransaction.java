@@ -43,6 +43,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import nl.mpi.tla.flat.deposit.util.Global;
 import org.apache.commons.configuration.XMLConfiguration;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import nl.mpi.tla.flat.deposit.action.fedoratransaction.util.FedoraTransactionThread;
 
 /**
  * @author menzowi
@@ -51,19 +57,20 @@ import org.apache.commons.configuration.XMLConfiguration;
 public class FedoraTransaction extends FedoraAction {
 
 	private static final Logger logger = LoggerFactory.getLogger(FedoraTransaction.class.getName());
+        ScheduledFuture<?> thread;
 
 	@Override
 	public boolean perform(Context context) throws DepositException {
             SIPInterface sip;
             
+            connect(context);
+           
             try {
                 fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));               
             } catch(Exception e) {
                 throw new DepositException("Connecting to Fedora Commons failed!",e);
             }
             try {
-                connect(context);
-
                 String actionName = this.getName(); 
 
                 if ("startTransaction".equals(actionName)) {
@@ -75,6 +82,17 @@ public class FedoraTransaction extends FedoraAction {
                         context.putInMemory("transLocation",transLocation);
                         logger.debug("Transaction Location from context memory: "+context.getFromMemory("transLocation"));
                         context.registerRollbackEvent(this,"TransLocation","putInMemory",transLocation.toString());
+                        
+                        //keeping the transaction alive by threading
+                        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+                        thread = scheduler.scheduleAtFixedRate(
+                                new FedoraTransactionThread(startUri.toString(),fedoraClient),   // task
+                                0,            // initial delay
+                                1,            // period
+                                TimeUnit.MINUTES
+                        );
+                        context.putInMemory("thread", thread);
+                        logger.debug("Thread has been started succussfully! :"+thread);
                     }
                     catch (Exception e) {
                         throw new DepositException("Start Transaction Error: ", e);
@@ -88,13 +106,18 @@ public class FedoraTransaction extends FedoraAction {
                     try (FcrepoResponse response = new PutBuilder(commitUri, fedoraClient).perform()) {
                         logger.debug("Transaction commit status: {}", response.getStatusCode());
                         
-                        switch (response.getStatusCode()) {
-                            case 404 -> logger.error("Commit Transaction statuscode:"+response.getStatusCode()+"-> Not Found: if the transaction doesn't exist");
-                            case 409 -> logger.error("Commit Transaction statuscode:"+response.getStatusCode()+"-> Conflict: Transaction did not commit successfully");
-                            case 410 -> logger.error("Commit Transaction statuscode:"+response.getStatusCode()+"-> Gone: Transaction expired");
-                            default -> {
-                                logger.debug("Successfully committed the trasaction!");
-                            }
+                        if (response.getStatusCode()== 404 || response.getStatusCode()== 409 || response.getStatusCode()== 410) {
+                            logger.error("Commit Transaction statuscode:"+response.getStatusCode());
+                            throw new DepositException("Commit Transaction Error: statuscode "+ response.getStatusCode()); 
+                        }
+                        else { 
+                                logger.debug("Successfully committed the trasaction!");  
+                                //remove thread from memory
+                                if(context.hasInMemory("thread")){
+                                    thread = (ScheduledFuture<?>) context.getFromMemory("thread");
+                                    thread.cancel(true);
+                                    context.remove("thread");
+                                }
                         }
                     }
                     catch (Exception e) {
@@ -123,6 +146,12 @@ public class FedoraTransaction extends FedoraAction {
                                     case 410 -> logger.error("Rollback Transaction statuscode:"+response.getStatusCode()+"-> Gone: if the transaction has already been committed or rolled back");
                                     default -> {
                                         logger.debug("Successfully rolled the trasaction back!");
+                                        //remove thread from memory
+                                        if(context.hasInMemory("thread")){
+                                            thread = (ScheduledFuture<?>) context.getFromMemory("thread");
+                                            thread.cancel(true);
+                                            context.remove("thread");
+                                        }
                                     }
                                 }
                             }

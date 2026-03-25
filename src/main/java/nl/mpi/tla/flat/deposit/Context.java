@@ -227,6 +227,11 @@ public class Context {
 		logger.debug("get memory key[" + key + "][" + memory.get(key) + "]");
 		return memory.get(key);
 	}
+        
+        public Object remove(String key){
+            logger.debug("remove memory key[" + key + "][" + memory.get(key) + "]");
+            return memory.remove(key);
+        }
 
 	// Exception
 
