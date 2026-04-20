@@ -19,20 +19,15 @@ package nl.mpi.tla.flat.deposit.action;
 import org.fcrepo.client.*;
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.FileInputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
 import javax.xml.transform.stream.StreamSource;
-import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.Collection;
-import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.Saxon;
@@ -40,7 +35,6 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import nl.mpi.tla.flat.deposit.util.Global;
 
 /**
  * @author menzowi
@@ -205,7 +199,7 @@ public class FedoraInteract extends FedoraAction {
                        context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "val", val);
                         String sparql=sparql_template.formatted(val,fid);
                         logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] val["+val+"] sparql["+sparql+"]");                                                        
-                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).addTransaction(new URI(context.getFromMemory("transLocation").toString())).body(IOUtils.toInputStream(sparql)).perform();
                     } else if (!oldval.strip().equals(val.strip())) {
                         // update
                        String sparql_template= """
@@ -248,7 +242,9 @@ public class FedoraInteract extends FedoraAction {
         }
         
         void updateDatastream(Context context, File fox, String fid, String ds, String ext) throws DepositException {
+            logger.debug("CHECK: updateDatastream["+fid+"]["+ds+"]");
             if (ds.equals("DC")) {
+                logger.debug("DO: updateDatastream["+fid+"]["+ds+"]");
                 try {
                     XdmNode dc = Saxon.buildDocument(new StreamSource(fox));
                     for (Iterator<XdmItem> iter = Saxon.xpathIterator(dc, "//dc:*", null, NAMESPACES); iter.hasNext();) {
@@ -260,8 +256,8 @@ public class FedoraInteract extends FedoraAction {
                 } catch (Exception ex) {
                     throw new DepositException(ex);
                 }
-            }
-            if (ds.equals("OBJ")) {
+            } else if (ds.equals("OBJ")) {
+                logger.debug("DO: updateDatastream["+fid+"]["+ds+"]");
                 try {
                     String rest = fedoraConfig.getString("localServer");
                     String rfid = rest+"/"+fid+"/"+ds;
@@ -276,12 +272,38 @@ public class FedoraInteract extends FedoraAction {
                 } catch (Exception ex) {
                     throw new DepositException(ex);
                 }
+            } else if (ds.equals("CMD")) {
+                logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+fox.getAbsolutePath()+"]");
+                try {
+                    String rest = fedoraConfig.getString("localServer");
+                    String rfid = rest+"/"+fid+"/"+ds;
+                    FcrepoResponse response = (new PutBuilder(new URI(rfid),fedoraClient)).body(new FileInputStream(fox),"application/xml").perform();
+                    logger.debug("FCREPO code["+response.getStatusCode()+"]");
+                } catch (Exception ex) {
+                    throw new DepositException(ex);
+                }
+            } else if (ds.equals("RELS-EXT")) {
+                logger.debug("DO: updateDatastream["+fid+"]["+ds+"]");
+                try {
+                    XdmNode dc = Saxon.buildDocument(new StreamSource(fox));
+                    String[] prefixes = {"relsext","model","onto-relsext","oai"};
+                    for (String prefix:prefixes) {
+                        // TODO[Menzo]: deal with @rdf:resource
+                        for (Iterator<XdmItem> iter = Saxon.xpathIterator(dc, "(//"+prefix+":*)[normalize-space(.)!='']", null, NAMESPACES); iter.hasNext();) {
+                            XdmItem prop = iter.next();
+                            String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())");
+                            String val = Saxon.xpath2string(prop, ".");
+                            upsertProperty(context,fid,name,val);
+                        }
+                    }
+                } catch (Exception ex) {
+                    throw new DepositException(ex);
+                }
             } else
-                logger.debug("TODO: updateDatastream["+ds+"] not yet implemented!");
+                logger.debug("TODO: updateDatastream["+fid+"]["+ds+"] not yet implemented!");
             // what to do with the various dsid's?
             // DC  -> DONE
-            // CMD -> nieuwe versie van een binary, zie https://wiki.lyrasis.org/display/FEDORA6x/External+Content met proxy en POST?
-            //         NEW: cmdi opslaan? versioning in de persists?
+            // CMD -> DONE
             // OBJ -> DONE
             // RELS-EXT ->  a la other props?
             // TN -> external location update
