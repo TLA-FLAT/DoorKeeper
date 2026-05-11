@@ -137,6 +137,15 @@ public class FedoraInteract extends FedoraAction {
 		return true;
 	}
         
+        protected String toSPARQL_URI(String val) {
+            if (val.startsWith("http:") || val.startsWith("https:")) {
+                val = "<"+val+">";
+            } else { 
+                val = "'"+val.replace("'", "\\'")+"'";
+            }
+            return val;
+        }
+        
         protected void upsertProperty(Context context, String fid, String prop, String val)  throws DepositException {
             try {
                 upsertProperty(context,fcrepo(new URI(fid)),fid,prop,val);
@@ -151,12 +160,14 @@ public class FedoraInteract extends FedoraAction {
                     upsertIdentifier(context,ds,fid,val);
                 String rest = fedoraConfig.getString("localServer");
                 String rfid = rest+"/"+fid;
-                String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']");
+                String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']/(.,@rdf:resource)[normalize-space(.)!='']",null,NAMESPACES);
+                val = toSPARQL_URI(val);
+                oldval = toSPARQL_URI(oldval);
                 if (oldval.strip().equals("")) {
                     // insert
                    String sparql_template= """
                      PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                     INSERT { ?ds <%s> '%s' }
+                     INSERT { ?ds <%s> %s }
                      WHERE  { ?ds dc:identifier '%s' }""".indent(2);
                    context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "val", val);
                     String sparql=sparql_template.formatted(prop,val,fid);
@@ -166,8 +177,8 @@ public class FedoraInteract extends FedoraAction {
                     // update
                    String sparql_template= """
                      PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                     DELETE { ?ds <%s> '%s' }
-                     INSERT { ?ds <%s> '%s' }
+                     DELETE { ?ds <%s> %s }
+                     INSERT { ?ds <%s> %s }
                      WHERE  { ?ds dc:identifier '%s' }""".indent(2);
                    context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "old", oldval, "new", val);
                     String sparql=sparql_template.formatted(prop,oldval,prop,val,fid);
@@ -249,8 +260,8 @@ public class FedoraInteract extends FedoraAction {
                     XdmNode dc = Saxon.buildDocument(new StreamSource(fox));
                     for (Iterator<XdmItem> iter = Saxon.xpathIterator(dc, "//dc:*", null, NAMESPACES); iter.hasNext();) {
                         XdmItem prop = iter.next();
-                        String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())");
-                        String val = Saxon.xpath2string(prop, ".");
+                        String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())",null,NAMESPACES);
+                        String val = Saxon.xpath2string(prop, ".",null,NAMESPACES);
                         upsertProperty(context,fid,name,val);
                     }
                 } catch (Exception ex) {
@@ -285,14 +296,16 @@ public class FedoraInteract extends FedoraAction {
             } else if (ds.equals("RELS-EXT")) {
                 logger.debug("DO: updateDatastream["+fid+"]["+ds+"]");
                 try {
-                    XdmNode dc = Saxon.buildDocument(new StreamSource(fox));
+                    XdmNode rels = Saxon.buildDocument(new StreamSource(fox));
                     String[] prefixes = {"relsext","model","onto-relsext","oai"};
                     for (String prefix:prefixes) {
-                        // TODO[Menzo]: deal with @rdf:resource
-                        for (Iterator<XdmItem> iter = Saxon.xpathIterator(dc, "(//"+prefix+":*)[normalize-space(.)!='']", null, NAMESPACES); iter.hasNext();) {
+                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]");
+                        for (Iterator<XdmItem> iter = Saxon.xpathIterator(rels, "(//"+prefix+":*)[exists((.,@rdf:resource)[normalize-space(.)!=''])]", null, NAMESPACES); iter.hasNext();) {
                             XdmItem prop = iter.next();
-                            String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())");
-                            String val = Saxon.xpath2string(prop, ".");
+                            String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())", null, NAMESPACES);
+                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]");
+                            String val = Saxon.xpath2string(rels, "(.,@rdf:resource)[normalize-space(.)!='']", null, NAMESPACES);
+                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]["+val+"]");
                             upsertProperty(context,fid,name,val);
                         }
                     }
