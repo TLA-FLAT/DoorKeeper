@@ -161,6 +161,7 @@ public class FedoraInteract extends FedoraAction {
                 String rest = fedoraConfig.getString("localServer");
                 String rfid = rest+"/"+fid;
                 String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']/(.,@rdf:resource)[normalize-space(.)!='']",null,NAMESPACES);
+                //TODO: oldval might be a list
                 val = toSPARQL_URI(val);
                 oldval = toSPARQL_URI(oldval);
                 if (oldval.strip().equals("")) {
