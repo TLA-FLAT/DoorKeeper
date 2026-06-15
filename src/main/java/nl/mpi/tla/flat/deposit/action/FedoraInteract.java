@@ -21,9 +21,12 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.FileInputStream;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
@@ -85,19 +88,24 @@ public class FedoraInteract extends FedoraAction {
 					Date asof = new Date(Long.parseLong(epoch));
 					logger.debug("Properties[" +  propfile + "] -> [" + fid + "][" + epoch + "=" + asof + "]");
 					XdmNode props = Saxon.buildDocument(new StreamSource(propfile));
-					for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "//foxml:property", null, NAMESPACES); iter.hasNext();) {
+					for (Iterator<XdmItem> iter = Saxon.xpathIterator(props, "distinct-values(//foxml:property/@NAME)", null, NAMESPACES); iter.hasNext();) {
 						XdmItem prop = iter.next();
-						String name = Saxon.xpath2string(prop, "@NAME");
-						String val = Saxon.xpath2string(prop, "@VALUE");
+						String name = prop.getStringValue();
+                                                logger.debug("Property[" + name + "]");
+						List<XdmItem> vals = Saxon.xpathList(props, "//foxml:property[@NAME='"+name+"']/@VALUE", null, NAMESPACES);
                                                 if (name.equals("info:fedora/fedora-system:def/model#state")) {
-                                                    val = switch(val) {
-                                                        case "A" -> "Active";
-                                                        case "I" -> "Inactive";
-                                                        case "D" -> "Deleted";
-                                                        default -> val;
-                                                    };
+                                                    var vs = new ArrayList<XdmItem>();
+                                                    for (XdmItem val:vals) {
+                                                        String v = switch(val.getStringValue()) {
+                                                            case "A" -> "Active";
+                                                            case "I" -> "Inactive";
+                                                            case "D" -> "Deleted";
+                                                            default -> val.getStringValue();
+                                                        };
+                                                        vs.add(new XdmAtomicValue(v));
+                                                    }
                                                 }
-                                                upsertProperty(context,ds,fid,name,val);
+                                                upsertProperty(context,ds,fid,name,vals);
 					}
 				} catch (Exception e) {
                                         throw new DepositException("Unexpected response[" + e + "] while querying Fedora Commons!", e);
@@ -146,87 +154,85 @@ public class FedoraInteract extends FedoraAction {
             return val;
         }
         
-        protected void upsertProperty(Context context, String fid, String prop, String val)  throws DepositException {
+        protected void upsertProperty(Context context, String fid, String prop, List<XdmItem> vals)  throws DepositException {
             try {
-                upsertProperty(context,fcrepo(new URI(fid)),fid,prop,val);
+                upsertProperty(context,fcrepo(new URI(fid)),fid,prop,vals);
             } catch (Exception ex) {
                 throw new DepositException(ex);
             }
         }
         
-        protected void upsertProperty(Context context, XdmNode ds, String fid, String prop, String val)  throws DepositException {
+        protected void upsertProperty(Context context, XdmNode ds, String fid, String prop, List<XdmItem> vals)  throws DepositException {
             try {
                 if (prop.equals("http://purl.org/dc/elements/1.1/identifier"))
-                    upsertIdentifier(context,ds,fid,val);
+                    upsertIdentifier(context,ds,fid,vals);
                 String rest = fedoraConfig.getString("localServer");
                 String rfid = rest+"/"+fid;
-                String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']/(.,@rdf:resource)[normalize-space(.)!='']",null,NAMESPACES);
-                //TODO: oldval might be a list
-                val = toSPARQL_URI(val);
-                oldval = toSPARQL_URI(oldval);
-                if (oldval.strip().equals("")) {
-                    // insert
-                   String sparql_template= """
-                     PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                     INSERT { ?ds <%s> %s }
-                     WHERE  { ?ds dc:identifier '%s' }""".indent(2);
-                   context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "val", val);
-                    String sparql=sparql_template.formatted(prop,val,fid);
-                    logger.debug("rfid[" +rfid + "] prop["+prop+"] val["+val+"] sparql["+sparql+"]");                                                        
-                    FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
-                } else if (!oldval.strip().equals(val.strip())) {
-                    // update
-                   String sparql_template= """
-                     PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                     DELETE { ?ds <%s> %s }
-                     INSERT { ?ds <%s> %s }
-                     WHERE  { ?ds dc:identifier '%s' }""".indent(2);
-                   context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "old", oldval, "new", val);
-                    String sparql=sparql_template.formatted(prop,oldval,prop,val,fid);
-                    logger.debug("rfid[" +rfid + "] prop["+prop+"] old["+oldval+"] new["+val+"] sparql["+sparql+"]");                                                        
-                    FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
-                } else {
-                    // skip
-                    logger.debug("SKIP: rfid[" +rfid + "] prop["+prop+"] old["+oldval+"] new["+val+"] noop");
+                List<XdmItem> oldvals = Saxon.xpathList(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']/(.,@rdf:resource)[normalize-space(.)!='']",null,NAMESPACES);
+                String NL = System.getProperty("newline.separator");
+                String sparql = "PREFIX dc: <http://purl.org/dc/elements/1.1/>";
+                sparql += NL;
+                String sparql_template = "DELETE { ?ds <%s> %s }";
+                for (XdmItem oldval:oldvals) {
+                    String old = oldval.getStringValue();
+                    old = toSPARQL_URI(old);
+                    context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "old", old);
+                    sparql += sparql_template.formatted(prop,old);
+                    sparql += NL; 
                 }
+                sparql_template = "INSERT { ?ds <%s> %s }";
+                for (XdmItem newval:vals) {
+                    String val = newval.getStringValue();
+                    val = toSPARQL_URI(val);
+                    context.registerRollbackEvent(this, "property", "fid", fid, "prop", prop, "new", val);
+                    sparql += sparql_template.formatted(prop,val);
+                    sparql += NL; 
+                }
+                sparql_template = "WHERE  { ?ds dc:identifier '%s' }";
+                sparql += sparql_template.formatted(rfid);
+                sparql += NL; 
+                logger.debug("rfid[" +rfid + "] prop["+prop+"] sparql["+sparql+"]");                                                        
+                FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
              } catch (Exception ex) {
                 throw new DepositException(ex);
             }
-       }
+        }
 
-        protected void upsertIdentifier(Context context, XdmNode ds, String fid, String val)  throws DepositException {
+        protected void upsertIdentifier(Context context, XdmNode ds, String fid, List<XdmItem> vals)  throws DepositException {
             try {
                 String rest = fedoraConfig.getString("localServer");
                 String rfid = rest+"/"+fid;
-                String pre = val.replaceAll("(.+:).*", "$1");
-                logger.debug("MENZO: pre[" + pre + "]");
-                if (val.startsWith("md5:")) {
-                    String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='http://purl.org/dc/elements/1.1/identifier'][starts-with(.,'md5:')]");
-                    if (oldval.strip().equals("")) {
-                        // insert
-                       String sparql_template= """
-                         PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                         INSERT { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
-                         WHERE  { ?ds dc:identifier '%s' }""".indent(2);
-                       context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "val", val);
-                        String sparql=sparql_template.formatted(val,fid);
-                        logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] val["+val+"] sparql["+sparql+"]");                                                        
-                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).addTransaction(new URI(context.getFromMemory("transLocation").toString())).body(IOUtils.toInputStream(sparql)).perform();
-                    } else if (!oldval.strip().equals(val.strip())) {
-                        // update
-                       String sparql_template= """
-                         PREFIX dc: <http://purl.org/dc/elements/1.1/>
-                         DELETE { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
-                         INSERT { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
-                         WHERE  { ?ds dc:identifier '%s' }""".indent(2);
-                       context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "old", oldval, "new", val);
-                        String sparql=sparql_template.formatted(oldval,val,fid);
-                        logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] old["+oldval+"] new["+val+"] sparql["+sparql+"]");                                                        
-                        FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                for (XdmItem val:vals) {
+                    String pre = val.getStringValue().replaceAll("(.+:).*", "$1");
+                    logger.debug("MENZO: pre[" + pre + "]");
+                    if (val.getStringValue().startsWith("md5:")) {
+                        String oldval = Saxon.xpath2string(ds,"//*[concat(namespace-uri(),local-name())='http://purl.org/dc/elements/1.1/identifier'][starts-with(.,'md5:')]");
+                        if (oldval.strip().equals("")) {
+                            // insert
+                           String sparql_template= """
+                             PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                             INSERT { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
+                             WHERE  { ?ds dc:identifier '%s' }""".indent(2);
+                           context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "val", val.getStringValue());
+                            String sparql=sparql_template.formatted(val,fid);
+                            logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] val["+val+"] sparql["+sparql+"]");                                                        
+                            FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).addTransaction(new URI(context.getFromMemory("transLocation").toString())).body(IOUtils.toInputStream(sparql)).perform();
+                        } else if (!oldval.strip().equals(val.getStringValue().strip())) {
+                            // update
+                           String sparql_template= """
+                             PREFIX dc: <http://purl.org/dc/elements/1.1/>
+                             DELETE { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
+                             INSERT { ?ds <http://purl.org/dc/elements/1.1/identifier> '%s' }
+                             WHERE  { ?ds dc:identifier '%s' }""".indent(2);
+                           context.registerRollbackEvent(this, "property", "fid", fid, "prop", "http://purl.org/dc/elements/1.1/identifier", "old", oldval, "new", val.getStringValue());
+                            String sparql=sparql_template.formatted(oldval,val,fid);
+                            logger.debug("rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] old["+oldval+"] new["+val+"] sparql["+sparql+"]");                                                        
+                            FcrepoResponse response = (new PatchBuilder(new URI(rfid),fedoraClient)).body(IOUtils.toInputStream(sparql)).perform();
+                        } else
+                            logger.debug("SKIP: rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] old["+oldval+"] new["+val+"] noop");
                     } else
-                        logger.debug("SKIP: rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] old["+oldval+"] new["+val+"] noop");
-                } else
-                    logger.debug("SKIP: rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] new["+val+"] not md5");
+                        logger.debug("SKIP: rfid[" +rfid + "] prop[http://purl.org/dc/elements/1.1/identifier] new["+val+"] not md5");
+                }
             } catch (Exception ex) {
                 throw new DepositException(ex);
             }
@@ -300,13 +306,13 @@ public class FedoraInteract extends FedoraAction {
                     XdmNode rels = Saxon.buildDocument(new StreamSource(fox));
                     String[] prefixes = {"relsext","model","onto-relsext","oai"};
                     for (String prefix:prefixes) {
-                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]");
+                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+Saxon.xpath(rels, "(//"+prefix+":*)[exists((.,@rdf:resource)[normalize-space(.)!=''])]", null, NAMESPACES).size()+"]");
                         for (Iterator<XdmItem> iter = Saxon.xpathIterator(rels, "(//"+prefix+":*)[exists((.,@rdf:resource)[normalize-space(.)!=''])]", null, NAMESPACES); iter.hasNext();) {
                             XdmItem prop = iter.next();
                             String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())", null, NAMESPACES);
                         logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]");
-                            String val = Saxon.xpath2string(rels, "(.,@rdf:resource)[normalize-space(.)!='']", null, NAMESPACES);
-                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]["+val+"]");
+                            String val = Saxon.xpath2string(prop, "(.,@rdf:resource)[normalize-space(.)!=''][1]", null, NAMESPACES);
+                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]["+prop.getStringValue()+"]["+val+"]");
                             upsertProperty(context,fid,name,val);
                         }
                     }
