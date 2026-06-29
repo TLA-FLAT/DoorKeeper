@@ -169,7 +169,7 @@ public class FedoraInteract extends FedoraAction {
                 String rest = fedoraConfig.getString("localServer");
                 String rfid = rest+"/"+fid;
                 List<XdmItem> oldvals = Saxon.xpathList(ds,"//*[concat(namespace-uri(),local-name())='"+prop+"']/(.,@rdf:resource)[normalize-space(.)!='']",null,NAMESPACES);
-                String NL = System.getProperty("newline.separator");
+                String NL = System.getProperty("line.separator");
                 String sparql = "PREFIX dc: <http://purl.org/dc/elements/1.1/>";
                 sparql += NL;
                 String sparql_template = "DELETE { ?ds <%s> %s }";
@@ -268,8 +268,8 @@ public class FedoraInteract extends FedoraAction {
                     for (Iterator<XdmItem> iter = Saxon.xpathIterator(dc, "//dc:*", null, NAMESPACES); iter.hasNext();) {
                         XdmItem prop = iter.next();
                         String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())",null,NAMESPACES);
-                        String val = Saxon.xpath2string(prop, ".",null,NAMESPACES);
-                        upsertProperty(context,fid,name,val);
+                        var vals = Saxon.xpathList(prop, ".",null,NAMESPACES);
+                        upsertProperty(context,fid,name,vals);
                     }
                 } catch (Exception ex) {
                     throw new DepositException(ex);
@@ -311,9 +311,9 @@ public class FedoraInteract extends FedoraAction {
                             XdmItem prop = iter.next();
                             String name = Saxon.xpath2string(prop, "concat(namespace-uri(),local-name())", null, NAMESPACES);
                         logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]");
-                            String val = Saxon.xpath2string(prop, "(.,@rdf:resource)[normalize-space(.)!=''][1]", null, NAMESPACES);
-                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]["+prop.getStringValue()+"]["+val+"]");
-                            upsertProperty(context,fid,name,val);
+                            var vals = Saxon.xpathList(prop, "(.,@rdf:resource)[normalize-space(.)!=''][1]", null, NAMESPACES);
+                        logger.debug("DO: updateDatastream["+fid+"]["+ds+"]["+prefix+"]["+name+"]["+prop.getStringValue()+"]["+vals+"]");
+                            upsertProperty(context,fid,name,vals);
                         }
                     }
                 } catch (Exception ex) {
