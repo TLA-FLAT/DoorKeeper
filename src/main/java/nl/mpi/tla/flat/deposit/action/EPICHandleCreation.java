@@ -46,6 +46,16 @@ public class EPICHandleCreation extends AbstractAction {
     
     private static final Logger logger = LoggerFactory.getLogger(EPICHandleCreation.class.getName());
 
+    /**
+     * The Fedora 6 datastream (LDP-NR) URL serving the latest version's content.
+     * Used as the temporary handle target at mint time: the memento doesn't exist
+     * yet (the transaction isn't committed), so EPICHandleUpdate repoints the handle
+     * to the version-specific memento URL once the deposit is committed.
+     */
+    protected String fcCurrentURL(String server, String fid, String dsid) {
+        return server+"/"+fid+"/"+dsid;
+    }
+
     @Override
     public boolean perform(Context context) throws DepositException {
         
@@ -103,11 +113,10 @@ public class EPICHandleCreation extends AbstractAction {
                 if (frag == null)
                     throw new DepositException("SIP FID["+context.getSIP().getFID()+"] isn't complete!");
                 String dsid = frag.replaceAll("@.*","");
-                String asof = frag.replaceAll(".*@","");
 
                 URI    pid  = context.getSIP().getPID();
                 String uuid = pid.toString().replaceAll(".*/","");
-                String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                String loc  = fcCurrentURL(server,fid,dsid);
 
                 logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
                 context.registerRollbackEvent(this, "epic creation", "uuid", uuid, "loc", loc);
@@ -129,13 +138,12 @@ public class EPICHandleCreation extends AbstractAction {
                         continue;
                     }
                     String dsid   = frag.replaceAll("@.*","");
-                    String asof   = frag.replaceAll(".*@","");
 
                     String pid    = col.getPID().toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
                     String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
                     String uuid   = pid.replaceAll(".*/","");
                     
-                    String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                    String loc    = fcCurrentURL(server,fid,dsid);
 
                     logger.info("Lookup handle["+prefix+"/"+uuid+"]");
                     String cur    = (isTest?null:ps.getPIDLocation(prefix+"/"+uuid));
@@ -169,12 +177,11 @@ public class EPICHandleCreation extends AbstractAction {
                         if (frag == null)
                             throw new DepositException("resource FID["+res.getFID()+"] isn't complete!");
                         String dsid = frag.replaceAll("@.*","");
-                        String asof = frag.replaceAll(".*@","");
 
                         String pid    = res.getPID().toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
                         String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
                         String uuid   = pid.replaceAll(".*/","");
-                        String loc  = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                        String loc  = fcCurrentURL(server,fid,dsid);
 
                         logger.info("Create handle["+pid+"]["+uuid+"] -> URI["+loc+"]");
                         context.registerRollbackEvent(this, "epic creation", "uuid", uuid, "loc", loc);
@@ -206,8 +213,7 @@ public class EPICHandleCreation extends AbstractAction {
                         }
 
                         String dsid   = frag.replaceAll("@.*","");
-                        String asof   = frag.replaceAll(".*@","");
-                        String loc    = server+"/objects/"+fid+"/datastreams/"+dsid+"/content?asOfDateTime="+asof;
+                        String loc    = fcCurrentURL(server,fid,dsid);
                         red           = new URI(loc);
                         break;
                     }

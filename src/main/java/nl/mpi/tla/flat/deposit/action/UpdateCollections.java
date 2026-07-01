@@ -215,30 +215,29 @@ public class UpdateCollections extends FedoraAction {
     private XsltTransformer dc = null;
     
     private void updateDC(File fox, URI fid, URI pid) throws SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
-        /*
-        FedoraResponse res = getDatastreamDissemination(fid.toString(),"DC").execute();
-        if (res.getStatus()==200) {
-            InputStream str = res.getEntityInputStream();
-            XdmNode old = Saxon.buildDocument(new StreamSource(str));
-            if (dc == null) {
-                dc = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/update-dc.xsl")).load();
-                SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
-                dc.setMessageListener(listener);
-                dc.setErrorListener(listener);
-            }
-            dc.setSource(old.asSource());
-            XdmDestination destination = new XdmDestination();
-            dc.setDestination(destination);
-            dc.setParameter(new QName("new-pid"),new XdmAtomicValue(pid.toString()));
-            dc.transform();
-            if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
-                // write to fox dir: <fid>.DC.xml
-                File  out = new File(fox + "/"+fid.toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".DC.xml");
-                TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
-            }
+        // since FC6 the DC record is folded into the object's RDF, so rebuild it
+        // from there with the new PID and leave it in the fox dir as a datastream
+        // update for FedoraInteract to apply (within the Fedora transaction)
+        XdmNode old = fcrepo(fid);
+        if (dc == null) {
+            dc = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/update-dc.xsl")).load();
+            SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
+            dc.setMessageListener(listener);
+            dc.setErrorListener(listener);
+        }
+        dc.setSource(old.asSource());
+        XdmDestination destination = new XdmDestination();
+        dc.setDestination(destination);
+        dc.setParameter(new QName("new-pid"),new XdmAtomicValue(pid.toString()));
+        dc.setParameter(new QName("subject"),new XdmAtomicValue(fedoraConfig.getString("localServer")+"/"+fid.toString()));
+        dc.transform();
+        if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
+            // write to fox dir: <fid>.DC.<asof>.xml
+            File  out = new File(fox + "/"+fid.toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".DC."+new Date().getTime()+".xml");
+            TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
+            logger.info("created DC["+out.getAbsolutePath()+"]");
         } else
-            throw new DepositException("Unexpected status["+res.getStatus()+"] while querying Fedora Commons!");
-        */
+            logger.debug("DC of FID["+fid+"] already refers to PID["+pid+"]");
     }
     
 }

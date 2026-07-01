@@ -52,14 +52,17 @@ abstract public class FedoraAction extends AbstractAction {
     
     public void connect(Context context) throws DepositException {
         try {
-            fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));        
+            fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));
 
             if (fedoraClient == null) {
                 user = fedoraConfig.getString("userName");
-                String pass = fedoraConfig.getString("userPass");            
-                fedoraClient = FcrepoClient.client()/*.credentials(user, pass)*/.build();
+                String pass = fedoraConfig.getString("userPass");
+                FcrepoClient.FcrepoClientBuilder builder = FcrepoClient.client();
+                if (user != null && !user.isEmpty())
+                    builder = builder.credentials(user, pass);
+                fedoraClient = builder.build();
             }
-            
+
         } catch(Exception e) {
             throw new DepositException("Connecting to Fedora Commons failed!",e);
         }
@@ -98,7 +101,9 @@ abstract public class FedoraAction extends AbstractAction {
     public URI lookupFID(URI pid) throws DepositException {
         URI fid = null;
         try {
-            String query = "SELECT ?fid WHERE { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+pid.toString().replace("hdl:","https://hdl.handle.net/")+"\" } ";
+            // dc:identifier may be stored as a literal (legacy/migrated data) or as a URI (current ingest)
+            String hdl = pid.toString().replace("hdl:","https://hdl.handle.net/");
+            String query = "SELECT ?fid WHERE { { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+hdl+"\" } UNION { ?fid <http://purl.org/dc/elements/1.1/identifier> <"+hdl+"> } } ";
             XdmNode tpl = sparql(query);
             logger.debug("RESULT["+tpl.toString()+"]");
             String f = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);
@@ -120,7 +125,7 @@ abstract public class FedoraAction extends AbstractAction {
             String query = "SELECT ?pid WHERE { <"+rest+"/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             XdmNode tpl = sparql(query);
             logger.debug("RESULT["+tpl.toString()+"]");
-            String p = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='pid']/srx:literal[starts-with(.,'https://hdl.handle.net/')])",null,Global.NAMESPACES);
+            String p = Saxon.xpath2string(tpl, "normalize-space((//srx:results/srx:result/srx:binding[@name='pid']/*[self::srx:literal or self::srx:uri][starts-with(.,'https://hdl.handle.net/')])[1])",null,Global.NAMESPACES);
             if (p!=null && !p.isEmpty())
                 pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
         } catch(URISyntaxException | SaxonApiException e) {
@@ -130,51 +135,65 @@ abstract public class FedoraAction extends AbstractAction {
     }
     
     public Boolean fcrepo_exists(URI fid,String ds) throws DepositException {
+        return fcrepo_exists(fid,ds,null);
+    }
+
+    public Boolean fcrepo_exists(URI fid,String ds,URI tx) throws DepositException {
         URI uri = fid;
         if (ds!=null && !ds.isBlank() && !ds.isEmpty())
             try {
                uri = new URI(fid.toString()+"/"+ds);
             } catch (Exception e) {
-                throw new DepositException(e);   
+                throw new DepositException(e);
             }
-        return fcrepo_exists(uri);
+        return fcrepo_exists(uri,tx);
     }
-    
+
     public Boolean fcrepo_exists(URI fid) throws DepositException {
+        return fcrepo_exists(fid,(URI)null);
+    }
+
+    public Boolean fcrepo_exists(URI fid,URI tx) throws DepositException {
         Boolean res = null;
         URI uri = null;
         try {
             uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
         } catch (Exception e) {
-            throw new DepositException(e);   
+            throw new DepositException(e);
         }
-        logger.debug("FCREPO["+uri.toString()+"]");
-        try (FcrepoResponse response = new HeadBuilder(uri, fedoraClient)
-            .perform()) {
+        logger.debug("FCREPO["+uri.toString()+"]"+(tx!=null?"[tx]":""));
+        HeadBuilder req = new HeadBuilder(uri, fedoraClient);
+        if (tx!=null) req = req.addTransaction(tx);
+        try (FcrepoResponse response = req.perform()) {
                 logger.debug("FCREPO code["+response.getStatusCode()+"]");
                 res = new Boolean(response.getStatusCode() == 200);
             } catch (Exception e) {
-                 throw new DepositException(e);   
+                 throw new DepositException(e);
             }
         return res;
     }
+
     public XdmNode fcrepo(URI fid) throws DepositException {
+        return fcrepo(fid,null);
+    }
+
+    public XdmNode fcrepo(URI fid,URI tx) throws DepositException {
         XdmNode res = null;
         URI uri = null;
         try {
             uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString());
         } catch (Exception e) {
-            throw new DepositException(e);   
+            throw new DepositException(e);
         }
-        logger.debug("FCREPO["+uri.toString()+"]");
-        try (FcrepoResponse response = new GetBuilder(uri, fedoraClient)
-            .accept("application/rdf+xml")
-            .perform()) {
+        logger.debug("FCREPO["+uri.toString()+"]"+(tx!=null?"[tx]":""));
+        GetBuilder req = new GetBuilder(uri, fedoraClient).accept("application/rdf+xml");
+        if (tx!=null) req = (GetBuilder)req.addTransaction(tx);
+        try (FcrepoResponse response = req.perform()) {
                 logger.debug("FCREPO code["+response.getStatusCode()+"]");
                 res = Saxon.buildDocument(new StreamSource(response.getBody()));
                 logger.debug("FCREPO response["+res.toString()+"]");
             } catch (Exception e) {
-                 throw new DepositException(e);   
+                 throw new DepositException(e);
             }
         return res;
     }

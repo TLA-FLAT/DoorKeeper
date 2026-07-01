@@ -35,6 +35,7 @@ import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.sip.Resource;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.SaxonListener;
 import nl.mpi.tla.util.Saxon;
@@ -160,6 +161,7 @@ public class FOXCreate extends AbstractAction {
             if (self!=null) {
                 if (Saxon.xpath2boolean(self,"normalize-space(@lat:flatURI)!=''",null,NAMESPACES)) {
                     context.getSIP().setFID(new URI(Saxon.xpath2string(self,"@lat:flatURI",null,NAMESPACES)));
+                    context.getSIP().setFIDStream("CMD");
                 } else
                     throw new DepositException("No FID found in this FOX["+dir+"/"+fid+"_CMD.xml]!");
             } else
@@ -167,7 +169,9 @@ public class FOXCreate extends AbstractAction {
             for (XdmItem resource:Saxon.xpath(cmd,"//cmd:CMD/cmd:Resources/cmd:ResourceProxyList/cmd:ResourceProxy[cmd:ResourceType='Resource']",null,NAMESPACES)) {
                 URI pid = new URI(Saxon.xpath2string(resource,"cmd:ResourceRef",null,NAMESPACES));
                 if (Saxon.xpath2boolean(resource,"normalize-space(cmd:ResourceRef/@lat:flatURI)!=''",null,NAMESPACES)) {
-                    context.getSIP().getResource(pid).setFID(new URI(Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
+                    Resource res = context.getSIP().getResource(pid);
+                    res.setFID(new URI(Saxon.xpath2string(resource,"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES)));
+                    res.setFIDStream("OBJ");
                 } else
                     throw new DepositException("No FID found for this resource["+pid+"]!");
             }
