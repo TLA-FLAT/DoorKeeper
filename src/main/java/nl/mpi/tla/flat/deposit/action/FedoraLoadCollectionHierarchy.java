@@ -52,7 +52,7 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
             connect(context);
             
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
-            XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
+            XdmValue namespaces = context.getProperty("fedoraNamespace", "");
             
             SIPInterface sip = context.getSIP();
             if (sip.hasCollections()) {

@@ -16,6 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.util;
 
+import java.net.URI;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -29,6 +30,7 @@ import static nl.mpi.tla.flat.deposit.sip.cmdi.CMD.LAT_NS;
  * @author menzowi
  */
 public class Global {
+    public static final String HANDLE_BASE = "https://hdl.handle.net/";
     final static protected SimpleDateFormat ASOF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
     final static public Map<String,String> NAMESPACES = new LinkedHashMap<>();
     
@@ -60,5 +62,15 @@ public class Global {
 
     static public Date asOfDateTime(String date) throws ParseException {
         return ASOF.parse(date.replaceFirst("Z$",""));
+    }
+
+    /** Return a Handle PID as its canonical, dereferenceable HTTPS URL. */
+    public static URI asHandleURL(URI pid) {
+        String value = pid.toString();
+        if (value.startsWith("hdl:"))
+            return URI.create(HANDLE_BASE + value.substring("hdl:".length()));
+        if (value.matches("http(s)?://hdl\\.handle\\.net/.*"))
+            return URI.create(HANDLE_BASE + value.replaceFirst("^http(s)?://hdl\\.handle\\.net/", ""));
+        throw new IllegalArgumentException("The URI[" + pid + "] isn't a valid Handle PID!");
     }
 }

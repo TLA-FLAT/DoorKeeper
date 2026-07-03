@@ -23,6 +23,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Semaphore;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
@@ -191,15 +192,15 @@ public class Flow {
         if (start != null)
             this.start = start;
         if (stop != null)
-            this.stop = start;
+            this.stop = stop;
         DepositException t = null;
         try {
             if (initFlow()) {
-                status = new Boolean(mainFlow(this.start,this.stop));
+                status = Boolean.valueOf(mainFlow(this.start,this.stop));
             } else
-                status = new Boolean(false);
+                status = Boolean.FALSE;
         } catch (Exception e) {
-            status = new Boolean(false);
+            status = Boolean.FALSE;
             try {
                 context.setException(e);
                 exceptionFlow(e);
@@ -219,6 +220,8 @@ public class Flow {
             } catch(DepositException x) {
                 t = x;
                 Flow.logger.error(" exception during the final flow! "+x.getMessage());
+	    } finally {
+		context.close();
             }
         }
         if (t != null) {
@@ -248,7 +251,7 @@ public class Flow {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
         boolean cont = true;
         boolean run  = (start==null);
-        if (next != start)
+        if (next != null && !Objects.equals(next, start))
             Flow.logger.warn("main flow start["+start+"] doesn't match stop/break["+next+"] from previous run");
         for (Action action:mainActions) {
             this.next = action.getName();

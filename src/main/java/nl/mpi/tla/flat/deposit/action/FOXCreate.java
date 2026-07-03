@@ -59,7 +59,7 @@ public class FOXCreate extends AbstractAction {
         try {
             
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
-            XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
+            XdmValue namespaces = context.getProperty("fedoraNamespace", "");
             
             // check for the user profile
             File owner = new File(getParameter("owner"));

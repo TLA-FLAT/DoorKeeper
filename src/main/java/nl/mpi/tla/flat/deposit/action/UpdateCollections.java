@@ -68,7 +68,7 @@ public class UpdateCollections extends FedoraAction {
             connect(context);
             
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
-            XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
+            XdmValue namespaces = context.getProperty("fedoraNamespace", "");
 
             // create the output dir
             dir = new File(getParameter("dir","./fox"));
@@ -110,7 +110,7 @@ public class UpdateCollections extends FedoraAction {
                     throw new DepositException("direct cycle for FID["+col.getFID()+"]");
                 if (col.hasFID()) {
                     for(XdmItem ns:namespaces) {
-                        if (col.getFID().toString().startsWith(ns.getStringValue()+":")) {
+                        if (col.getFID().toString().startsWith(ns.getStringValue()+"_")) {
                             try {
                                 // load the collection's CMD
                                 XdmNode old = getCMDDataStream(col.getFID(true));
@@ -120,9 +120,9 @@ public class UpdateCollections extends FedoraAction {
                                     XdmDestination destination = new XdmDestination();
                                     upsert.setDestination(destination);
                                     upsert.transform();
-                                    // write to fox dir: <fid>.CMD.xml
+                                    // write to fox dir: <fid>.CMD.<asof>.xml
                                     logger.debug("collection["+col.getFID()+"]");
-                                    File out = new File(first + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
+                                    File out = new File(first + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+new Date().getTime()+".xml");
                                     TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
                                     logger.info("created CMD["+out.getAbsolutePath()+"]");
                                     String newPID = Saxon.xpath2string(destination.getXdmNode(), "/cmd:CMD/cmd:Header/cmd:MdSelfLink",null,NAMESPACES);
@@ -134,7 +134,7 @@ public class UpdateCollections extends FedoraAction {
                                         // loop over collections
                                         for (Collection par:col.getParentCollections()) {
                                             for (XdmItem n:namespaces) {
-                                                if (par.getFID().toString().startsWith(n.getStringValue()+":")) {
+                                                if (par.getFID().toString().startsWith(n.getStringValue()+"_")) {
                                                     updateCollection(new ArrayDeque<>(Arrays.asList(col.getFID())), par, col.getFID(), oldPID, newPID, namespace, namespaces);
                                                 }
                                             }
@@ -178,8 +178,8 @@ public class UpdateCollections extends FedoraAction {
                 XdmDestination destination = new XdmDestination();
                 upsert.setDestination(destination);
                 upsert.transform();
-                // write to fox dir: <fid>.CMD.xml
-                File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD.xml");
+                // write to fox dir: <fid>.CMD.<asof>.xml
+                File out = new File(dir + "/"+col.getFID(true).toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".CMD."+new Date().getTime()+".xml");
                 Saxon.save(destination,out);
                 logger.info("created CMD["+out.getAbsolutePath()+"]");
                 String newPID = Saxon.xpath2string(destination.getXdmNode(), "replace(/cmd:CMD/cmd:Header/cmd:MdSelfLink,'http(s)?://hdl.handle.net/','hdl:')",null,NAMESPACES);
@@ -191,7 +191,7 @@ public class UpdateCollections extends FedoraAction {
                     // update the parent collection
                     for (Collection par:col.getParentCollections()) {
                         for (XdmItem ns:namespaces) {
-                            if (par.getFID().toString().startsWith(ns.getStringValue()+":")) {
+                            if (par.getFID().toString().startsWith(ns.getStringValue()+"_")) {
                                 if (!hist.contains(par.getFID())) {
                                     hist.push(col.getFID());
                                     updateCollection(hist, par, col.getFID(), oldPID, newPID,namespace,namespaces);
@@ -215,10 +215,23 @@ public class UpdateCollections extends FedoraAction {
     private XsltTransformer dc = null;
     
     private void updateDC(File fox, URI fid, URI pid) throws SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
-        // since FC6 the DC record is folded into the object's RDF, so rebuild it
-        // from there with the new PID and leave it in the fox dir as a datastream
-        // update for FedoraInteract to apply (within the Fedora transaction)
-        XdmNode old = fcrepo(fid);
+        // since FC6 the DC (and optional OLAC) datastream is the canonical XML
+        // record, e.g., to be served via OAI-PMH, so replace the handle directly
+        // in the record and leave it in the fox dir as a datastream update for
+        // FedoraInteract to apply (within the Fedora transaction), where it also
+        // refreshes the object's RDF index
+        updateIdentifier(fox, fid, pid, "DC", true);
+        updateIdentifier(fox, fid, pid, "OLAC", false);
+    }
+
+    private void updateIdentifier(File fox, URI fid, URI pid, String dsid, boolean required) throws SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
+        XdmNode old = getXMLDataStream(fid, dsid);
+        if (old == null) {
+            if (required)
+                throw new DepositException("no "+dsid+" datastream for FID["+fid+"]!");
+            logger.debug("FID["+fid+"] has no "+dsid+" datastream, skipped");
+            return;
+        }
         if (dc == null) {
             dc = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/update-dc.xsl")).load();
             SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
@@ -229,15 +242,14 @@ public class UpdateCollections extends FedoraAction {
         XdmDestination destination = new XdmDestination();
         dc.setDestination(destination);
         dc.setParameter(new QName("new-pid"),new XdmAtomicValue(pid.toString()));
-        dc.setParameter(new QName("subject"),new XdmAtomicValue(fedoraConfig.getString("localServer")+"/"+fid.toString()));
         dc.transform();
         if (!Saxon.xpath2boolean(destination.getXdmNode(), "/null")) {
-            // write to fox dir: <fid>.DC.<asof>.xml
-            File  out = new File(fox + "/"+fid.toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+".DC."+new Date().getTime()+".xml");
+            // write to fox dir: <fid>.<dsid>.<asof>.xml
+            File  out = new File(fox + "/"+fid.toString().replaceAll("[^a-zA-Z0-9\\-]", "_")+"."+dsid+"."+new Date().getTime()+".xml");
             TransformerFactory.newInstance().newTransformer().transform(destination.getXdmNode().asSource(),new StreamResult(out));
-            logger.info("created DC["+out.getAbsolutePath()+"]");
+            logger.info("created "+dsid+"["+out.getAbsolutePath()+"]");
         } else
-            logger.debug("DC of FID["+fid+"] already refers to PID["+pid+"]");
+            logger.debug(dsid+" of FID["+fid+"] already refers to PID["+pid+"]");
     }
     
 }

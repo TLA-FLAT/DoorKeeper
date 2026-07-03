@@ -82,8 +82,9 @@ public class Owner extends AbstractAction {
                 Model model = ModelFactory.createDefaultModel();
                 logger.debug("policy["+policy.getAbsolutePath()+"]");
                 model.read(policy.getAbsolutePath(),"TURTLE");
-                OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"));
-                RDFDataMgr.write(trix, model, Lang.TRIX);
+                try (OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"))) {
+                    RDFDataMgr.write(trix, model, Lang.TRIX);
+                }
 
                 // convert trix to semantic triples using ACL/sl-trix-to-sem-triples.xsl
                 XsltTransformer trix2sem = Saxon.buildTransformer(Owner.class.getResource("/ACL/sl-trix-to-sem-triples.xsl")).load();

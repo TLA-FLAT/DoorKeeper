@@ -57,7 +57,8 @@ import nl.mpi.tla.flat.deposit.action.fedoratransaction.util.FedoraTransactionTh
 public class FedoraTransaction extends FedoraAction {
 
 	private static final Logger logger = LoggerFactory.getLogger(FedoraTransaction.class.getName());
-        ScheduledFuture<?> thread;
+        private static final String KEEP_ALIVE_TASK = "fedoraTransactionKeepAliveTask";
+        private static final String KEEP_ALIVE_EXECUTOR = "fedoraTransactionKeepAliveExecutor";
 
 	@Override
 	public boolean perform(Context context) throws DepositException {
@@ -74,6 +75,7 @@ public class FedoraTransaction extends FedoraAction {
                 String actionName = this.getName(); 
 
                 if ("startTransaction".equals(actionName)) {
+                    ScheduledExecutorService scheduler = null;
                     try {
                         URI startUri = URI.create(fedoraConfig.getString("localServer")+"/fcr:tx");
                         logger.debug("StartUri--"+startUri);
@@ -84,17 +86,20 @@ public class FedoraTransaction extends FedoraAction {
                         context.registerRollbackEvent(this,"TransLocation","putInMemory",transLocation.toString());
                         
                         //keeping the transaction alive by threading
-                        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-                        thread = scheduler.scheduleAtFixedRate(
-                                new FedoraTransactionThread(startUri.toString(),fedoraClient),   // task
+                        scheduler = Executors.newSingleThreadScheduledExecutor();
+                        ScheduledFuture<?> thread = scheduler.scheduleAtFixedRate(
+                                new FedoraTransactionThread(transLocation.toString(),fedoraClient),
                                 0,            // initial delay
                                 1,            // period
                                 TimeUnit.MINUTES
                         );
-                        context.putInMemory("thread", thread);
+                        context.putInMemory(KEEP_ALIVE_TASK, thread);
+                        context.putInMemory(KEEP_ALIVE_EXECUTOR, scheduler);
                         logger.debug("Thread has been started succussfully! :"+thread);
                     }
                     catch (Exception e) {
+                        if (scheduler != null)
+                            scheduler.shutdownNow();
                         throw new DepositException("Start Transaction Error: ", e);
                     }
                 }
@@ -106,22 +111,19 @@ public class FedoraTransaction extends FedoraAction {
                     try (FcrepoResponse response = new PutBuilder(commitUri, fedoraClient).perform()) {
                         logger.debug("Transaction commit status: {}", response.getStatusCode());
                         
-                        if (response.getStatusCode()== 404 || response.getStatusCode()== 409 || response.getStatusCode()== 410) {
+                        if (response.getStatusCode() >= 300) {
                             logger.error("Commit Transaction statuscode:"+response.getStatusCode());
                             throw new DepositException("Commit Transaction Error: statuscode "+ response.getStatusCode()); 
                         }
                         else { 
                                 logger.debug("Successfully committed the trasaction!");  
-                                //remove thread from memory
-                                if(context.hasInMemory("thread")){
-                                    thread = (ScheduledFuture<?>) context.getFromMemory("thread");
-                                    thread.cancel(true);
-                                    context.remove("thread");
-                                }
+                                stopKeepAlive(context);
                         }
                     }
                     catch (Exception e) {
                         throw new DepositException("Commit Transaction Error: ", e);
+                    } finally {
+                        stopKeepAlive(context);
                     }
                 }
             } catch (Exception e) {
@@ -146,23 +148,31 @@ public class FedoraTransaction extends FedoraAction {
                                     case 410 -> logger.error("Rollback Transaction statuscode:"+response.getStatusCode()+"-> Gone: if the transaction has already been committed or rolled back");
                                     default -> {
                                         logger.debug("Successfully rolled the trasaction back!");
-                                        //remove thread from memory
-                                        if(context.hasInMemory("thread")){
-                                            thread = (ScheduledFuture<?>) context.getFromMemory("thread");
-                                            thread.cancel(true);
-                                            context.remove("thread");
-                                        }
                                     }
                                 }
                             }
                             catch (Exception e) {
                                 throw new DepositException("Rollback Transaction Error: ", e);
+                            } finally {
+                                stopKeepAlive(context);
                             }
                         }
                     }
                     catch (Exception ex) {
+                            stopKeepAlive(context);
                             logger.error("rollback action[" + this.getName() + "] event[" + event + "] failed!", ex);
                     }
+            }
+        }
+
+        private void stopKeepAlive(Context context) {
+            if (context.hasInMemory(KEEP_ALIVE_TASK)) {
+                ScheduledFuture<?> task = (ScheduledFuture<?>) context.remove(KEEP_ALIVE_TASK);
+                task.cancel(true);
+            }
+            if (context.hasInMemory(KEEP_ALIVE_EXECUTOR)) {
+                ScheduledExecutorService scheduler = (ScheduledExecutorService) context.remove(KEEP_ALIVE_EXECUTOR);
+                scheduler.shutdownNow();
             }
         }
 }

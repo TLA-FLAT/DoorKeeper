@@ -31,7 +31,7 @@ public class WorkspaceLogCleanup extends AbstractAction {
     
     @Override
     public boolean perform(Context context) {
-        MDC.remove("sip");
+        context.close();
         return true;
     }
     

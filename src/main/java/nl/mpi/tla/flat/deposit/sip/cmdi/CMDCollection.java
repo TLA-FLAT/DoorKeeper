@@ -42,10 +42,12 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
     protected XdmValue namespaces;
     
     public CMDCollection(URI pid,URI fid, String namespace, XdmValue namespaces) throws DepositException {
-        this.pid = pid;
-        this.fid = fid;
         this.namespace=namespace;
         this.namespaces=namespaces;
+        if (pid != null)
+            setPID(pid);
+        if (fid != null)
+            setFID(fid);
         if (this.pid!=null)
             this.uri = this.pid;
         else if (this.fid!=null)

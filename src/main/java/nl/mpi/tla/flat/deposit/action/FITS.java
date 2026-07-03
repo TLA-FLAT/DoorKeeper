@@ -41,7 +41,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 
@@ -64,6 +65,7 @@ import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.Saxon;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.MDC;
 
 /**
  *
@@ -75,21 +77,17 @@ public class FITS extends AbstractAction {
 	private static final Logger logger = LoggerFactory.getLogger(FITS.class);
 
 	private static final String MIMETYPE_XPATH = "distinct-values(/fits:fits/fits:identification/fits:identity/tokenize(@mimetype,'(\\s|,)+'))[.!='TBD']=$mime";
-	XdmNode result;
-	int threadCounter = 0;
 	ExecutorService executor;
 	File dir;
-	int unallowed;
 	XdmNode mimetypes;
-	private static volatile boolean isAnyError;
 
 	@Override
 	public boolean perform(Context context) throws DepositException {
-		isAnyError = false;
+		AtomicBoolean isAnyError = new AtomicBoolean(false);
+		AtomicInteger unallowed = new AtomicInteger();
 		int threadLimit;
 		int waitLimit;
 		dir = null;
-		unallowed = 0;
 		if (hasParameter("dir")) {
 			dir = new File(getParameter("dir"));
 			if (!dir.exists()) {
@@ -106,7 +104,7 @@ public class FITS extends AbstractAction {
 			threadLimit = 1; // default number of fits thread
 		}
 		if (hasParameter("waitLimit")) {
-			waitLimit = Integer.valueOf(getParameter("threadLimit"));
+			waitLimit = Integer.valueOf(getParameter("waitLimit"));
 		} else {
 			waitLimit = 15; // default waiting of fits thread
 		}
@@ -131,25 +129,21 @@ public class FITS extends AbstractAction {
 		} catch (SaxonApiException ex) {
 			throw new DepositException(ex);
 		}
-		threadCounter = 0;
 		executor = Executors.newFixedThreadPool(threadLimit);
 		TaskLimitSemaphore obj = new TaskLimitSemaphore(executor, threadLimit);
 		List<Future<Integer>> list = new ArrayList<Future<Integer>>();
 
 		for (Resource resource : context.getSIP().getResources()) {
-			if (!isAnyError) {
+			if (!isAnyError.get()) {
 				Future<Integer> future;
 				if (resource.hasFile()) {
 					File file = resource.getFile();
 					logger.debug("resource[" + file + "] mimetype?");
-					result = null;
 					try {
 						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath().replaceAll(" ","+"));
-						if (threadCounter <= threadLimit) {
-							future = obj.submit(() -> {
-								threadCounter = threadCounter + 1;
+						future = obj.submit(() -> {
 								logger.debug("Running: Thread name = " + Thread.currentThread().getName());
-								logger.debug("Running: Thread counter = " + threadCounter);
+								XdmNode result;
 								try {
 									logger.debug("URL call = " + call.toString());
 									HttpURLConnection con = (HttpURLConnection) call.openConnection();
@@ -159,7 +153,7 @@ public class FITS extends AbstractAction {
 									try {
 										status = con.getResponseCode();
 									} catch (IOException e) {
-										isAnyError = true;
+										isAnyError.set(true);
 										logger.debug("set isAnyError TRUE");
 										con.disconnect();
 										logger.debug("Exception occurred while getting response code: " + e.getMessage());
@@ -168,14 +162,14 @@ public class FITS extends AbstractAction {
 									logger.debug("status from the http call: " + status);
 									Reader streamReader = null;
 									StringBuffer content;
-									if (status > 299 || status == -1) {
-										isAnyError = true;
+									if (status < 200 || status >= 300) {
+										isAnyError.set(true);
 										logger.debug("set isAnyError TRUE");
 										streamReader = new InputStreamReader(con.getErrorStream());
 										con.disconnect();
 										logger.debug("Status from the Http call is >299. Hence abort! Error: "+ streamReader);
 										throw new DepositException("Status from Http call returning error value. Abort!");
-									} else if (status < 299) {
+									} else {
 										streamReader = new InputStreamReader(con.getInputStream());
 										logger.debug("StreamReader : " + streamReader);
 										content = new StringBuffer();
@@ -187,16 +181,10 @@ public class FITS extends AbstractAction {
 										in.close();
 										con.disconnect();
 										logger.debug("Content created!");
-									} else {
-										isAnyError = true;
-										logger.debug("set isAnyError TRUE");
-										con.disconnect();
-										logger.debug("Status from the Http call does not satisfy the condition to proceed further!");
-										throw new DepositException("Status from Http call returning unknown value. Abort!");
 									}
 
-									if (String.valueOf(content) == null) {
-										isAnyError = true;
+									if (content.length() == 0) {
+										isAnyError.set(true);
 										logger.debug("set isAnyError TRUE");
 										logger.debug("Content from Http Call is NULL!!");
 										throw new DepositException("Content from the Http call is null. Abort the execution!!");
@@ -204,34 +192,15 @@ public class FITS extends AbstractAction {
 
 									Source ss = new StreamSource(new StringReader(content.toString().trim()));
 									logger.debug("Source: " + ss);
-
-									if (ss.toString() != null) {
-										result = Saxon.buildDocument(ss);
-										if (dir != null && result != null) {
-											logger.debug("Result = " + result.getStringValue());
-											// save the FITS report for this resource
-											String name = file.getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
-											if (resource instanceof CMDResource)
-												name = ((CMDResource) resource).getID();
-											File out = new File(dir + "/" + name + ".FITS.xml");
-											try {
-												Saxon.save(result.asSource(), out);
-											} catch (SaxonApiException ex) {
-												throw new DepositException(ex);
-											}
-											logger.debug(". FITS[" + out + "]");
-										} else {
-											isAnyError = true;
-											logger.debug("set isAnyError TRUE");
-											logger.debug("Result from Fits: " + result + " does not satisfy the condition.");
-											logger.debug("Hence the Fits value is not saved and further execution is aborted!");
-											throw new DepositException("Result from Fits is incorrect. Abort!");
-										}
-									} else {
-										isAnyError = true;
-										logger.debug("set isAnyError TRUE");
-										logger.debug("XML Document is equal to null i.e Fits returned null");
-										throw new DepositException("Mimetype will not be checked due to Fits returning null value!");
+									result = Saxon.buildDocument(ss);
+									logger.debug("Result = " + result.getStringValue());
+									if (dir != null) {
+										String name = file.getPath().replaceAll("[^a-zA-Z0-9\\-]", "_");
+										if (resource instanceof CMDResource)
+											name = ((CMDResource) resource).getID();
+										File out = new File(dir + "/" + name + ".FITS.xml");
+										Saxon.save(result.asSource(), out);
+										logger.debug(". FITS[" + out + "]");
 									}
 								} catch (IOException io) {
 									throw new IOException("IOException occured during the http call: " + io + io.getMessage());
@@ -244,7 +213,7 @@ public class FITS extends AbstractAction {
 										XdmItem mt = iter.next();
 										String mime = Saxon.xpath2string(mt, "normalize-space(@value)");
 										logger.debug(". . mimetype[" + mime + "] check");
-										Boolean bCheck2 = new Boolean(true); // tells if all assertion groups succeeded
+										Boolean bCheck2 = Boolean.TRUE; // tells if all assertion groups succeeded
 										if (Saxon.xpath2boolean(mt, "exists(assertions)")) {
 											for (Iterator<XdmItem> iter2 = Saxon.xpathIterator(mt, "assertions", null,
 													NAMESPACES); iter2.hasNext();) {
@@ -304,7 +273,7 @@ public class FITS extends AbstractAction {
 												if (!bCheck3) {
 													// some assertion of this assertions failed
 													logger.debug(". . . assertions[" + xp + "] failed");
-													bCheck2 = new Boolean(false);
+													bCheck2 = Boolean.FALSE;
 													break;
 												} else
 													logger.debug(". . . assertions[" + xp + "] succeeded");
@@ -379,7 +348,7 @@ public class FITS extends AbstractAction {
 											// no allowed or fallback mimetype was found for this resource
 											logger.debug(". mimetypes failed");
 											logger.error("No mimetype found for resource[{}]", file);
-											unallowed++;
+											unallowed.incrementAndGet();
 										} else
 											logger.debug(". mimetypes succeeded");
 									}
@@ -387,47 +356,49 @@ public class FITS extends AbstractAction {
 									throw new DepositException(ex);
 								}
 								logger.debug("Closing: Thread name = " + Thread.currentThread().getName());
-								logger.debug("Closing: Thread counter = " + threadCounter + " Done. . . .");
-								return threadCounter;
+								return 1;
 							});
 							list.add((Future<Integer>) future);
-						}
 					} catch (Exception ex) {
+						executor.shutdownNow();
 						throw new DepositException(ex);
 					}
 				}
 			} else {
-				logger.debug("ERROR in one of the threads! Abort execution! (isAnyError) --> " + isAnyError);
+				logger.debug("ERROR in one of the threads! Abort execution! (isAnyError) --> " + isAnyError.get());
 			}
 		}
-		// Check if all the threads are completed - Start
-		while (threadCounter > 0) {
-			try {
-				logger.debug("Threadcounter > 0 ---> " + threadCounter + " > 0");
-				logger.debug("Wait for all threads to finish (" + waitLimit + " seconds). . . . . . . . . . . . . . . .");
-				executor.awaitTermination(waitLimit, TimeUnit.SECONDS);
-			} catch (InterruptedException e) {
-				throw new DepositException(e);
+
+		executor.shutdown();
+		try {
+			if (!executor.awaitTermination(waitLimit, TimeUnit.SECONDS)) {
+				executor.shutdownNow();
+				throw new DepositException("FITS processing exceeded the waitLimit of " + waitLimit + " seconds");
 			}
+		} catch (InterruptedException e) {
+			executor.shutdownNow();
+			Thread.currentThread().interrupt();
+			throw new DepositException(e);
 		}
 
 		for (Future<Integer> fut : list) {
 			try {
-				// because Future.get() waits for task to get completed
 				logger.info(new Date() + "::" + fut.get());
 			} catch (InterruptedException | ExecutionException e) {
+				executor.shutdownNow();
+				if (e instanceof InterruptedException)
+					Thread.currentThread().interrupt();
 				throw new DepositException("Exception occurred from thread with msg: " + e);
 			}
 		}
 
 		logger.debug("Execution of all threads successfully completed! We can now safely close the executor.");
 		// Check if all the threads are completed - End
-		executor.shutdown();
 		logger.debug("Executor shutdown done!");
 
-		if (unallowed > 0)
-			logger.error("{} resources were not allowed!", unallowed);
-		return (unallowed == 0);
+		if (unallowed.get() > 0)
+			logger.error("{} resources were not allowed!", unallowed.get());
+		return (unallowed.get() == 0);
 	}
 
 	public class TaskLimitSemaphore {
@@ -442,31 +413,26 @@ public class FITS extends AbstractAction {
 
 		public <T> Future<T> submit(final Callable<T> task) throws Exception {
 			Future<T> future = null;
-			logger.debug("isAnyError Boolean value inside thread: "+isAnyError);
-			if (isAnyError) {
-				throw new Exception("ERROR! So don't acquire anymore threads!");
-			} else {
-				semaphore.acquire();
-				logger.debug("semaphore.acquire()...");
-			}
+			Map<String, String> loggingContext = MDC.getCopyOfContextMap();
+			semaphore.acquire();
+			logger.debug("semaphore.acquire()...");
 			try {
 				future = executor.submit(() -> {
+					if (loggingContext == null)
+						MDC.clear();
+					else
+						MDC.setContextMap(loggingContext);
 					try {
 						return task.call();
 					} finally {
 						semaphore.release();
 						logger.debug("semaphore.release()...");
-						threadCounter--;
-						logger.debug("Thread counter decreased to --> " + threadCounter + " . . . . . . .");
-
+						MDC.clear();
 					}
 				});
 			} catch (Exception e) {
-				isAnyError = true;
-				semaphore.release();
-				logger.debug("ERROR: semaphore.release()...");
-				threadCounter--;
-				logger.debug("ERROR: Thread counter decreased to --> " + threadCounter + " . . . . . . .");
+					semaphore.release();
+					logger.debug("ERROR: semaphore.release()...");
 				throw new Exception("ERROR occurred in thread! -> " + e);
 			}
 			return future;

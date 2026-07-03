@@ -17,13 +17,18 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.util.StatusPrinter;
 import java.io.File;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.UUID;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
@@ -107,13 +112,22 @@ public class WorkspaceLogSetup extends AbstractAction {
                 }
             }
             
-            Logger logger = LoggerFactory.getLogger(nl.mpi.tla.flat.deposit.Flow.class);
             LoggerContext logctxt = (LoggerContext) LoggerFactory.getILoggerFactory();
+            ch.qos.logback.classic.Logger workspaceLogger = logctxt.getLogger("nl.mpi.tla.flat.deposit");
+            Set<Appender<ILoggingEvent>> existingAppenders = attachedAppenders(workspaceLogger);
             JoranConfigurator configurator = new JoranConfigurator();
             configurator.setContext(logctxt);
             configurator.doConfigure(logback.toString());
             StatusPrinter.printInCaseOfErrorsOrWarnings(logctxt);
-            logger.debug("\n\n" +
+            Set<Appender<ILoggingEvent>> runAppenders = attachedAppenders(workspaceLogger);
+            runAppenders.removeAll(existingAppenders);
+            for (Appender<ILoggingEvent> appender : runAppenders) {
+                context.registerCleanup(() -> {
+                    workspaceLogger.detachAppender(appender);
+                    appender.stop();
+                });
+            }
+            LoggerFactory.getLogger(nl.mpi.tla.flat.deposit.Flow.class).debug("\n\n" +
                 "\"Relax,\" said the DoorKeeper,\n" +
                 "\"I'm programmed to receive.\n" +
                 "You can check-out any time you like,\n" +
@@ -124,6 +138,13 @@ public class WorkspaceLogSetup extends AbstractAction {
             return false;
         }
         return true;
+    }
+
+    private Set<Appender<ILoggingEvent>> attachedAppenders(ch.qos.logback.classic.Logger logger) {
+        Set<Appender<ILoggingEvent>> appenders = new LinkedHashSet<>();
+        for (Iterator<Appender<ILoggingEvent>> iterator = logger.iteratorForAppenders(); iterator.hasNext();)
+            appenders.add(iterator.next());
+        return appenders;
     }
     
 }

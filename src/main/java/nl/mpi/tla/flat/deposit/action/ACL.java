@@ -97,8 +97,9 @@ public class ACL extends AbstractAction {
             // https://jena.apache.org/documentation/io/
             Model model = ModelFactory.createDefaultModel() ;
             model.read(policy.getAbsolutePath()) ;
-            OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"));
-            RDFDataMgr.write(trix, model, Lang.TRIX);
+            try (OutputStream trix = new FileOutputStream(new File(dir +"/policy.trix"))) {
+                RDFDataMgr.write(trix, model, Lang.TRIX);
+            }
 
             // convert trix to semantic triples using ACL/sl-trix-to-sem-triples.xsl
             XsltTransformer trix2sem = Saxon.buildTransformer(ACL.class.getResource("/ACL/sl-trix-to-sem-triples.xsl")).load();

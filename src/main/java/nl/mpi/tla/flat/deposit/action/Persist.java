@@ -18,7 +18,6 @@ package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.ListIterator;
@@ -93,12 +92,6 @@ public class Persist extends AbstractAction {
                     File o = newResourceFile;
                     logger.debug("first resource[" + newResourceFile.getName() + "]");
                     while (newResourceFile.exists()) {
-                        try {
-                            context.addPID(new URI("hdl:1234/5678."+v), new URI("file:"+newResourceFile.toString()));
-                            logger.debug("added PID");
-                        } catch (Exception e) {
-                            throw new DepositException(e);
-                        }
                         newResourceFile = new File(o.toString()+"."+(v++));
                         logger.debug("next resource[" + newResourceFile.getName() + "]");
                     }

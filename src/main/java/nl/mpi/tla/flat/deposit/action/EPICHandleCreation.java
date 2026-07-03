@@ -62,7 +62,7 @@ public class EPICHandleCreation extends AbstractAction {
         try {
             
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
-            XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
+            XdmValue namespaces = context.getProperty("fedoraNamespace", "");
         	
             String fedora = this.getParameter("fedoraConfig");
             String epic   = this.getParameter("epicConfig");
@@ -203,7 +203,7 @@ public class EPICHandleCreation extends AbstractAction {
                     continue;
                 boolean c = false;
                 for(XdmItem ns:namespaces) {
-                    if (red.toString().startsWith(ns.getStringValue()+":")) {
+                    if (red.toString().startsWith(ns.getStringValue()+"_")) {
                         String fid    = red.toString().replaceAll("#.*","");
                         String frag   = red.getRawFragment();
                         if (frag == null) {

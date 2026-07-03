@@ -43,9 +43,9 @@ public class UpdateSwordStatus extends AbstractAction {
             logger.debug("SWORD status properties["+ppath.toAbsolutePath()+"]");
             Properties props = new Properties();
             try {
-                FileInputStream in = new FileInputStream(ppath.toFile());
-                props.load(in);
-                in.close();
+                try (FileInputStream in = new FileInputStream(ppath.toFile())) {
+                    props.load(in);
+                }
                 Boolean status = context.getFlow().getStatus();
                 if (status == null) {
                     props.setProperty("state.label", "FAILED");
@@ -60,9 +60,9 @@ public class UpdateSwordStatus extends AbstractAction {
                     props.setProperty("state.description", "Deposit in the archive succeeded.");
                     logger.debug("SWORD status updated to [ARCHIVED]");
                 }
-                FileOutputStream out = new FileOutputStream(ppath.toFile());
-                props.store(out,"SWORD SIP status");
-                out.close();
+                try (FileOutputStream out = new FileOutputStream(ppath.toFile())) {
+                    props.store(out,"SWORD SIP status");
+                }
             } catch (IOException ex) {
                 throw new DepositException(ex);
             }

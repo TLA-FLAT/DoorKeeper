@@ -36,8 +36,12 @@ public class SIPLoad extends AbstractAction {
     
     @Override
     public boolean perform(Context context) throws DepositException {
-    	String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
-        XdmValue namespaces = context.getProperty("fedoraNamespace", "lat");
+	if (!context.hasProperty("fedoraNamespace"))
+	    throw new DepositException("Missing required workflow property fedoraNamespace");
+	if (!context.hasProperty("activeFedoraNamespace"))
+	    throw new DepositException("Missing required workflow property activeFedoraNamespace");
+	String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
+        XdmValue namespaces = context.getProperty("fedoraNamespace", "");
         String sip = this.getParameter("sip","./metadata/record.cmdi");
         if (sip == null) {
             logger.error("no sip file specified!");

@@ -90,7 +90,8 @@ public class DoorKeeper {
         for (int i=1;i<arg.size();i++) {
             String pv = (String)arg.get(i);
             if (pv.contains("=")) {
-                addParameter(params,pv.split("=")[0], pv.split("=")[1]);
+                int separator = pv.indexOf('=');
+                addParameter(params, pv.substring(0, separator), pv.substring(separator + 1));
             } else {
                 logger.error("workflow["+pv+"] isn't a valid <param>=<value>!");
                 showHelp();
@@ -100,7 +101,8 @@ public class DoorKeeper {
         
         try {
             Flow flw = new Flow(wf,params);
-            flw.run(start,stop);
+            if (!flw.run(start,stop))
+                System.exit(1);
         } catch (Exception ex) {
             logger.error("FATAL:",ex);
             System.exit(1);

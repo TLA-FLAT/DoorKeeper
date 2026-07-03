@@ -89,10 +89,12 @@ abstract public class AbstractAction implements ActionInterface {
                 try {
                     File pf = new File(overwrite);
                     if (pf.exists() && pf.canRead()) {
-                        if (overwrite.endsWith(".xml"))
-                            props.loadFromXML(new FileInputStream(pf));
-                        else
-                            props.load(new FileInputStream(pf));
+                        try (FileInputStream input = new FileInputStream(pf)) {
+                            if (overwrite.endsWith(".xml"))
+                                props.loadFromXML(input);
+                            else
+                                props.load(input);
+                        }
                     }
                 } catch (Exception ex) {
                     // ignore

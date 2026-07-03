@@ -31,6 +31,8 @@ import java.nio.file.Paths;
 
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -84,9 +86,7 @@ public class Context {
 	protected PrintWriter rollbackLog = null;
 
 	protected Map<String, Object> memory = new LinkedHashMap<>();
-
-	FileWriter fileWriter;
-	FileReader fileReader;
+	protected List<Runnable> cleanupTasks = new ArrayList<>();
 
 	// constructor
 
@@ -228,10 +228,38 @@ public class Context {
 		return memory.get(key);
 	}
         
-        public Object remove(String key){
+	public Object remove(String key){
             logger.debug("remove memory key[" + key + "][" + memory.get(key) + "]");
             return memory.remove(key);
         }
+
+	/** Register run-owned resources that must be released even when the flow fails. */
+	public synchronized void registerCleanup(Runnable cleanup) {
+		cleanupTasks.add(cleanup);
+	}
+
+	/** Release all run-owned resources. Safe to invoke more than once. */
+	public void close() {
+		List<Runnable> tasks;
+		synchronized (this) {
+			tasks = new ArrayList<>(cleanupTasks);
+			cleanupTasks.clear();
+		}
+		Collections.reverse(tasks);
+		for (Runnable cleanup : tasks) {
+			try {
+				cleanup.run();
+			} catch (Exception ex) {
+				logger.error("Couldn't release a workflow resource", ex);
+			}
+		}
+		if (rollbackLog != null) {
+			rollbackLog.flush();
+			rollbackLog.close();
+			rollbackLog = null;
+		}
+		org.slf4j.MDC.remove("sip");
+	}
 
 	// Exception
 
@@ -250,40 +278,21 @@ public class Context {
 	}
 
 	public void saveEvent() {
-		String file = null;
-		fileWriter = null;
-		try {
-			file = getPidFile();
-			if (file != null) {
-				File f = new File(file);
-				if (!f.exists())
-					f.createNewFile();
-				f.setWritable(true, false);
-				fileWriter = new FileWriter(file);
+		if (pids.isEmpty()) {
+			this.logger.debug("No pids saved for this run- saveEvent()!");
+			return;
+		}
+		String file = getPidFile();
+		if (file == null)
+			return;
+		try (ICsvListWriter saveLog = new CsvListWriter(new FileWriter(file), CsvPreference.STANDARD_PREFERENCE)) {
+			for (Map.Entry<URI, URI> entry : pids.entrySet()) {
+				saveLog.write(entry.getKey().toString(), entry.getValue().toString());
+				logger.debug("saved["+entry.getKey().toString()+","+entry.getValue().toString()+"]");
 			}
 		} catch (IOException ex) {
-			this.logger.debug("Couldn't create/open save pids csv file[" + file + "]", ex);
-			//System.exit(1);
+			this.logger.debug("Couldn't write pids to csv file[" + file + "]", ex);
 		}
-		if (fileWriter != null) {
-			try {
-				if (!pids.isEmpty()) {
-					ICsvListWriter saveLog = new CsvListWriter(fileWriter, CsvPreference.STANDARD_PREFERENCE);
-					for (Map.Entry<URI, URI> entry : pids.entrySet()) {
-						saveLog.write(entry.getKey().toString(), entry.getValue().toString());
-						logger.debug("saved["+entry.getKey().toString()+","+entry.getValue().toString()+"]");
-					}
-					saveLog.close();
-				}
-				//else {
-				//	logger.info("Hashmap of pids is empty. Nothing to store into the file!");
-				//} #Not required anymore. It was used for logging during testing phase
-			} catch (IOException e) {
-				this.logger.debug("Couldn't write pids to csv file["+ this.getProperty("dk-pidList", "pids.csv").toString() + "]", e);
-				//System.exit(1);
-			}
-		} else
-			this.logger.debug("No pids saved for this run- saveEvent()!");
 	}
 
 	public String getPidFile() {
@@ -299,24 +308,14 @@ public class Context {
 	}
 
 	public void getSave() {
-		String file = null;
-		fileReader = null;
-		try {
-			file = getPidFile();
-			if (file != null) {
-				File f = new File(file);
-				if (f.exists() && f.length() != 0) 
-					fileReader = new FileReader(file);
-				else
-					logger.debug("pids.csv file does not exist in the path!");
+		String file = getPidFile();
+		if (file != null) {
+			File f = new File(file);
+			if (!f.exists() || f.length() == 0) {
+				logger.debug("pids.csv file does not exist in the path!");
+				return;
 			}
-		} catch (IOException ex) {
-			this.logger.debug("Couldn't create/open save pids csv file[" + file + "]", ex);
-			//System.exit(1);
-		}
-		if (fileReader != null) {
-			try {
-				CSVReader readLog = new CSVReader(fileReader);
+			try (CSVReader readLog = new CSVReader(new FileReader(file))) {
 				Map<URI, URI> tempPids = new LinkedHashMap<>();
 				List<String[]> readingData = readLog.readAll();
 				for (String[] list : readingData) {
@@ -325,7 +324,6 @@ public class Context {
 				pids = tempPids;
 			} catch (IOException | CsvException ex) {
 				this.logger.debug("Couldn't read save log file[" + this.getProperty("dk-pidList", "pids.csv").toString() + "]",ex);
-				//System.exit(1);
 			}
 		} else
 			this.logger.debug("No pids saved for this run!- getSave()");

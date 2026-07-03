@@ -22,8 +22,10 @@ import java.io.FilenameFilter;
 import java.io.FileInputStream;
 import java.net.URI;
 import java.util.Date;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Pattern;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
@@ -54,19 +56,20 @@ public class FedoraInteract extends FedoraAction {
 			SIPInterface sip = context.getSIP();
 
 			File dir = new File(this.getParameter("dir", "./fox"));
+			String fidFilePattern = configuredFidFilePattern(context);
 
 			// <fid>.xml (full FOXML -> create the object container + its datastreams)
-			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.xml")));
+			File[] foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(fidFilePattern + "\\.xml")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replace(".xml", "").replaceFirst("^([a-z]+)_", "$1_").replace("_CMD","");
+				String fid = fox.getName().replace(".xml", "").replace("_CMD","");
 				logger.debug("FOXML[" + fox + "] -> [" + fid + "]");
 				ingest(context, fox, fid);
 			}
 
 			// - <fid>.<asof>.props (props -> modify (some) properties)
-                        File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[0-9]+\\.props")));
+                        File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter(fidFilePattern + "\\.[0-9]+\\.props")));
 			for (File propfile : propfiles) {
-				String fid = propfile.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1_").replace("_CMD", "");
+				String fid = propfile.getName().replaceFirst("\\..*$", "").replace("_CMD", "");
 				try {
 					String epoch = propfile.getName().replaceFirst("^.*\\.([0-9]+)\\.props$", "$1");
 					Date asof = new Date(Long.parseLong(epoch));
@@ -79,26 +82,12 @@ public class FedoraInteract extends FedoraAction {
 				}
 
 			}
-                        /*
-
-			// - <fid>.<dsid>.file ... create/modify DS
-			// - <fid>.<dsid>.<ext>... create/modify DS
-			foxs = dir.listFiles(
-					((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[A-Za-z0-9_]+")));
-			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1:").replace("_CMD", "");
-				String dsid = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
-				String ext = fox.getName().replaceFirst("^.*\\.(.*)$", "$1");
-				logger.debug("DSID[" + fox + "] -> [" + fid + "][" + dsid + "][" + ext + "]");
-				upsertDatastream(context, fox, fid, dsid, ext);
-			}
-                        */
 
 			// - <fid>.<dsid>.<asof>.file ... (DS -> modifyDatastream.dsLocation)
 			// - <fid>.<dsid>.<asof>.<ext>... (DS -> modifyDatastream.content)
-			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter("[a-z]+_[A-Za-z0-9_]+\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
+			foxs = dir.listFiles(((FilenameFilter) new RegexFileFilter(fidFilePattern + "\\.[A-Z][A-Z0-9\\-]*\\.[0-9]+\\.[A-Za-z0-9_]+")));
 			for (File fox : foxs) {
-				String fid = fox.getName().replaceFirst("\\..*$", "").replaceFirst("^([a-z]+)_", "$1_").replace("_CMD", "");
+				String fid = fox.getName().replaceFirst("\\..*$", "").replace("_CMD", "");
 				String ds = fox.getName().replaceFirst("^.*\\.([A-Z][A-Z0-9\\-]*)\\..*$", "$1");
 				String epoch = fox.getName().replaceFirst("^.*\\.([0-9]+)\\..*$", "$1");
 				Date asof = new Date(Long.parseLong(epoch));
@@ -111,6 +100,19 @@ public class FedoraInteract extends FedoraAction {
 		}
 		return true;
 	}
+
+        /** Build the accepted Fedora object filename prefixes from the workflow configuration. */
+        protected String configuredFidFilePattern(Context context) throws DepositException {
+            List<String> namespaces = new ArrayList<>();
+            for (XdmItem namespace : context.getProperty("fedoraNamespace", "")) {
+                String value = namespace.getStringValue().trim();
+                if (!value.isEmpty())
+                    namespaces.add(Pattern.quote(value));
+            }
+            if (namespaces.isEmpty())
+                throw new DepositException("No Fedora namespaces are configured in fedoraNamespace");
+            return "(?:" + String.join("|", namespaces) + ")_[A-Za-z0-9_]+";
+        }
         
         protected URI transURI(Context context) throws DepositException {
             try {
@@ -184,7 +186,7 @@ public class FedoraInteract extends FedoraAction {
                 if (tx != null) pb = pb.addTransaction(tx);
                 try (FcrepoResponse response = pb.body(IOUtils.toInputStream(sparql)).perform()) {
                     logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                    if (response.getStatusCode() > 300)
+                    if (response.getStatusCode() >= 300)
                         throw new DepositException("can't update property["+prop+"] of ["+rfid+"], status["+response.getStatusCode()+"]");
                 }
              } catch (DepositException ex) {
@@ -215,7 +217,7 @@ public class FedoraInteract extends FedoraAction {
                             URI tx = transURI(context);
                             if (tx != null) pb = pb.addTransaction(tx);
                             try (FcrepoResponse response = pb.body(IOUtils.toInputStream(sparql)).perform()) {
-                                if (response.getStatusCode() > 300)
+                                if (response.getStatusCode() >= 300)
                                     throw new DepositException("can't insert identifier["+val+"] of ["+rfid+"], status["+response.getStatusCode()+"]");
                             }
                         } else if (!oldval.strip().equals(val.getStringValue().strip())) {
@@ -231,7 +233,7 @@ public class FedoraInteract extends FedoraAction {
                             URI tx = transURI(context);
                             if (tx != null) pb = pb.addTransaction(tx);
                             try (FcrepoResponse response = pb.body(IOUtils.toInputStream(sparql)).perform()) {
-                                if (response.getStatusCode() > 300)
+                                if (response.getStatusCode() >= 300)
                                     throw new DepositException("can't update identifier["+val+"] of ["+rfid+"], status["+response.getStatusCode()+"]");
                             }
                         } else
@@ -262,7 +264,9 @@ public class FedoraInteract extends FedoraAction {
             // datastream path creates-or-replaces the resource, and the SPARQL upsert
             // used for the RDF-backed datastreams (DC/RELS-EXT) is equally valid against
             // an object that doesn't have the property yet. So creation mirrors update.
-            // DC       -> folded into the object's RDF (e.g. dc:identifier md5:...)
+            // DC       -> binary child (canonical XML record, e.g., for OAI-PMH)
+            //             + folded into the object's RDF (e.g. dc:identifier md5:...)
+            // OLAC     -> binary child (canonical XML record, e.g., for OAI-PMH)
             // RELS-EXT -> folded into the object's RDF (e.g. isConstituentOf)
             // CMD      -> new binary child
             // OBJ      -> new external-content (proxy) binary child
@@ -276,7 +280,11 @@ public class FedoraInteract extends FedoraAction {
             try {
                 XdmNode doc = Saxon.buildDocument(new StreamSource(fox));
                 switch (ds) {
-                    case "DC" -> applyDC(context, doc, fid);
+                    case "DC" -> {
+                        putBinary(context, fid, "DC", new FileInputStream(fox), "text/xml");
+                        applyDC(context, doc, fid);
+                    }
+                    case "OLAC" -> putBinary(context, fid, "OLAC", new FileInputStream(fox), "text/xml");
                     case "RELS-EXT" -> applyRELS(context, doc, fid);
                     case "CMD" -> putBinary(context, fid, "CMD", new FileInputStream(fox), "application/x-cmdi+xml");
                     case "OBJ" -> {
@@ -331,7 +339,7 @@ public class FedoraInteract extends FedoraAction {
 
         /** PUT a binary (LDP-NR) child datastream, joining the active transaction. */
         protected void putBinary(Context context, String fid, String ds, java.io.InputStream body, String mime) throws DepositException {
-            try {
+            try (body) {
                 String rfid = fedoraConfig.getString("localServer")+"/"+fid+"/"+ds;
                 logger.debug("PUT binary["+rfid+"]["+mime+"]");
                 PutBuilder pb = new PutBuilder(new URI(rfid),fedoraClient);
@@ -339,7 +347,7 @@ public class FedoraInteract extends FedoraAction {
                 if (tx != null) pb = pb.addTransaction(tx);
                 try (FcrepoResponse response = pb.body(body, mime).perform()) {
                     logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                    if (response.getStatusCode() > 300)
+                    if (response.getStatusCode() >= 300)
                         throw new DepositException("can't store the binary ["+rfid+"], status["+response.getStatusCode()+"]");
                 }
             } catch (DepositException ex) {
@@ -359,7 +367,7 @@ public class FedoraInteract extends FedoraAction {
                 if (tx != null) pb = pb.addTransaction(tx);
                 try (FcrepoResponse response = pb.externalContent(new URI(ref), mime, "proxy").perform()) {
                     logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                    if (response.getStatusCode() > 300)
+                    if (response.getStatusCode() >= 300)
                         throw new DepositException("can't store the external content of ["+rfid+"], status["+response.getStatusCode()+"]");
                 }
             } catch (DepositException ex) {
@@ -383,7 +391,7 @@ public class FedoraInteract extends FedoraAction {
                 if (tx != null) pb = pb.addTransaction(tx);
                 try (FcrepoResponse response = pb.perform()) {
                     logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                    if (response.getStatusCode() > 300)
+                    if (response.getStatusCode() >= 300)
                         throw new DepositException("can't create the object ["+rfid+"], status["+response.getStatusCode()+"]");
                 }
             } catch (DepositException ex) {
@@ -430,6 +438,11 @@ public class FedoraInteract extends FedoraAction {
                     XdmNode dc = (XdmNode) Saxon.xpath(foxml, "//foxml:datastream[@ID='DC']//foxml:xmlContent/*", null, NAMESPACES).itemAt(0);
                     String dcMime = Saxon.xpath2string(foxml, "//foxml:datastream[@ID='DC']//foxml:datastreamVersion[1]/@MIMETYPE", null, NAMESPACES);
                     putBinary(context, fid, "DC", IOUtils.toInputStream(dc.toString(), "UTF-8"), dcMime.isEmpty() ? "text/xml" : dcMime);
+                }
+                if (Saxon.xpath2boolean(foxml, "exists(//foxml:datastream[@ID='OLAC']//foxml:xmlContent/*)", null, NAMESPACES)) {
+                    XdmNode olac = (XdmNode) Saxon.xpath(foxml, "//foxml:datastream[@ID='OLAC']//foxml:xmlContent/*", null, NAMESPACES).itemAt(0);
+                    String olacMime = Saxon.xpath2string(foxml, "//foxml:datastream[@ID='OLAC']//foxml:datastreamVersion[1]/@MIMETYPE", null, NAMESPACES);
+                    putBinary(context, fid, "OLAC", IOUtils.toInputStream(olac.toString(), "UTF-8"), olacMime.isEmpty() ? "text/xml" : olacMime);
                 }
                 if (Saxon.xpath2boolean(foxml, "exists(//foxml:datastream[@ID='OBJ']//foxml:contentLocation/@REF)", null, NAMESPACES)) {
                     String ref = Saxon.xpath2string(foxml, "//foxml:datastream[@ID='OBJ']//foxml:contentLocation[1]/@REF", null, NAMESPACES);

@@ -102,7 +102,7 @@ abstract public class FedoraAction extends AbstractAction {
         URI fid = null;
         try {
             // dc:identifier may be stored as a literal (legacy/migrated data) or as a URI (current ingest)
-            String hdl = pid.toString().replace("hdl:","https://hdl.handle.net/");
+            String hdl = Global.asHandleURL(pid).toString();
             String query = "SELECT ?fid WHERE { { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+hdl+"\" } UNION { ?fid <http://purl.org/dc/elements/1.1/identifier> <"+hdl+"> } } ";
             XdmNode tpl = sparql(query);
             logger.debug("RESULT["+tpl.toString()+"]");
@@ -127,7 +127,7 @@ abstract public class FedoraAction extends AbstractAction {
             logger.debug("RESULT["+tpl.toString()+"]");
             String p = Saxon.xpath2string(tpl, "normalize-space((//srx:results/srx:result/srx:binding[@name='pid']/*[self::srx:literal or self::srx:uri][starts-with(.,'https://hdl.handle.net/')])[1])",null,Global.NAMESPACES);
             if (p!=null && !p.isEmpty())
-                pid = new URI(p.replace("https://hdl.handle.net/","hdl:"));
+                pid = Global.asHandleURL(new URI(p));
         } catch(URISyntaxException | SaxonApiException e) {
             throw new DepositException(e);
         }
@@ -166,7 +166,7 @@ abstract public class FedoraAction extends AbstractAction {
         if (tx!=null) req = req.addTransaction(tx);
         try (FcrepoResponse response = req.perform()) {
                 logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                res = new Boolean(response.getStatusCode() == 200);
+                res = Boolean.valueOf(response.getStatusCode() == 200);
             } catch (Exception e) {
                  throw new DepositException(e);
             }
@@ -217,16 +217,38 @@ abstract public class FedoraAction extends AbstractAction {
     
     public InputStream getBinaryDataStream(URI fid,String ds) throws DepositException {
         try {
-            FcrepoResponse response = new GetBuilder(fid.resolve(new URI("./"+ds)), fedoraClient).perform();
+            URI uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString()+"/"+ds);
+            FcrepoResponse response = new GetBuilder(uri, fedoraClient).perform();
             return response.getBody();
         } catch(Exception e) {
             throw new DepositException("Interacting with Fedora Commons for ["+fid+"]["+ds+"] failed!",e);
         }
     }
-    
+
+    /** GET a datastream and parse it as XML; returns null when the object doesn't have the datastream. */
+    public XdmNode getXMLDataStream(URI fid,String dsid) throws DepositException {
+        try {
+            URI uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString()+"/"+dsid);
+            logger.debug("FCREPO["+uri.toString()+"]");
+            try (FcrepoResponse response = new GetBuilder(uri, fedoraClient).perform()) {
+                logger.debug("FCREPO code["+response.getStatusCode()+"]");
+                if (response.getStatusCode() == 404 || response.getStatusCode() == 410)
+                    return null;
+                if (response.getStatusCode() >= 300)
+                    throw new DepositException("Unexpected status["+response.getStatusCode()+"] for ["+uri+"]!");
+                return Saxon.buildDocument(new StreamSource(response.getBody()));
+            }
+        } catch(DepositException ex) {
+            throw ex;
+        } catch(Exception e) {
+            throw new DepositException("Interacting with Fedora Commons for ["+fid+"]["+dsid+"] failed!",e);
+        }
+    }
+
     public XdmNode getCMDDataStream(URI fid) throws DepositException {
         try {
-            FcrepoResponse response = new GetBuilder(fid.resolve(new URI("./CMD")), fedoraClient).perform();
+            URI uri = new URI(fedoraConfig.getString("localServer")+"/"+fid.toString()+"/CMD");
+            FcrepoResponse response = new GetBuilder(uri, fedoraClient).perform();
             if (response.getContentType().equals("application/x-cmdi+xml"))
                 return Saxon.buildDocument(new StreamSource(response.getBody()));
         } catch(Exception e) {

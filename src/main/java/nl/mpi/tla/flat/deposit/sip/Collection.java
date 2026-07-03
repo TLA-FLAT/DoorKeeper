@@ -52,14 +52,8 @@ abstract public class Collection {
     public void setPID(URI pid) throws DepositException {
         if (this.pid!=null)
             logger.warn("Collection["+this.uri+"] has already a PID["+this.pid+"]! new PID["+pid+"]");
-        if (pid.toString().startsWith("hdl:")) {
-            this.pid = pid;
-        } else if (pid.toString().matches("http(s)?://hdl.handle.net/.*")) {
-            try {
-                this.pid = new URI(pid.toString().replace("http(s)?://hdl.handle.net/", "hdl:"));
-            } catch (URISyntaxException ex) {
-                throw new DepositException(ex);
-            }
+        if (pid.toString().matches("(hdl:|http(s)?://hdl\\.handle\\.net/).*")) {
+            this.pid = Global.asHandleURL(pid);
         } else {
             throw new DepositException("The URI["+pid+"] isn't a valid PID!");
         }

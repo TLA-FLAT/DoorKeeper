@@ -148,7 +148,7 @@
                 <xsl:variable name="sipPID">
                     <xsl:choose>
                         <xsl:when test="starts-with(cmd:hdl($record/cmd:CMD/cmd:Header/cmd:MdSelfLink), 'hdl:')">
-                            <xsl:sequence select="cmd:hdl($record/cmd:CMD/cmd:Header/cmd:MdSelfLink)"/>
+                            <xsl:sequence select="replace(cmd:hdl($record/cmd:CMD/cmd:Header/cmd:MdSelfLink), '^hdl:', 'https://hdl.handle.net/')"/>
                         </xsl:when>
                         <xsl:otherwise>
                             <xsl:sequence select="resolve-uri($record/cmd:CMD/cmd:Header/cmd:MdSelfLink, base-uri($record))"/>
@@ -260,7 +260,7 @@
                         <xsl:variable name="resPID">
                             <xsl:choose>
                                 <xsl:when test="starts-with(cmd:hdl($resource/cmd:ResourceRef), 'hdl:')">
-                                    <xsl:sequence select="cmd:hdl($resource/cmd:ResourceRef)"/>
+                                    <xsl:sequence select="replace(cmd:hdl($resource/cmd:ResourceRef), '^hdl:', 'https://hdl.handle.net/')"/>
                                 </xsl:when>
                                 <xsl:otherwise>
                                     <xsl:sequence select="resolve-uri($resource/cmd:ResourceRef, base-uri($resource))"/>
