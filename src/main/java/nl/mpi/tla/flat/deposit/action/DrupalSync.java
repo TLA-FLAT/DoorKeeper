@@ -30,16 +30,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+import java.util.Set;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
@@ -82,6 +80,7 @@ public class DrupalSync extends FedoraAction {
     protected String mediaUseVocabulary = "islandora_media_use";
     protected String sipModel = "Compound Object";
     protected String collectionModel = "Collection";
+    protected final Set<String> collectionProfiles = new LinkedHashSet<>();
 
     protected final Map<String,TermRef> termCache = new HashMap<>();
 
@@ -126,13 +125,15 @@ public class DrupalSync extends FedoraAction {
             List<NodeRef> parents = new ArrayList<>();
             for (Collection col : sip.getCollections(false)) {
                 if (col.hasPID() && col.hasFID()) {
-                    parents.add(upsertNode(context, col.getPID(), col.getFID(true), collectionModel, new ArrayList<>()));
+                    parents.add(upsertNode(context, col.getPID(), col.getFID(true), collectionModel, new ArrayList<>(), null));
                 } else {
                     logger.warn("Parent collection["+col+"] has no PID and/or FID; SIP node won't be a member of it");
                 }
             }
 
-            NodeRef node = upsertNode(context, sip.getPID(), sip.getFID(true), sipModel, parents);
+            String model = isCollectionSIP(sip) ? collectionModel : sipModel;
+            String title = cmdiTitle(Saxon.wrapNode(sip.getRecord()));
+            NodeRef node = upsertNode(context, sip.getPID(), sip.getFID(true), model, parents, title);
 
             for (Resource res : sip.getResources()) {
                 if (!(res.isInsert() || res.isUpdate()))
@@ -141,7 +142,19 @@ public class DrupalSync extends FedoraAction {
                     logger.warn("Resource["+res+"] has no PID and/or FID; skipped");
                     continue;
                 }
-                syncResource(context, res, node, mimeMap);
+                // Each resource is its own archival object, so it gets its own
+                // islandora_object node — titled with its filename, modelled
+                // from its mimetype, and a member of the compound SIP node.
+                // The media is attached to that child node, not the compound:
+                // a compound node carries only the bundle-level CMD/DC/OLAC
+                // metadata and never media of its own.
+                String mime = (res.hasMime() ? res.getMime() : "application/octet-stream");
+                MimeMapping mapping = lookupMapping(mimeMap, mime);
+                String filename = (res.getFile() != null ? res.getFile().getName()
+                        : res.getFID(true).toString().replaceAll(".*/",""));
+                NodeRef child = upsertNode(context, res.getPID(), res.getFID(true),
+                        mapping.model(), List.of(node), filename);
+                syncResource(context, res, child, mimeMap);
             }
         } catch (DepositException ex) {
             throw ex;
@@ -161,9 +174,9 @@ public class DrupalSync extends FedoraAction {
      * Nodes are written through JSON:API: the core REST node POST route
      * (path /node) is shadowed by the frontpage view's route.
      */
-    protected NodeRef upsertNode(Context context, URI pid, URI fid, String model, List<NodeRef> parents) throws DepositException {
+    protected NodeRef upsertNode(Context context, URI pid, URI fid, String model, List<NodeRef> parents, String suppliedTitle) throws DepositException {
         String fidStr = fid.toString().replaceAll("#.*","");
-        String title = fetchTitle(fid, fidStr);
+        String title = (suppliedTitle == null || suppliedTitle.isBlank()) ? fetchTitle(fid, fidStr) : suppliedTitle;
         TermRef modelTerm = termId(modelVocabulary, model);
 
         ObjectNode attributes = MAPPER.createObjectNode();
@@ -270,17 +283,68 @@ public class DrupalSync extends FedoraAction {
         }
     }
 
-    /**
-     * The object's dc:title from its Fedora RDF; falls back to the PID's local name.
-     */
-    protected String fetchTitle(URI fid, String fallback) {
+    /** Determine whether the SIP's CMDI profile is configured as a collection profile. */
+    protected boolean isCollectionSIP(SIPInterface sip) {
         try {
-            XdmNode info = fcrepo(new URI(fid.toString().replaceAll("#.*","")));
-            String title = Saxon.xpath2string(info, "normalize-space((//dc:title)[1])", null, Global.NAMESPACES);
+            String profile = cmdiProfile(Saxon.wrapNode(sip.getRecord()));
+            boolean collection = isCollectionProfile(profile);
+            logger.debug("CMDI profile["+profile+"] model["+(collection ? collectionModel : sipModel)+"]");
+            return collection;
+        } catch (Exception ex) {
+            logger.warn("Couldn't determine the SIP's CMDI profile; using model["+sipModel+"]", ex);
+            return false;
+        }
+    }
+
+    protected String cmdiProfile(XdmNode cmd) throws Exception {
+        return Saxon.xpath2string(cmd,
+                "normalize-space(/cmd:CMD/cmd:Header/cmd:MdProfile)", null, Global.NAMESPACES);
+    }
+
+    protected boolean isCollectionProfile(String profile) {
+        return profile != null && collectionProfiles.contains(profile);
+    }
+
+    /**
+     * Prefer an explicit collection display name, then the first CMDI component
+     * element named Title/title. This works across the configured CMDI profiles.
+     */
+    protected String cmdiTitle(XdmNode cmd) {
+        if (cmd == null)
+            return null;
+        try {
+            String title = Saxon.xpath2string(cmd,
+                    "normalize-space((/cmd:CMD/cmd:Header/cmd:MdCollectionDisplayName, "
+                    + "/cmd:CMD/cmd:Components//*[local-name()='Title' or local-name()='title'])[1])",
+                    null, Global.NAMESPACES);
+            return (title == null || title.isBlank()) ? null : title;
+        } catch (Exception ex) {
+            logger.warn("Couldn't extract a title from CMDI", ex);
+            return null;
+        }
+    }
+
+    /** The object's DC/CMD title from Fedora; falls back to the FID's local name. */
+    protected String fetchTitle(URI fid, String fallback) {
+        URI cleanFid;
+        try {
+            cleanFid = new URI(fid.toString().replaceAll("#.*",""));
+            XdmNode dc = getXMLDataStream(cleanFid, "DC");
+            String title = dc == null ? null
+                    : Saxon.xpath2string(dc, "normalize-space((//dc:title)[1])", null, Global.NAMESPACES);
+            if (title != null && !title.isEmpty())
+                return title;
+
+            String cmdTitle = cmdiTitle(getXMLDataStream(cleanFid, "CMD"));
+            if (cmdTitle != null)
+                return cmdTitle;
+
+            XdmNode info = fcrepo(cleanFid);
+            title = Saxon.xpath2string(info, "normalize-space((//dc:title)[1])", null, Global.NAMESPACES);
             if (title != null && !title.isEmpty())
                 return title;
         } catch (Exception ex) {
-            logger.warn("Couldn't fetch dc:title for ["+fid+"]; falling back to the PID", ex);
+            logger.warn("Couldn't fetch a title for ["+fid+"]; falling back to the FID", ex);
         }
         return fallback.replaceAll(".*/","");
     }
@@ -364,22 +428,14 @@ public class DrupalSync extends FedoraAction {
             server = server.replaceAll("/+$","");
 
             String user = xConfig.getString("userName");
-            String pass = xConfig.getString("userPass");
+            String pass = readSecret(xConfig, "userPass", "userPassFile");
             if (user == null || user.isEmpty() || pass == null || pass.isEmpty())
                 throw new DepositException("The Drupal configuration["+drupal+"] doesn't specify userName/userPass!");
             authorization = "Basic " + Base64.getEncoder().encodeToString((user+":"+pass).getBytes(StandardCharsets.UTF_8));
 
             HttpClient.Builder builder = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1);
-            if (xConfig.getBoolean("trustAll", false)) {
-                logger.warn("Trusting any Drupal TLS certificate; don't use trustAll in production!");
-                SSLContext ssl = SSLContext.getInstance("TLS");
-                ssl.init(null, new TrustManager[] { new X509TrustManager() {
-                    public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-                    public void checkServerTrusted(X509Certificate[] chain, String authType) {}
-                    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-                }}, null);
-                builder = builder.sslContext(ssl);
-            }
+            if (xConfig.getBoolean("trustAll", false))
+                throw new DepositException("Drupal trustAll is no longer supported; use internal HTTP or a trusted TLS certificate");
             http = builder.build();
 
             nodeBundle = xConfig.getString("nodeBundle", nodeBundle);
@@ -387,6 +443,13 @@ public class DrupalSync extends FedoraAction {
             mediaUseVocabulary = xConfig.getString("mediaUseVocabulary", mediaUseVocabulary);
             sipModel = xConfig.getString("sipModel", sipModel);
             collectionModel = xConfig.getString("collectionModel", collectionModel);
+            collectionProfiles.clear();
+            for (Object configured : xConfig.getList("collectionProfile")) {
+                for (String profile : configured.toString().split(",")) {
+                    if (!profile.isBlank())
+                        collectionProfiles.add(profile.trim());
+                }
+            }
             return xConfig;
         } catch (DepositException ex) {
             throw ex;

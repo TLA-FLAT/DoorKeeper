@@ -28,6 +28,8 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Date;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -44,23 +46,33 @@ abstract public class FedoraAction extends AbstractAction {
 
     private static final Logger logger = LoggerFactory.getLogger(FedoraAction.class.getName());
     
-    private static String user = null;
+    private String user = null;
     
     protected XMLConfiguration fedoraConfig = null;
     
-    protected static FcrepoClient fedoraClient = null;
+    protected FcrepoClient fedoraClient = null;
+
+    private static final String CLIENT_MEMORY_KEY_PREFIX = FedoraAction.class.getName() + ".client:";
     
     public void connect(Context context) throws DepositException {
         try {
             fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));
 
-            if (fedoraClient == null) {
-                user = fedoraConfig.getString("userName");
-                String pass = fedoraConfig.getString("userPass");
+            String configPath = new File(getParameter("fedoraConfig")).getCanonicalPath();
+            String clientKey = CLIENT_MEMORY_KEY_PREFIX + configPath;
+            user = fedoraConfig.getString("userName");
+
+            if (context.hasInMemory(clientKey)) {
+                fedoraClient = (FcrepoClient) context.getFromMemory(clientKey);
+            } else {
+                String pass = readSecret(fedoraConfig, "userPass", "userPassFile");
                 FcrepoClient.FcrepoClientBuilder builder = FcrepoClient.client();
-                if (user != null && !user.isEmpty())
-                    builder = builder.credentials(user, pass);
+                if (user != null && !user.isEmpty()) {
+                    URI localServer = URI.create(fedoraConfig.getString("localServer"));
+                    builder = builder.credentials(user, pass).authScope(localServer.getHost());
+                }
                 fedoraClient = builder.build();
+                context.putInMemory(clientKey, fedoraClient);
             }
 
         } catch(Exception e) {
@@ -70,6 +82,24 @@ abstract public class FedoraAction extends AbstractAction {
     
     public String getFedoraUser() {
         return this.user;
+    }
+
+    /** Read a credential from a mounted secret file, with the inline value kept for compatibility. */
+    protected static String readSecret(XMLConfiguration config, String valueKey, String fileKey) throws IOException {
+        String secretFile = config.getString(fileKey);
+        if (secretFile != null && !secretFile.isBlank()) {
+            Path path = Path.of(secretFile);
+            if (!Files.isRegularFile(path) || !Files.isReadable(path))
+                throw new IOException("Credential file[" + path + "] isn't a readable regular file");
+            return stripLineEnding(Files.readString(path, StandardCharsets.UTF_8));
+        }
+        return config.getString(valueKey);
+    }
+
+    private static String stripLineEnding(String value) {
+        while (value.endsWith("\n") || value.endsWith("\r"))
+            value = value.substring(0, value.length() - 1);
+        return value;
     }
     
     public XdmNode sparql(String query) throws DepositException {
