@@ -18,7 +18,6 @@ package nl.mpi.tla.flat.deposit.sip.cmdi;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.regex.Matcher;
 
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmValue;

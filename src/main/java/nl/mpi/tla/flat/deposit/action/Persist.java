@@ -22,7 +22,6 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
-import java.util.logging.Level;
 
 import javax.xml.transform.stream.StreamSource;
 
@@ -33,7 +32,6 @@ import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.Flow;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.flat.deposit.action.persist.util.PersistDatasetNameRetriever;

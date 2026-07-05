@@ -58,7 +58,7 @@ public class Owner extends AbstractAction {
             if (getOverwriteProperties(context).containsKey("owner.user.name")) {
                 SaxonListener listener = new SaxonListener("ACL",MDC.get("sip"));
                 XsltTransformer owner = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
-                owner.setMessageListener(listener);
+                setMessageHandler(owner, listener);
                 owner.setErrorListener(listener);
                 owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
                 owner.setParameter(new QName("overwrite-user-name"), new XdmAtomicValue(getOverwriteProperties(context).getProperty("owner.user.name")));
@@ -89,12 +89,12 @@ public class Owner extends AbstractAction {
                 // convert trix to semantic triples using ACL/sl-trix-to-sem-triples.xsl
                 XsltTransformer trix2sem = Saxon.buildTransformer(Owner.class.getResource("/ACL/sl-trix-to-sem-triples.xsl")).load();
                 SaxonListener listener = new SaxonListener("ACL",MDC.get("sip"));
-                trix2sem.setMessageListener(listener);
+                setMessageHandler(trix2sem, listener);
                 trix2sem.setErrorListener(listener);
                 trix2sem.setSource(new StreamSource(dir +"/policy.trix"));
                 // convert sem triples to the owner.xml
                 XsltTransformer wacl2owner = Saxon.buildTransformer(Owner.class.getResource("/ACL/owner.xsl")).load();
-                wacl2owner.setMessageListener(listener);
+                setMessageHandler(wacl2owner, listener);
                 wacl2owner.setErrorListener(listener);
                 wacl2owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
                 // pipe

@@ -33,6 +33,7 @@ import java.util.List;
 
 import java.util.Set;
 import net.sf.saxon.s9api.XdmAtomicValue;
+import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmSequenceIterator;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 
@@ -55,7 +56,7 @@ public class ResourceMapping extends FedoraAction {
             Set<Resource> resources = context.getSIP().getResources();
             
             List<Path> dirs = new ArrayList<>();
-            for (XdmSequenceIterator iter=(params.containsKey("dir")?params.get("dir"):new XdmAtomicValue("./resources")).iterator();iter.hasNext();)
+            for (XdmSequenceIterator<XdmItem> iter=(params.containsKey("dir")?params.get("dir"):new XdmAtomicValue("./resources")).iterator();iter.hasNext();)
                 dirs.add(Paths.get(iter.next().getStringValue()).toFile().getAbsoluteFile().toPath());
             
             // first dir is expected to be the resources dir within the workspace

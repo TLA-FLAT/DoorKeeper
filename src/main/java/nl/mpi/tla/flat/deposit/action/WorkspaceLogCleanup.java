@@ -17,18 +17,13 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import nl.mpi.tla.flat.deposit.Context;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 /**
  *
  * @author menzowi
  */
 public class WorkspaceLogCleanup extends AbstractAction {
-    
-    private static final Logger logger = LoggerFactory.getLogger(WorkspaceLogCleanup.class.getName());
-    
+
     @Override
     public boolean perform(Context context) {
         context.close();

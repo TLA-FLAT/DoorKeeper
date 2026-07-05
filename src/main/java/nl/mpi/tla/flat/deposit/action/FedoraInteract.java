@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -32,7 +32,6 @@ import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.Saxon;
 import org.apache.commons.io.IOUtils;
@@ -53,8 +52,6 @@ public class FedoraInteract extends FedoraAction {
 		try {
 			connect(context);
 
-			SIPInterface sip = context.getSIP();
-
 			File dir = new File(this.getParameter("dir", "./fox"));
 			String fidFilePattern = configuredFidFilePattern(context);
 
@@ -67,7 +64,7 @@ public class FedoraInteract extends FedoraAction {
 			}
 
 			// - <fid>.<asof>.props (props -> modify (some) properties)
-                        File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter(fidFilePattern + "\\.[0-9]+\\.props")));
+            File[] propfiles = dir.listFiles(((FilenameFilter) new RegexFileFilter(fidFilePattern + "\\.[0-9]+\\.props")));
 			for (File propfile : propfiles) {
 				String fid = propfile.getName().replaceFirst("\\..*$", "").replace("_CMD", "");
 				try {
@@ -113,7 +110,7 @@ public class FedoraInteract extends FedoraAction {
                 throw new DepositException("No Fedora namespaces are configured in fedoraNamespace");
             return "(?:" + String.join("|", namespaces) + ")_[A-Za-z0-9_]+";
         }
-        
+
         protected URI transURI(Context context) throws DepositException {
             try {
                 if (context.hasInMemory("transLocation"))
@@ -128,12 +125,12 @@ public class FedoraInteract extends FedoraAction {
         protected String toSPARQL_URI(String val) {
             if (val.startsWith("http:") || val.startsWith("https:")) {
                 val = "<"+val+">";
-            } else { 
+            } else {
                 val = "'"+val.replace("'", "\\'")+"'";
             }
             return val;
         }
-        
+
         protected void upsertProperty(Context context, String fid, String prop, String val)  throws DepositException {
             upsertProperty(context,fid,prop,List.<XdmItem>of(new XdmAtomicValue(val)));
         }
@@ -145,7 +142,7 @@ public class FedoraInteract extends FedoraAction {
                 throw new DepositException(ex);
             }
         }
-        
+
         protected void upsertProperty(Context context, XdmNode ds, String fid, String prop, List<XdmItem> vals)  throws DepositException {
             try {
                 if (prop.equals("http://purl.org/dc/elements/1.1/identifier"))
@@ -274,7 +271,7 @@ public class FedoraInteract extends FedoraAction {
             logger.debug("DO: insertDatastream["+fid+"]["+ds+"] via update semantics");
             updateDatastream(context, fox, fid, ds, ext);
         }
-        
+
         void updateDatastream(Context context, File fox, String fid, String ds, String ext) throws DepositException {
             logger.debug("CHECK: updateDatastream["+fid+"]["+ds+"]");
             try {
@@ -456,7 +453,7 @@ public class FedoraInteract extends FedoraAction {
                 throw new DepositException(ex);
             }
         }
-        
+
         //TODO: remove old methods vvvv
 /*
 	protected void upsertDatastream(Context context, File fox, String fid, String dsid, String ext) throws DepositException {
@@ -523,7 +520,7 @@ public class FedoraInteract extends FedoraAction {
 		}
 	}
 
-        
+
 	void updateDatastream(Context context, File fox, String fid, String dsid, String ext) throws DepositException {
 		updateDatastream(context, fox, fid, dsid, null, ext);
 	}

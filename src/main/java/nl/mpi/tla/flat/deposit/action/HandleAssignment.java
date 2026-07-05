@@ -16,10 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.net.URI;
-import java.util.Properties;
 import java.util.UUID;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;

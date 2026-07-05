@@ -37,7 +37,7 @@ abstract public class Collection {
     protected URI uri = null;
     protected URI pid = null;
     protected URI fid = null;
-    protected Set<Collection> collections = new LinkedHashSet();
+    protected Set<Collection> collections = new LinkedHashSet<>();
     protected boolean dirty = false;
     
     public URI getURI() {
@@ -164,7 +164,7 @@ abstract public class Collection {
     }
     
     public Set<Collection> getParentCollections(boolean deep) {
-        Set<Collection> colls =  new LinkedHashSet();
+        Set<Collection> colls = new LinkedHashSet<>();
         colls.addAll(this.collections);
         if (deep) {
             for (Collection col:this.collections) {

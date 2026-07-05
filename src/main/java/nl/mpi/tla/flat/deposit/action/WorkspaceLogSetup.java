@@ -22,7 +22,6 @@ import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.util.StatusPrinter;
 import java.io.File;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.UUID;
@@ -50,7 +49,7 @@ import org.slf4j.MDC;
 public class WorkspaceLogSetup extends AbstractAction {
     
     private static final Logger logger = LoggerFactory.getLogger(WorkspaceLogSetup.class.getName());
-    
+
     @Override
     public boolean perform(Context context) {
         if (MDC.get("sip")==null)
@@ -86,7 +85,7 @@ public class WorkspaceLogSetup extends AbstractAction {
                 
                 XsltTransformer configure = Saxon.buildTransformer(WorkspaceLogSetup.class.getResource("/WorkspaceLog/config-log.xsl")).load();
                 SaxonListener listener = new SaxonListener("WorkspaceLogSetup", MDC.get("sip"));
-                configure.setMessageListener(listener);
+                setMessageHandler(configure, listener);
                 configure.setErrorListener(listener);
 
                 configure.setParameter(new QName("dir"), new XdmAtomicValue(dir.toString()));
@@ -134,7 +133,7 @@ public class WorkspaceLogSetup extends AbstractAction {
                 "But you can never leave!\"\n"
             );
         } catch (Exception ex) {
-            this.logger.error("Couldn't setup the deposit log!",ex);
+            logger.error("Couldn't setup the deposit log!",ex);
             return false;
         }
         return true;

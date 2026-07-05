@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -42,58 +42,40 @@ import org.slf4j.LoggerFactory;
  * @author menzowi
  */
 public class Flow {
-    
+
     protected Boolean status = null;
-    
+
     protected String next = null;
-    
-    private File base = null;
-    
+
     private static final Logger logger = LoggerFactory.getLogger(Flow.class.getName());
-    
+
     protected XdmNode spec = null;
-    
+
     protected Context context = null;
-    
+
     protected List<Action> noActions = new LinkedList<>();
-    
+
     protected List<Action> initActions = noActions;
-    
+
     protected List<Action> mainActions = noActions;
-    
+
     protected List<Action> exceptionActions = noActions;
-    
+
     protected List<Action> finalActions = noActions;
-    
+
     protected boolean rollback = false;
-    
+
     protected String start = null;
-    
+
     protected String stop = null;
-    
+
     protected Map<String, Semaphore> semaphores = new HashMap<>();
 
-    public Flow(File spec) throws DepositException {
-        this(spec,new HashMap<String,XdmValue>());
-    }
-    
     public Flow(File spec,Map<String,XdmValue> params) throws DepositException {
-        this(new StreamSource(spec),spec,params);
+        this(new StreamSource(spec),params);
     }
-    
-    public Flow(Source spec) throws DepositException {
-        this(spec,new HashMap<String,XdmValue>());
-    }
+
     public Flow(Source spec,Map<String,XdmValue> params) throws DepositException {
-        this(spec,null,params);
-    }
-
-    public Flow(Source spec,File base) throws DepositException {
-        this(spec,base,new HashMap<String,XdmValue>());
-    }
-
-    public Flow(Source spec,File base,Map<String,XdmValue> params) throws DepositException {
-        this.base = base;
         try {
             this.spec = Saxon.buildDocument(spec);
         } catch(SaxonApiException e) {
@@ -102,7 +84,7 @@ public class Flow {
         this.context = new Context(this,this.spec,params);
         loadFlow();
     }
-    
+
     private void loadFlow() throws DepositException {
         try {
             initActions = loadFlow(Saxon.xpath(spec, "/flow/init/action"));
@@ -114,7 +96,7 @@ public class Flow {
             throw new DepositException(ex);
         }
     }
-    
+
     private List<Action> loadFlow(XdmValue actions) throws DepositException {
         List<Action> flow = new LinkedList<>();
         for (XdmItem action:actions) {
@@ -128,15 +110,15 @@ public class Flow {
                 }
                 try {
                     // use the regular class loader to load the action class
-                    Class<ActionInterface> face = (Class<ActionInterface>) Class.forName(clazz);
+                    Class<? extends ActionInterface> face = Class.forName(clazz).asSubclass(ActionInterface.class);
                     // instantiate the class and add it to the workflow
-                    ActionInterface actionImpl = face.newInstance();
+                    ActionInterface actionImpl = face.getDeclaredConstructor().newInstance();
                     actionImpl.setName(name!=null?name:clazz);
                     flow.add(new Action(actionImpl,Saxon.xpath(action, "parameter")));
                     if (Saxon.hasAttribute(action,"sema")) {
                         semaphores.put(actionImpl.getName(),new Semaphore(Integer.parseInt(Saxon.xpath2string(action, "@sema"))));
                     }
-                } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+                } catch (ReflectiveOperationException | ClassCastException e) {
                     Flow.logger.error(" couldn't load action["+name+"]["+clazz+"]! "+e.getMessage());
                     throw new DepositException(e);
                 }
@@ -147,19 +129,19 @@ public class Flow {
         }
         return flow;
     }
-    
+
     public void setStart(String start) {
         this.start = start;
-    } 
-    
+    }
+
     public String getStart() {
         return this.start;
     }
-    
+
     public void setStop(String stop) {
         this.stop = stop;
-    } 
-    
+    }
+
     public String getStop() {
         return this.stop;
     }
@@ -167,15 +149,15 @@ public class Flow {
     public boolean isRerun() {
         return this.start != null;
     }
-    
+
     public Context getContext() {
         return this.context;
     }
-    
+
     public Boolean getStatus() {
         return this.status;
     }
-    
+
     public String getNext() {
         return this.next;
     }
@@ -230,7 +212,7 @@ public class Flow {
         }
         return status.booleanValue();
     }
-    
+
     private boolean initFlow() throws DepositException {
         Flow.logger.debug("BEGIN  init flow");
         boolean next = true;
@@ -246,7 +228,7 @@ public class Flow {
         Flow.logger.debug(" END   init flow["+next+"]");
         return next;
     }
-    
+
     private boolean mainFlow(String start,String stop) throws DepositException {
         Flow.logger.debug("BEGIN  main flow start["+start+"] stop["+stop+"]");
         boolean cont = true;
@@ -275,7 +257,7 @@ public class Flow {
             }
             Flow.logger.debug(" END   main flow["+cont+"]");
             return cont;
-    
+
     }
 
     private boolean exceptionFlow(Exception e) throws DepositException {
@@ -294,13 +276,13 @@ public class Flow {
         Flow.logger.debug(" END   exception flow["+next+"]");
         return next;
     }
-    
+
     private void rollback() {
         XdmNode log = context.getRollbackLog();
         for (int a=mainActions.size();a>0;a--) {
             Action action = mainActions.get((a - 1));
             try {
-                Map vars = new HashMap();
+                Map<String, XdmValue> vars = new HashMap<>();
                 vars.put("action",new XdmAtomicValue(action.getName()));
                 action.rollback(context,Saxon.xpathList(log, "/rollback/event[@action=$action]",vars));
             } catch (SaxonApiException ex) {
@@ -324,23 +306,23 @@ public class Flow {
         Flow.logger.debug(" END   final flow["+next+"]");
         return next;
     }
-    
+
     class Action {
-        
+
         private ActionInterface action = null;
         private XdmValue params = null;
-        
+
         public Action(ActionInterface action,XdmValue params) {
             this.action = action;
             this.params = params;
         }
-        
+
         public String getName() {
             if (this.action==null)
                 return null;
             return this.action.getName();
         }
-        
+
         public boolean perform(Context context) throws DepositException {
             if (this.action==null)
                 throw new DepositException("Action is unknown!");
@@ -360,7 +342,7 @@ public class Flow {
                     semaphores.get(this.getName()).release();
             }
         }
-        
+
         public void rollback(Context context,List<XdmItem> events) {
             Flow.logger.debug("rollback action["+this.action.getName()+"]["+this.action.getClass().getName()+"]");
             for (ListIterator<XdmItem> iter = events.listIterator(events.size());iter.hasPrevious();) {

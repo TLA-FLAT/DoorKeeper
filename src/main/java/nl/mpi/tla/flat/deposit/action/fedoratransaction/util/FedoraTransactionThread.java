@@ -3,7 +3,6 @@ package nl.mpi.tla.flat.deposit.action.fedoratransaction.util;
 
 import java.net.URI;
 import java.util.logging.Level;
-import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.action.FedoraTransaction;
 import org.fcrepo.client.FcrepoClient;

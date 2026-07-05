@@ -514,19 +514,6 @@ _NOTES_:
 </PIDService>
 ```
 
-### <a name="Index"></a>`nl.mpi.tla.flat.deposit.action.Index`
-
-parameter         | default  | cardinality | notes
-------------------|----------|-------------|------
-`gsearchServer`   |          | 1           |
-`gsearchUser`     |          | 1           |
-`gsearchPassword` |          | 1           |
-
-Triggers indexing the deposited SIP using [gsearch](https://github.com/fcrepo3/gsearch).
-
-_NOTES_:
-- see [FedoraInteract](#FedoraInteract) (mandatory, earlier)
-
 ### <a name="Mail"></a>`nl.mpi.tla.flat.deposit.action.Mail`
 
 parameter         | default  | cardinality | notes
@@ -648,9 +635,6 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
         <property name="work" value="{flat:findBagBase($bag)}" uniq="true"/>
         <property name="easy" value="{$base}/easy" uniq="true"/>
         <property name="epicPrefix" value="12345"/>
-        <property name="gsearchUser" value="fgsAdmin"/>
-        <property name="gsearchPassword" value="fgsAdmin"/>
-        <property name="gsearchServer" value="http://localhost:8080/fedoragsearch"/>
     </config>
     <init>
         <action name="log setup" class="nl.mpi.tla.flat.deposit.action.WorkspaceLogSetup">
@@ -718,11 +702,6 @@ Here is a complete example taken from the [FLAT DoorKeeper Docker setup](https:/
         <action class="nl.mpi.tla.flat.deposit.action.EPICHandleCreation">
             <parameter name="fedoraConfig" value="{$base}/policies/fedora-config.xml"/>
             <parameter name="epicConfig" value="{$base}/policies/epic-config.xml"/>
-        </action>
-        <action class="nl.mpi.tla.flat.deposit.action.Index">
-            <parameter name="gsearchServer" value="{$gsearchServer}"/>
-            <parameter name="gsearchUser" value="{$gsearchUser}"/>
-            <parameter name="gsearchPassword" value="{$gsearchPassword}"/>
         </action>
     </main>
     <exception>

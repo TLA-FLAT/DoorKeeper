@@ -19,12 +19,13 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.net.URI;
 import javax.xml.transform.Source;
-import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.URIResolver;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
+import net.sf.saxon.lib.ResourceRequest;
+import net.sf.saxon.lib.ResourceResolver;
+import net.sf.saxon.trans.XPathException;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
@@ -55,7 +56,7 @@ public class FOXCreate extends AbstractAction {
 
     @Override
     public boolean perform(Context context) throws DepositException {
-        URIResolver org = Saxon.getXsltCompiler().getURIResolver();
+        ResourceResolver originalResolver = Saxon.getXsltCompiler().getResourceResolver();
         try {
             
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
@@ -94,7 +95,7 @@ public class FOXCreate extends AbstractAction {
 
             
             if (hasParameter("jar_cmd2fox")) {
-                Saxon.getXsltCompiler().setURIResolver(new JarURIResolver(org,new File(getParameter("jar_cmd2fox"))));
+                Saxon.getXsltCompiler().setResourceResolver(new JarResourceResolver(originalResolver, new File(getParameter("jar_cmd2fox"))));
             }
             
             File xsl = new File(getParameter("cmd2fox"));
@@ -102,7 +103,7 @@ public class FOXCreate extends AbstractAction {
             
             XsltTransformer fox = cmd2fox.load();
             SaxonListener listener = new SaxonListener("FOXCreate",MDC.get("sip"));
-            fox.setMessageListener(listener);
+            setMessageHandler(fox, listener);
             fox.setErrorListener(listener);
             
             // fixed parameters
@@ -178,28 +179,29 @@ public class FOXCreate extends AbstractAction {
         } catch(Exception e) {
             throw new DepositException("The creation of FOX files failed!",e);
        } finally {
-            // restore the URL resolver
-            if (org!=null)
-                Saxon.getXsltCompiler().setURIResolver(org);
+            // restore the resource resolver
+            Saxon.getXsltCompiler().setResourceResolver(originalResolver);
         }
         return true;
     }
     
-    static class JarURIResolver implements URIResolver {
+    static class JarResourceResolver implements ResourceResolver {
         
-        private URIResolver resolver = null;
-        private File xsl = null;
+        private final ResourceResolver resolver;
+        private final File xsl;
         
-        public JarURIResolver(URIResolver resolver, File xsl) {
+        public JarResourceResolver(ResourceResolver resolver, File xsl) {
             this.resolver = resolver;
             this.xsl = xsl;
         }
         
-        public Source resolve(String href,String base) throws TransformerException {
-            if (href.equals("jar:cmd2fox.xsl") && xsl!=null) {
+        @Override
+        public Source resolve(ResourceRequest request) throws XPathException {
+            String href = request.relativeUri != null ? request.relativeUri : request.uri;
+            if ("jar:cmd2fox.xsl".equals(href) && xsl!=null) {
                 return new javax.xml.transform.stream.StreamSource(this.xsl);
             } else {
-                return resolver.resolve(href,base);
+                return resolver == null ? null : resolver.resolve(request);
             }
         }        
     }

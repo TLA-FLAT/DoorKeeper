@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,9 +16,7 @@
  */
 package nl.mpi.tla.flat.deposit.action;
 
-import org.fcrepo.client.*;
 import java.io.File;
-import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -28,7 +26,6 @@ import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -40,7 +37,6 @@ import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.Collection;
-import nl.mpi.tla.flat.deposit.util.Global;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.Saxon;
 import nl.mpi.tla.util.SaxonListener;
@@ -54,19 +50,19 @@ import org.slf4j.MDC;
  * @author pavsri
  */
 public class UpdateCollections extends FedoraAction {
-    
+
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(UpdateCollections.class.getName());
-    
+
     private File dir = null;
     private File first = null;
-    
+
     private XsltTransformer upsert = null;
-    
+
     @Override
-    public boolean perform(Context context) throws DepositException {       
+    public boolean perform(Context context) throws DepositException {
         try {
             connect(context);
-            
+
             String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
             XdmValue namespaces = context.getProperty("fedoraNamespace", "");
 
@@ -74,20 +70,20 @@ public class UpdateCollections extends FedoraAction {
             dir = new File(getParameter("dir","./fox"));
             if (!dir.exists())
                  FileUtils.forceMkdir(dir);
-            
+
             if (this.hasParameter("firstDir")) {
                 first = new File(getParameter("firstDir"));
                 if (!first.exists())
                      FileUtils.forceMkdir(first);
             } else
                 first = dir;
-                
+
 
             // prep the stylesheet
             upsert = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/upsert-collection.xsl")).load();
             SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
-            upsert.setMessageListener(listener);
-            upsert.setErrorListener(listener);            
+            setMessageHandler(upsert, listener);
+            upsert.setErrorListener(listener);
             upsert.setParameter(new QName("fid"),new XdmAtomicValue(context.getSIP().getFID()));
             upsert.setParameter(new QName("new-pid"),new XdmAtomicValue(context.getSIP().getPID()));
             if (context.getSIP().isUpdate()) {
@@ -154,10 +150,10 @@ public class UpdateCollections extends FedoraAction {
             }
         } catch (Exception ex) {
             throw new DepositException(ex);
-        }        
+        }
         return true;
     }
-    
+
     private void updateCollection(Deque<URI> hist, Collection col, URI fidPart, String oldPart, String newPart, String namespace, XdmValue namespaces) throws Exception {
         try {
             // load the collection's CMD
@@ -211,9 +207,9 @@ public class UpdateCollections extends FedoraAction {
             throw new DepositException("Unexpected error["+e.getMessage()+"] while querying Fedora Commons!",e);
         }
     }
-    
+
     private XsltTransformer dc = null;
-    
+
     private void updateDC(File fox, URI fid, URI pid) throws SaxonApiException, TransformerConfigurationException, TransformerException, DepositException {
         // since FC6 the DC (and optional OLAC) datastream is the canonical XML
         // record, e.g., to be served via OAI-PMH, so replace the handle directly
@@ -235,7 +231,7 @@ public class UpdateCollections extends FedoraAction {
         if (dc == null) {
             dc = Saxon.buildTransformer(UpdateCollections.class.getResource("/UpdateCollections/update-dc.xsl")).load();
             SaxonListener listener = new SaxonListener("UpdateCollections",MDC.get("sip"));
-            dc.setMessageListener(listener);
+            setMessageHandler(dc, listener);
             dc.setErrorListener(listener);
         }
         dc.setSource(old.asSource());
@@ -251,5 +247,5 @@ public class UpdateCollections extends FedoraAction {
         } else
             logger.debug(dsid+" of FID["+fid+"] already refers to PID["+pid+"]");
     }
-    
+
 }

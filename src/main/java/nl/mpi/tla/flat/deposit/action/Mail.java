@@ -27,7 +27,6 @@ import javax.mail.internet.MimeMessage;
 import javax.xml.transform.dom.DOMSource;
 
 import java.io.File;
-import java.net.URI;
 
 import javax.xml.transform.stream.StreamSource;
 
@@ -35,17 +34,14 @@ import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmDestination;
 import net.sf.saxon.s9api.XdmNode;
-import net.sf.saxon.s9api.XdmValue;
 import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.XsltTransformer;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import nl.mpi.tla.util.Saxon;
 import nl.mpi.tla.util.SaxonListener;
 
 import org.apache.commons.lang.exception.ExceptionUtils;
-import com.google.common.base.Throwables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -106,7 +102,7 @@ public class Mail extends FedoraAction {
 
 			XsltTransformer fox = template.load();
 			SaxonListener listener = new SaxonListener("Mail", MDC.get("sip"));
-			fox.setMessageListener(listener);
+			setMessageHandler(fox, listener);
 			fox.setErrorListener(listener);
 
 			String userID = null;

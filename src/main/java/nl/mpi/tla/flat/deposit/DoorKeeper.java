@@ -53,7 +53,7 @@ public class DoorKeeper {
     public static void main(String[] args) {
         String start = null;
         String stop  = null;
-        Map<String,XdmValue> params = new HashMap();
+        Map<String,XdmValue> params = new HashMap<>();
     
         OptionParser parser = new OptionParser("f:t:?*");
         OptionSet options = parser.parse(args);
@@ -68,7 +68,7 @@ public class DoorKeeper {
             System.exit(0);
         }
 
-        List arg = options.nonOptionArguments();
+        List<?> arg = options.nonOptionArguments();
         if (arg.size()<1) {
             showHelp();
             System.exit(1);

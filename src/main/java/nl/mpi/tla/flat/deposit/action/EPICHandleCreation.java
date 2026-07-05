@@ -19,7 +19,6 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Files;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -61,7 +60,6 @@ public class EPICHandleCreation extends AbstractAction {
         
         try {
             
-            String namespace = context.getProperty("activeFedoraNamespace", "lat").toString();
             XdmValue namespaces = context.getProperty("fedoraNamespace", "");
         	
             String fedora = this.getParameter("fedoraConfig");
@@ -179,7 +177,6 @@ public class EPICHandleCreation extends AbstractAction {
                         String dsid = frag.replaceAll("@.*","");
 
                         String pid    = res.getPID().toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
-                        String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
                         String uuid   = pid.replaceAll(".*/","");
                         String loc  = fcCurrentURL(server,fid,dsid);
 
@@ -269,8 +266,7 @@ public class EPICHandleCreation extends AbstractAction {
 	        logger.debug("EPIC configuration["+config.getAbsolutePath()+"]");
 	        
 	        XMLConfiguration xConfig = new XMLConfiguration(config);
-	        
-	        boolean isTest = xConfig.getString("status") != null && xConfig.getString("status").equals("test");
+
                 String tombstone = xConfig.getString("tombstone");
 	        
 	        PIDService ps = PIDService.create(xConfig, null);
@@ -281,8 +277,7 @@ public class EPICHandleCreation extends AbstractAction {
 	                String tpe = Saxon.xpath2string(event, "@type");
 	                if (tpe.equals("epic creation")) {
 	                	String uuid = Saxon.xpath2string(event, "param[@name='uuid']/@value");
-	                	String loc = Saxon.xpath2string(event, "param[@name='loc']/@value");
-	                	
+
 	                	if(delMode){
 	                		try {
 	                			ps.deleteHandle(uuid);
@@ -301,7 +296,6 @@ public class EPICHandleCreation extends AbstractAction {
 	                }
 	                else if (tpe.equals("epic Update")){
 		                	String uuid = Saxon.xpath2string(event, "param[@name='uuid']/@value");
-		                	String loc = Saxon.xpath2string(event, "param[@name='loc']/@value");
 		                	String cur = Saxon.xpath2string(event, "param[@name='cur']/@value");
 		                	
 		                	ps.updateLocation(uuid, cur);

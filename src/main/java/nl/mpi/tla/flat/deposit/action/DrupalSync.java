@@ -112,7 +112,7 @@ public class DrupalSync extends FedoraAction {
         try {
             connect(context);
 
-            XMLConfiguration config = loadDrupalConfig();
+            loadDrupalConfig();
             Map<String,MimeMapping> mimeMap = loadMimeMap();
 
             SIPInterface sip = context.getSIP();

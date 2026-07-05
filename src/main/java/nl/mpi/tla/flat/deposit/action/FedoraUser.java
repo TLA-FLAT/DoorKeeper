@@ -18,11 +18,8 @@ package nl.mpi.tla.flat.deposit.action;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.util.UUID;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -35,10 +32,6 @@ import nl.mpi.tla.util.SaxonListener;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.io.FileUtils;
 import com.google.common.io.Files;
-import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.ModelFactory;
-import org.apache.jena.riot.Lang;
-import org.apache.jena.riot.RDFDataMgr;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -137,7 +130,7 @@ public class FedoraUser extends AbstractAction {
             // embed the user in the Fedora config
             XsltTransformer embed = Saxon.buildTransformer(FedoraUser.class.getResource("/FedoraUser/config.xsl")).load();
             SaxonListener listener = new SaxonListener("FedoraUser",MDC.get("sip"));
-            embed.setMessageListener(listener);
+            setMessageHandler(embed, listener);
             embed.setErrorListener(listener);
             embed.setSource(new StreamSource(conf));
             embed.setParameter(new QName("user"), Saxon.buildDocument(new StreamSource(user)));

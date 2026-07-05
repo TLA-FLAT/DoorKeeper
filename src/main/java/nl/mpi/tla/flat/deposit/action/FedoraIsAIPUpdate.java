@@ -17,7 +17,6 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.net.URI;
-import java.util.Date;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;

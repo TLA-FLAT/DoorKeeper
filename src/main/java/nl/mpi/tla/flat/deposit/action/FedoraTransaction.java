@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,35 +18,20 @@ package nl.mpi.tla.flat.deposit.action;
 
 import org.fcrepo.client.*;
 import java.io.File;
-import java.io.FilenameFilter;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
-import javax.xml.transform.stream.StreamSource;
-import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmItem;
-import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
-import nl.mpi.tla.flat.deposit.sip.Collection;
-import nl.mpi.tla.flat.deposit.sip.Resource;
-import nl.mpi.tla.flat.deposit.sip.SIPInterface;
-import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
 import nl.mpi.tla.util.Saxon;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import nl.mpi.tla.flat.deposit.util.Global;
 import org.apache.commons.configuration.XMLConfiguration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import nl.mpi.tla.flat.deposit.action.fedoratransaction.util.FedoraTransactionThread;
 
 /**
@@ -61,17 +46,16 @@ public class FedoraTransaction extends FedoraAction {
 
 	@Override
 	public boolean perform(Context context) throws DepositException {
-            SIPInterface sip;
-            
+
             connect(context);
-           
+
             try {
-                fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));               
+                fedoraConfig = new XMLConfiguration(new File(getParameter("fedoraConfig")));
             } catch(Exception e) {
                 throw new DepositException("Connecting to Fedora Commons failed!",e);
             }
             try {
-                String actionName = this.getName(); 
+                String actionName = this.getName();
 
                 if ("startTransaction".equals(actionName)) {
                     ScheduledExecutorService scheduler = null;
@@ -83,7 +67,7 @@ public class FedoraTransaction extends FedoraAction {
                         context.putInMemory("transLocation",transLocation);
                         logger.debug("Transaction Location from context memory: "+context.getFromMemory("transLocation"));
                         context.registerRollbackEvent(this,"TransLocation","putInMemory",transLocation.toString());
-                        
+
                         //keeping the transaction alive by threading
                         scheduler = Executors.newSingleThreadScheduledExecutor();
                         ScheduledFuture<?> thread = scheduler.scheduleAtFixedRate(
@@ -102,20 +86,20 @@ public class FedoraTransaction extends FedoraAction {
                         throw new DepositException("Start Transaction Error: ", e);
                     }
                 }
-                    
+
                 if ("commitTransaction".equals(actionName)) {
                     String contextUri = context.getFromMemory("transLocation").toString();
                     logger.debug("Commit-- ContextUri--->"+contextUri);
                     URI commitUri = URI.create(contextUri);
                     try (FcrepoResponse response = new PutBuilder(commitUri, fedoraClient).perform()) {
                         logger.debug("Transaction commit status: {}", response.getStatusCode());
-                        
+
                         if (response.getStatusCode() >= 300) {
                             logger.error("Commit Transaction statuscode:"+response.getStatusCode());
-                            throw new DepositException("Commit Transaction Error: statuscode "+ response.getStatusCode()); 
+                            throw new DepositException("Commit Transaction Error: statuscode "+ response.getStatusCode());
                         }
-                        else { 
-                                logger.debug("Successfully committed the trasaction!");  
+                        else {
+                                logger.debug("Successfully committed the trasaction!");
                                 stopKeepAlive(context);
                         }
                     }
@@ -130,7 +114,7 @@ public class FedoraTransaction extends FedoraAction {
             }
             return true;
 	}
-        
+
         public void rollback(Context context,List<XdmItem> events) {
             for (ListIterator<XdmItem> iter = events.listIterator(events.size());iter.hasPrevious();) {
                 XdmItem event = iter.previous();

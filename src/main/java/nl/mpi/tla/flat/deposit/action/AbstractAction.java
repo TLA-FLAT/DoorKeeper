@@ -18,23 +18,27 @@ package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import net.sf.saxon.s9api.AbstractXsltTransformer;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmValue;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.util.SaxonListener;
 
 /**
  *
  * @author menzowi
  */
 abstract public class AbstractAction implements ActionInterface {
+
+    protected static void setMessageHandler(AbstractXsltTransformer transformer, SaxonListener listener) {
+        transformer.setMessageHandler(message -> listener.message(
+                message.getContent(), message.getErrorCode(), message.isTerminate(), message.getLocation()));
+    }
     
     // action name
     

@@ -17,17 +17,17 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -43,18 +43,13 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.IntConsumer;
-import java.util.stream.IntStream;
-
-import javax.swing.text.Document;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,10 +109,11 @@ public class FITS extends AbstractAction {
 		if (!fitsService.endsWith("/")) {
 			fitsService += "/";
 		}
-		URL fitsURL = null;
+		URI fitsEndpoint;
 		try {
-			fitsURL = new URL(fitsService);
-		} catch (MalformedURLException ex) {
+			fitsEndpoint = URI.create(fitsService);
+			fitsEndpoint.toURL();
+		} catch (IllegalArgumentException | MalformedURLException ex) {
 			throw new DepositException(ex);
 		}
 		String mimetypesFileLocation = getParameter("mimetypes");
@@ -140,7 +136,8 @@ public class FITS extends AbstractAction {
 					File file = resource.getFile();
 					logger.debug("resource[" + file + "] mimetype?");
 					try {
-						URL call = new URL(fitsURL, "examine?file=" + file.getAbsolutePath().replaceAll(" ","+"));
+						URL call = fitsEndpoint.resolve("examine?file="
+								+ URLEncoder.encode(file.getAbsolutePath(), StandardCharsets.UTF_8)).toURL();
 						future = obj.submit(() -> {
 								logger.debug("Running: Thread name = " + Thread.currentThread().getName());
 								XdmNode result;
@@ -226,7 +223,7 @@ public class FITS extends AbstractAction {
 												}
 												logger.debug(". . . assertions[" + xp + "] check");
 												// evaluate xpath
-												Map vars = new HashMap();
+													Map<String, XdmValue> vars = new HashMap<>();
 												vars.put("mime", new XdmAtomicValue(mime));
 												if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
 													// the assertions XPath failed, continue to the next
@@ -286,7 +283,7 @@ public class FITS extends AbstractAction {
 												xp = MIMETYPE_XPATH;
 											}
 											// evaluate xpath
-											Map vars = new HashMap();
+											Map<String, XdmValue> vars = new HashMap<>();
 											vars.put("mime", new XdmAtomicValue(mime));
 											if (!Saxon.xpath2boolean(result, xp, vars, NAMESPACES)) {
 												// the assertions XPath failed, continue to the next /mimetypes/mimetype

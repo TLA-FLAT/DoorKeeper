@@ -24,9 +24,7 @@ import java.nio.file.attribute.FileTime;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import javax.xml.transform.dom.DOMSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -46,7 +44,6 @@ import org.slf4j.Marker;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
-import java.util.regex.Pattern;
 
 /**
  *
@@ -68,8 +65,8 @@ public class CMD implements SIPInterface {
 
     protected Document rec = null;
     
-    protected Set<Resource> resources = new LinkedHashSet();
-    protected Set<Collection> collections = new LinkedHashSet();
+    protected Set<Resource> resources = new LinkedHashSet<>();
+    protected Set<Collection> collections = new LinkedHashSet<>();
         
     protected boolean dirty = false;
     
@@ -350,7 +347,7 @@ public class CMD implements SIPInterface {
 
     @Override
     public Set<Collection> getCollections(boolean deep) {
-        Set<Collection> colls =  new LinkedHashSet();
+        Set<Collection> colls = new LinkedHashSet<>();
         colls.addAll(this.collections);
         if (deep) {
             for (Collection col:this.collections) {

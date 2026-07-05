@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import net.sf.saxon.s9api.XdmAtomicValue;
+import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmSequenceIterator;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
@@ -44,14 +45,25 @@ public class Locking extends AbstractAction {
     public boolean perform(Context context) throws DepositException {
         Set<ReentrantLock> locked = null;
         if (context.hasInMemory(MEMO)) {
-            locked = (Set<ReentrantLock>) context.getFromMemory(MEMO);
+            Object stored = context.getFromMemory(MEMO);
+            if (!(stored instanceof Set<?> storedLocks)) {
+                throw new DepositException("Invalid lock state in context memory");
+            }
+            locked = new HashSet<>();
+            for (Object lock : storedLocks) {
+                if (!(lock instanceof ReentrantLock reentrantLock)) {
+                    throw new DepositException("Invalid lock entry in context memory");
+                }
+                locked.add(reentrantLock);
+            }
+            context.putInMemory(MEMO, locked);
         } else {
-            locked = new HashSet();
+            locked = new HashSet<>();
             context.putInMemory(MEMO, locked);
         }
         String mode = this.getParameter("mode", "lock");
         if (mode.equals("lock")) {
-            for (XdmSequenceIterator iter=(params.containsKey("what")?params.get("what"):new XdmAtomicValue("sip")).iterator();iter.hasNext();) {
+            for (XdmSequenceIterator<XdmItem> iter=(params.containsKey("what")?params.get("what"):new XdmAtomicValue("sip")).iterator();iter.hasNext();) {
                 String what = iter.next().getStringValue();
                 if (what.equals("sip")) {
                     String uri = context.getSIP().getFID(true).toString();

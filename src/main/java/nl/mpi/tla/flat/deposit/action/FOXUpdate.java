@@ -17,7 +17,6 @@
 package nl.mpi.tla.flat.deposit.action;
 
 import java.io.File;
-import java.util.Date;
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
@@ -70,7 +69,7 @@ public class FOXUpdate extends AbstractAction {
             
                 XsltTransformer split = Saxon.buildTransformer(FOXUpdate.class.getResource("/FOXUpdate/splitFOX.xsl")).load();
                 SaxonListener listener = new SaxonListener("FOXUpdate",MDC.get("sip"));
-                split.setMessageListener(listener);
+                setMessageHandler(split, listener);
                 split.setErrorListener(listener);
                 split.setSource(new StreamSource(fox));
                 XdmDestination destination = new XdmDestination();

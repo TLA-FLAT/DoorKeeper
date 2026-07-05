@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 The Language Archive
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,18 +16,13 @@
  */
 package nl.mpi.tla.flat.deposit;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringReader;
-import java.io.StringWriter;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 import nl.mpi.tla.flat.deposit.sip.SIPInterface;
 import java.util.LinkedHashMap;
@@ -35,7 +30,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.SaxonApiException;
@@ -50,14 +44,11 @@ import nl.mpi.tla.util.Saxon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Marker;
-import org.supercsv.io.CsvListReader;
 import org.supercsv.io.CsvListWriter;
-import org.supercsv.io.ICsvListReader;
 import org.supercsv.io.ICsvListWriter;
 import org.supercsv.prefs.CsvPreference;
 
 import com.opencsv.CSVReader;
-import com.opencsv.CSVWriter;
 import com.opencsv.exceptions.CsvException;
 import java.nio.file.Path;
 
@@ -132,11 +123,11 @@ public class Context {
 			String prefix = Saxon.xpath2string(imp, "@prefix",props);
 			String clazz = Saxon.xpath2string(imp, "@class",props);
 			try {
-				Class<ImportPropertiesInterface> face = (Class<ImportPropertiesInterface>) Class.forName(clazz);
-				ImportPropertiesInterface importer = face.newInstance();
+				Class<? extends ImportPropertiesInterface> face = Class.forName(clazz).asSubclass(ImportPropertiesInterface.class);
+				ImportPropertiesInterface importer = face.getDeclaredConstructor().newInstance();
 				importer.importProperties(prefix, props);
-			} catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-				this.logger.error(" couldn't load property importer[" + clazz + "][" + prefix + "]! " + e.getMessage());
+			} catch (ReflectiveOperationException | ClassCastException e) {
+				logger.error(" couldn't load property importer[" + clazz + "][" + prefix + "]! " + e.getMessage());
 				throw new DepositException(e);
 			}
 		}
@@ -227,7 +218,7 @@ public class Context {
 		logger.debug("get memory key[" + key + "][" + memory.get(key) + "]");
 		return memory.get(key);
 	}
-        
+
 	public Object remove(String key){
             logger.debug("remove memory key[" + key + "][" + memory.get(key) + "]");
             return memory.remove(key);
@@ -279,7 +270,7 @@ public class Context {
 
 	public void saveEvent() {
 		if (pids.isEmpty()) {
-			this.logger.debug("No pids saved for this run- saveEvent()!");
+			logger.debug("No pids saved for this run- saveEvent()!");
 			return;
 		}
 		String file = getPidFile();
@@ -291,18 +282,18 @@ public class Context {
 				logger.debug("saved["+entry.getKey().toString()+","+entry.getValue().toString()+"]");
 			}
 		} catch (IOException ex) {
-			this.logger.debug("Couldn't write pids to csv file[" + file + "]", ex);
+			logger.debug("Couldn't write pids to csv file[" + file + "]", ex);
 		}
 	}
 
 	public String getPidFile() {
 		String filename = null;
-		this.logger.debug("XdmValue= " + this.getProperty("dk-pidList", "pids.csv"));
+		logger.debug("XdmValue= " + this.getProperty("dk-pidList", "pids.csv"));
 		if (this.getProperty("dk-pidList", "pids.csv") != null) {
 			XdmValue pidFileProperty = this.getProperty("dk-pidList", "pids.csv");
 			filename = Path.of(pidFileProperty.toString().startsWith(System.getProperty("file.separator"))?"":".",pidFileProperty.toString()).toString();
 		} else {
-			this.logger.debug("There is no pids saved! pids.csv is not present!");
+			logger.debug("There is no pids saved! pids.csv is not present!");
 		}
 		return filename;
 	}
@@ -323,10 +314,10 @@ public class Context {
 				}
 				pids = tempPids;
 			} catch (IOException | CsvException ex) {
-				this.logger.debug("Couldn't read save log file[" + this.getProperty("dk-pidList", "pids.csv").toString() + "]",ex);
+				logger.debug("Couldn't read save log file[" + this.getProperty("dk-pidList", "pids.csv").toString() + "]",ex);
 			}
 		} else
-			this.logger.debug("No pids saved for this run!- getSave()");
+			logger.debug("No pids saved for this run!- getSave()");
 	}
 
 	// Rollback
@@ -337,7 +328,7 @@ public class Context {
 				rollbackLog = new PrintWriter(
 						new FileWriter(this.getProperty("dk-rollbackLog", "rollback.log").toString(), true), true);
 			} catch (IOException ex) {
-				this.logger.error("Couldn't create/open rollback log file["
+				logger.error("Couldn't create/open rollback log file["
 						+ this.getProperty("dk-rollbackLog", "rollback.log").toString() + "]", ex);
 				System.exit(1);
 			}
@@ -352,7 +343,7 @@ public class Context {
 	public void registerRollbackEvent(ActionInterface action, String event, String... params) {
 		initRollbackLog();
 		if (params.length % 2 != 0) {
-			this.logger.warn("uneven param list for action[" + action.getName() + "] event[" + event + "]!");
+			logger.warn("uneven param list for action[" + action.getName() + "] event[" + event + "]!");
 		}
 		rollbackLog.format("<event action=\"%s\" type=\"%s\">", escXML(action.getName()), escXML(event));
 		for (int p = 0; p < params.length; p++) {
@@ -376,7 +367,7 @@ public class Context {
 			xml = xml.replaceAll("rollback.log", this.getProperty("dk-rollbackLog", "rollback.log").toString());
 			return Saxon.buildDocument(new StreamSource(new StringReader(xml)));
 		} catch (SaxonApiException ex) {
-			this.logger.error("Couldn't read rollback log file["
+			logger.error("Couldn't read rollback log file["
 					+ this.getProperty("dk-rollbackLog", "rollback.log").toString() + "]", ex);
 			System.exit(1);
 		}
@@ -396,7 +387,7 @@ public class Context {
 			}
 			if (Saxon.xpath2boolean(param, "../" + type + "[@name='" + name + "']/@uniq='true'")) {
 				if (map.containsKey(name)) {
-					this.logger.error(type + "[" + name + "] should be unique!");
+					logger.error(type + "[" + name + "] should be unique!");
 					throw new DepositException(type + "[" + name + "] should be unique!");
 				}
 			}
@@ -415,14 +406,14 @@ public class Context {
 					else
 						map.put(name, val);
 				} catch (SaxonApiException e) {
-					this.logger.error(type + "[" + name + "] xpath[" + Saxon.xpath2string(param, "@xpath")
+					logger.error(type + "[" + name + "] xpath[" + Saxon.xpath2string(param, "@xpath")
 							+ "] couldn't be evaluated! " + e.getMessage());
 					throw new DepositException(e);
 				}
 			}
 			int i = 1;
 			for (XdmItem val : map.get(name))
-				this.logger.debug(type + "[" + name + "][" + (i++) + "/" + map.get(name).size() + "]["
+				logger.debug(type + "[" + name + "][" + (i++) + "/" + map.get(name).size() + "]["
 						+ val.getStringValue() + "]");
 		}
 		boolean closure = true;
@@ -443,7 +434,7 @@ public class Context {
 						nvals = nvals.append(new XdmAtomicValue(avt));
 				}
 				map.put(name, nvals);
-				this.logger.debug("closure[" + c + "] " + type + "[" + name + "][" + map.get(name) + "]");
+				logger.debug("closure[" + c + "] " + type + "[" + name + "][" + map.get(name) + "]");
 			}
 		} while (!closure);
 		for (String name : map.keySet()) {

@@ -40,8 +40,8 @@ public class DrupalSyncTest {
 
     @Test
     public void extractsUppercaseComponentTitleUsedByMpiCollection() throws Exception {
-        assertEquals("Claude Test Collection", new TestableDrupalSync().title(
-                cmd("clarin.eu:cr1:p_collection", null, "Claude Test Collection")));
+        assertEquals("DoorKeeper Test Collection", new TestableDrupalSync().title(
+                cmd("clarin.eu:cr1:p_collection", null, "DoorKeeper Test Collection")));
     }
 
     @Test
