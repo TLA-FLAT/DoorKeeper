@@ -19,17 +19,13 @@ package nl.mpi.tla.flat.deposit.context;
 import java.util.Map;
 import net.sf.saxon.s9api.XdmAtomicValue;
 import net.sf.saxon.s9api.XdmValue;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author menzowi
  */
 public class Environment implements ImportPropertiesInterface {
-    
-    private static final Logger logger = (Logger) LoggerFactory.getLogger(Environment.class.getName());
-    
+
     @Override
     public void importProperties(String prefix,Map<String, XdmValue> props) {
         String pre = (prefix==null?"":prefix);
