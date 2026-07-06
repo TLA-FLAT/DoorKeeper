@@ -31,7 +31,12 @@ public class Environment implements ImportPropertiesInterface {
         String pre = (prefix==null?"":prefix);
         Map<String, String> env = System.getenv();
         for (String name : env.keySet()) {
-            props.put(pre+name,new XdmAtomicValue(env.get(name).replaceAll("\\{", "{{").replaceAll("\\}","}}")));
+            String key = pre+name;
+            // See SystemProperties: names become XPath variable QNames, so a
+            // ':' in the name would abort the whole property load. Skip it.
+            if (key.indexOf(':') >= 0)
+                continue;
+            props.put(key,new XdmAtomicValue(env.get(name).replaceAll("\\{", "{{").replaceAll("\\}","}}")));
         }
     }
     

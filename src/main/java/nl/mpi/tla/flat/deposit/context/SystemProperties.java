@@ -32,7 +32,16 @@ public class SystemProperties implements ImportPropertiesInterface {
         String pre = (prefix==null?"":prefix);
         Properties sprops = System.getProperties();
         for (Object name : sprops.keySet()) {
-            props.put(pre+name.toString(),new XdmAtomicValue(sprops.get(name).toString().replaceAll("\\{", "{{").replaceAll("\\}","}}")));
+            String key = pre+name.toString();
+            // These names become XPath variable QNames when the flow config's
+            // <property> elements are evaluated. A ':' in the name produces an
+            // invalid local name, which aborts the whole property load — and
+            // therefore every deposit — the moment any library sets a system
+            // property with a colon in its name at runtime. Such a property
+            // can't be a usable variable anyway, so skip it instead of failing.
+            if (key.indexOf(':') >= 0)
+                continue;
+            props.put(key,new XdmAtomicValue(sprops.get(name).toString().replaceAll("\\{", "{{").replaceAll("\\}","}}")));
         }
     }
     
