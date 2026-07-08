@@ -46,6 +46,8 @@ import org.slf4j.LoggerFactory;
 public class FedoraInteract extends FedoraAction {
 
 	private static final Logger logger = LoggerFactory.getLogger(FedoraInteract.class.getName());
+	private static final int EXTERNAL_CONTENT_MAX_ATTEMPTS = 121;
+	private static final long EXTERNAL_CONTENT_RETRY_DELAY_MS = 250L;
 
 	@Override
 	public boolean perform(Context context) throws DepositException {
@@ -359,13 +361,37 @@ public class FedoraInteract extends FedoraAction {
             try {
                 String rfid = fedoraConfig.getString("localServer")+"/"+fid+"/"+ds;
                 logger.debug("PUT external content["+rfid+"] set to ["+ref+"]["+mime+"]");
-                PutBuilder pb = new PutBuilder(new URI(rfid),fedoraClient);
+                URI refUri = new URI(ref);
                 URI tx = transURI(context);
-                if (tx != null) pb = pb.addTransaction(tx);
-                try (FcrepoResponse response = pb.externalContent(new URI(ref), mime, "proxy").perform()) {
-                    logger.debug("FCREPO code["+response.getStatusCode()+"]");
-                    if (response.getStatusCode() >= 300)
-                        throw new DepositException("can't store the external content of ["+rfid+"], status["+response.getStatusCode()+"]");
+                for (int attempt = 1; attempt <= EXTERNAL_CONTENT_MAX_ATTEMPTS; attempt++) {
+                    PutBuilder pb = new PutBuilder(new URI(rfid),fedoraClient);
+                    if (tx != null) pb = pb.addTransaction(tx);
+                    try (FcrepoResponse response = pb.externalContent(refUri, mime, "proxy").perform()) {
+                        int status = response.getStatusCode();
+                        logger.debug("FCREPO code["+status+"]");
+                        if (status < 300)
+                            return;
+
+                        // On Docker Desktop a file moved into a shared bind mount can
+                        // briefly be invisible in another container. Fedora reports
+                        // that allowlist/existence check as HTTP 400. Retry only that
+                        // narrowly defined case; all other errors remain immediate.
+                        boolean retryable = status == 400
+                                && "file".equalsIgnoreCase(refUri.getScheme())
+                                && attempt < EXTERNAL_CONTENT_MAX_ATTEMPTS;
+                        if (!retryable)
+                            throw new DepositException("can't store the external content of ["+rfid+"], status["+status+"]");
+
+                        logger.warn("External file["+ref+"] is not visible to Fedora yet; retrying "
+                                + "attempt["+(attempt + 1)+"/"+EXTERNAL_CONTENT_MAX_ATTEMPTS+"]");
+                    }
+
+                    try {
+                        Thread.sleep(EXTERNAL_CONTENT_RETRY_DELAY_MS);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        throw new DepositException("Interrupted while waiting for external content ["+ref+"]", ex);
+                    }
                 }
             } catch (DepositException ex) {
                 throw ex;

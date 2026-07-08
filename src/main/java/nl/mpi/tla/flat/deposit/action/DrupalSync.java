@@ -132,8 +132,7 @@ public class DrupalSync extends FedoraAction {
             }
 
             String model = isCollectionSIP(sip) ? collectionModel : sipModel;
-            String title = cmdiTitle(Saxon.wrapNode(sip.getRecord()));
-            NodeRef node = upsertNode(context, sip.getPID(), sip.getFID(true), model, parents, title);
+            NodeRef node = upsertNode(context, sip.getPID(), sip.getFID(true), model, parents, null);
 
             for (Resource res : sip.getResources()) {
                 if (!(res.isInsert() || res.isUpdate()))
@@ -306,25 +305,10 @@ public class DrupalSync extends FedoraAction {
     }
 
     /**
-     * Prefer an explicit collection display name, then the first CMDI component
-     * element named Title/title. This works across the configured CMDI profiles.
+     * The object's DC title from Fedora (written by cmd2fox at ingest, the
+     * source of truth for node titles across all CMDI profiles); falls back
+     * to the FID's local name.
      */
-    protected String cmdiTitle(XdmNode cmd) {
-        if (cmd == null)
-            return null;
-        try {
-            String title = Saxon.xpath2string(cmd,
-                    "normalize-space((/cmd:CMD/cmd:Header/cmd:MdCollectionDisplayName, "
-                    + "/cmd:CMD/cmd:Components//*[local-name()='Title' or local-name()='title'])[1])",
-                    null, Global.NAMESPACES);
-            return (title == null || title.isBlank()) ? null : title;
-        } catch (Exception ex) {
-            logger.warn("Couldn't extract a title from CMDI", ex);
-            return null;
-        }
-    }
-
-    /** The object's DC/CMD title from Fedora; falls back to the FID's local name. */
     protected String fetchTitle(URI fid, String fallback) {
         URI cleanFid;
         try {
@@ -334,10 +318,6 @@ public class DrupalSync extends FedoraAction {
                     : Saxon.xpath2string(dc, "normalize-space((//dc:title)[1])", null, Global.NAMESPACES);
             if (title != null && !title.isEmpty())
                 return title;
-
-            String cmdTitle = cmdiTitle(getXMLDataStream(cleanFid, "CMD"));
-            if (cmdTitle != null)
-                return cmdTitle;
 
             XdmNode info = fcrepo(cleanFid);
             title = Saxon.xpath2string(info, "normalize-space((//dc:title)[1])", null, Global.NAMESPACES);
