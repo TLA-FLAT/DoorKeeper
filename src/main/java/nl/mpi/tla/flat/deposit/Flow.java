@@ -264,6 +264,10 @@ public class Flow {
         Flow.logger.debug("BEGIN  exception flow");
         boolean next = true;
         Flow.logger.error(" exception during the init or main flow! "+e.getMessage(),e);
+        String reference = org.slf4j.MDC.get("sip");
+        UserLog.systemError("The deposit could not be completed because of a system error. "
+                + "Please try again. If the problem continues, contact support"
+                + (reference != null ? " and mention reference " + reference : "") + ".");
         for (Action action:exceptionActions) {
             Flow.logger.debug("ACTION exception flow["+action.getName()+"]");
             next = action.perform(context);

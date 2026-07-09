@@ -55,6 +55,7 @@ import org.slf4j.LoggerFactory;
 
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.UserLog;
 import nl.mpi.tla.flat.deposit.sip.Resource;
 import nl.mpi.tla.flat.deposit.sip.cmdi.CMDResource;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
@@ -72,6 +73,7 @@ public class FITS extends AbstractAction {
 	private static final Logger logger = LoggerFactory.getLogger(FITS.class);
 
 	private static final String MIMETYPE_XPATH = "distinct-values(/fits:fits/fits:identification/fits:identity/tokenize(@mimetype,'(\\s|,)+'))[.!='TBD']=$mime";
+	private static final String DETECTED_MIMETYPES_XPATH = "string-join(distinct-values(/fits:fits/fits:identification/fits:identity/tokenize(@mimetype,'(\\s|,)+'))[.!='TBD'], ', ')";
 	ExecutorService executor;
 	File dir;
 	XdmNode mimetypes;
@@ -205,6 +207,7 @@ public class FITS extends AbstractAction {
 								try {
 									// loop over /mimetypes/mimetype
 									boolean bCheck1 = false; // tells if a mimetype was found for the resource
+									boolean assertionFailure = false;
 									for (Iterator<XdmItem> iter = Saxon.xpathIterator(mimetypes, "/mimetypes/mimetype",
 											null, NAMESPACES); iter.hasNext();) {
 										XdmItem mt = iter.next();
@@ -235,39 +238,17 @@ public class FITS extends AbstractAction {
 												logger.debug(". . . assertions[" + xp + "] check succeeded");
 												// the assertions XPath succeeded, check the assertions for this
 												// mimetype
-												Boolean bCheck3 = true; // tells if all mimetype assertions succeeded
-																		// for
-																		// the resource
-												for (Iterator<XdmItem> iter3 = Saxon.xpathIterator(assertions, "assert",
-														null, NAMESPACES); iter3.hasNext();) {
-													XdmItem a = iter3.next();
-													String axp = Saxon.xpath2string(a, "normalize-space(@xpath)");
-													if (!axp.isEmpty()) {
-														// evaluate the assertion xpath
-														bCheck3 = Saxon.xpath2boolean(result, axp, null, NAMESPACES);
-														if (!bCheck3) {
-															// assertion fails, print the AVT log message
-															logger.debug(". . . . assert[" + axp + "] check failed");
-															logger.error(
-																	"File '{}' has a mimetype '{}' which is ALLOWED in this repository, but fails an assertion!",
-																	file, mime);
-															logger.error("Message from FITS file: " + Saxon.avt(
-																	Saxon.xpath2string(a, "@message"), result,
-																	context.getProperties(), NAMESPACES));
-															// break out of the assertion loop
-															break;
-														}
-														// assertion is positive, go to next
-														logger.debug(". . . . assert[" + axp + "] check succeeded");
-													} else {
-														// the assertion xpath does not exist
-														throw new DepositException(
-																"The verification of the FITS report for resource["
-																		+ file
-																		+ "] failed due to a configuration mismatch!");
+												List<String> failedAssertions = failedAssertionMessages(
+														assertions, result, context.getProperties());
+												if (!failedAssertions.isEmpty()) {
+													logger.error(
+															"File '{}' has a mimetype '{}' which is ALLOWED in this repository, but fails {} assertion(s)!",
+															file, mime, failedAssertions.size());
+													for (String reason : failedAssertions) {
+														logger.error("Message from FITS file: " + reason);
+														UserLog.fileError("The file \"" + file.getName()
+																+ "\" was not accepted: " + reason);
 													}
-												}
-												if (!bCheck3) {
 													// some assertion of this assertions failed
 													logger.debug(". . . assertions[" + xp + "] failed");
 													bCheck2 = Boolean.FALSE;
@@ -304,18 +285,22 @@ public class FITS extends AbstractAction {
 											logger.info(
 													"Resource[{}] has a mimetype which is ALLOWED in this repository and satisfies all assertions: '{}'",
 													file, mime);
+											UserLog.fileInfo("The file \"" + file.getName()
+													+ "\" was accepted as " + mime + ".");
 											if (resource.hasMime() && !resource.getMime().equals(mime)) {
 												logger.warn("Resource mimetype changed from '{}' to '{}'",
 														resource.getMime(), mime);
 											}
 											logger.debug("Setting resource mimetype to '{}'", mime);
 											resource.setMime(mime);
-										} else
+										} else {
+											assertionFailure = true;
 											logger.debug(". . mimetype[" + mime + "] failed");
+										}
 										break;
 									}
 
-									if (!bCheck1) {
+									if (!bCheck1 && !assertionFailure) {
 										// no mimetype was found, look for the otherwise
 										logger.debug(". mimetypes failed, checking otherwise");
 										XdmItem o = Saxon.xpathSingle(mimetypes, "/mimetypes/otherwise");
@@ -330,6 +315,8 @@ public class FITS extends AbstractAction {
 													bCheck1 = true;
 													logger.error("Use fallback mimetype[{}] for resource[{}]", fallback,
 															file);
+													UserLog.fileWarning("The file \"" + file.getName()
+															+ "\" was assigned the fallback type " + fallback + ".");
 													if (resource.hasMime() && !resource.getMime().equals(fallback)) {
 														logger.warn("Resource mimetype changed from '{}' to '{}'",
 																resource.getMime(), fallback);
@@ -345,9 +332,16 @@ public class FITS extends AbstractAction {
 											// no allowed or fallback mimetype was found for this resource
 											logger.debug(". mimetypes failed");
 											logger.error("No mimetype found for resource[{}]", file);
+											String detected = detectedMimetypes(result);
+											UserLog.fileError("The file \"" + file.getName()
+													+ "\" was not accepted. FITS identified its type as "
+													+ (detected.isBlank() ? "unknown" : detected)
+													+ ", but no repository file rule matched.");
 											unallowed.incrementAndGet();
 										} else
 											logger.debug(". mimetypes succeeded");
+									} else if (assertionFailure) {
+										unallowed.incrementAndGet();
 									}
 								} catch (Exception ex) {
 									throw new DepositException(ex);
@@ -396,6 +390,31 @@ public class FITS extends AbstractAction {
 		if (unallowed.get() > 0)
 			logger.error("{} resources were not allowed!", unallowed.get());
 		return (unallowed.get() == 0);
+	}
+
+	static String detectedMimetypes(XdmNode result) throws SaxonApiException {
+		return Saxon.xpath2string(result, DETECTED_MIMETYPES_XPATH, null, NAMESPACES);
+	}
+
+	static List<String> failedAssertionMessages(XdmItem assertions, XdmNode result,
+			Map<String, XdmValue> properties) throws SaxonApiException, DepositException {
+		List<String> messages = new ArrayList<>();
+		for (Iterator<XdmItem> iter = Saxon.xpathIterator(assertions, "assert", null, NAMESPACES);
+				iter.hasNext();) {
+			XdmItem assertion = iter.next();
+			String xpath = Saxon.xpath2string(assertion, "normalize-space(@xpath)");
+			if (xpath.isEmpty()) {
+				throw new DepositException("A FITS policy assertion has no xpath.");
+			}
+			if (Saxon.xpath2boolean(result, xpath, null, NAMESPACES)) {
+				logger.debug(". . . . assert[" + xpath + "] check succeeded");
+				continue;
+			}
+			logger.debug(". . . . assert[" + xpath + "] check failed");
+			messages.add(Saxon.avt(Saxon.xpath2string(assertion, "@message"), result,
+					properties, NAMESPACES));
+		}
+		return messages;
 	}
 
 	public class TaskLimitSemaphore {

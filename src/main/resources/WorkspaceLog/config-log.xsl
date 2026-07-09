@@ -29,8 +29,9 @@
 			</appender>
 			<appender name="USER_{$sip}" class="ch.qos.logback.core.FileAppender">
 				<file><xsl:value-of select="$dir"/>/user-log-events.xml</file>
-				<append>true</append>\n" + <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
-					<evaluator>\n" + <expression>return (level >= INFO &amp;&amp; mdc.get("sip") != null &amp;&amp; ((String)mdc.get("sip")).equals("<xsl:value-of select="$sip"/>"));</expression>
+				<append>true</append>
+				<filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+					<evaluator><expression>return (level >= INFO &amp;&amp; mdc.get("sip") != null &amp;&amp; ((String)mdc.get("sip")).equals("<xsl:value-of select="$sip"/>"));</expression>
 					</evaluator>
 					<OnMismatch>DENY</OnMismatch>
 					<OnMatch>ACCEPT</OnMatch>
@@ -40,6 +41,9 @@
 				</encoder>
 			</appender>
 			<logger name="nl.mpi.tla.flat.deposit" level="DEBUG">
+				<appender-ref ref="DEVEL_{$sip}"/>
+			</logger>
+			<logger name="nl.mpi.tla.flat.deposit.user" level="INFO" additivity="false">
 				<appender-ref ref="USER_{$sip}"/>
 				<appender-ref ref="DEVEL_{$sip}"/>
 			</logger>

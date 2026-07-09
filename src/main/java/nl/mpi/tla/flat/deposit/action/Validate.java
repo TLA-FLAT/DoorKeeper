@@ -22,6 +22,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Source;
@@ -37,7 +41,9 @@ import nl.mpi.tla.util.Saxon;
 
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
+import nl.mpi.tla.flat.deposit.UserLog;
 import static nl.mpi.tla.flat.deposit.util.Global.NAMESPACES;
+import net.sf.saxon.s9api.XdmItem;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +56,22 @@ import org.w3c.dom.Document;
 public class Validate extends AbstractAction {
 
     private static final Logger logger = LoggerFactory.getLogger(Validate.class.getName());
+    private static final Pattern ENUMERATION_ERROR = Pattern.compile(
+            "Value '([^']*)' is not facet-valid with respect to enumeration '\\[([^]]*)\\]'.*",
+            Pattern.DOTALL);
+    private static final Pattern PATTERN_ERROR = Pattern.compile(
+            "Value '([^']*)' is not facet-valid with respect to pattern '([^']*)' for type '([^']*)'.*",
+            Pattern.DOTALL);
+    private static final Pattern BOUND_ERROR = Pattern.compile(
+            "Value '([^']*)' is not facet-valid with respect to (minInclusive|maxInclusive|minExclusive|maxExclusive) '([^']*)'.*",
+            Pattern.DOTALL);
+    private static final Pattern LENGTH_ERROR = Pattern.compile(
+            "Value '([^']*)' with length = '[^']*' is not facet-valid with respect to (minLength|maxLength|length) '([^']*)'.*",
+            Pattern.DOTALL);
+    private static final Pattern ELEMENT_IN_MESSAGE = Pattern.compile("Element '([^']+)'", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SIMPLE_TYPE_IN_MESSAGE = Pattern.compile(
+            "type 'simpletype-([A-Za-z][A-Za-z0-9_-]*?)(?:-\\d+)?---'", Pattern.CASE_INSENSITIVE);
+    private static final Pattern VALUE_IN_MESSAGE = Pattern.compile("Value '([^']*)'");
 
     @Override
     public boolean perform(Context context) throws DepositException {
@@ -75,18 +97,24 @@ public class Validate extends AbstractAction {
             // (cvc-elt.1.a) when handed that DOM directly via DOMSource. A DOMSource
             // (rather than a stream) is required here since SchemAnon reads it twice:
             // once for XSD, once for the XSD's embedded Schematron rules.
-            Source doc = new DOMSource(reparseNamespaceAware(rec));
+            Document validationDocument = reparseNamespaceAware(rec);
+            Source doc = new DOMSource(validationDocument);
 
             // the CMD XSD may carry embedded Schematron rules (validated as a side
             // effect of validating against it), on top of the separately configured rules
-            boolean valid = validate(new SchemAnon(URI.create(xsd).toURL()), doc);
+            boolean valid = validate(new SchemAnon(URI.create(xsd).toURL()), doc, validationDocument);
             if (rules != null && !rules.isEmpty())
-                valid = validate(new SchemAnon(Paths.get(rules).toUri().toURL()), doc) && valid;
+                valid = validate(new SchemAnon(Paths.get(rules).toUri().toURL()), doc, validationDocument) && valid;
+
+            if (valid)
+                UserLog.metadataInfo("The metadata passed validation.");
 
             return valid;
         } catch (DepositException ex) {
+            UserLog.metadataError("The metadata could not be validated: " + userText(ex.getMessage()));
             throw ex;
         } catch (Exception ex) {
+            UserLog.metadataError("The metadata could not be validated. Please check the metadata profile and values.");
             throw new DepositException(ex);
         }
     }
@@ -101,15 +129,143 @@ public class Validate extends AbstractAction {
     }
 
     /** Run one SchemAnon validation pass, logging every reported message. */
-    protected boolean validate(SchemAnon validator, Source doc) throws SchemAnonException, java.io.IOException {
+    protected boolean validate(SchemAnon validator, Source doc, Document validationDocument) throws SchemAnonException, java.io.IOException {
         boolean valid = validator.validate(doc);
+        Set<String> fieldsWithSpecificErrors = new HashSet<>();
         for (Message msg : validator.getMessages()) {
             String at = (msg.getLocation() != null ? " at ["+msg.getLocation()+"]" : "");
-            if (msg.isError())
+            if (msg.isError()) {
                 logger.error("["+validator.getType()+"]"+at+": "+msg.getText());
-            else
+                String field = fieldFromMessage(msg.getText());
+                if (!isCascadingValueError(msg.getText()) || field.isBlank()
+                        || !fieldsWithSpecificErrors.contains(field)) {
+                    UserLog.metadataError(userMessage(msg, validationDocument));
+                }
+                if (!field.isBlank() && !isCascadingValueError(msg.getText()))
+                    fieldsWithSpecificErrors.add(field);
+            }
+            else {
                 logger.warn("["+validator.getType()+"]"+at+": "+msg.getText());
+                UserLog.metadataWarning(userMessage(msg, validationDocument));
+            }
         }
         return valid;
+    }
+
+    private String userMessage(Message message, Document document) {
+        String location = message.getLocation();
+        String path = "";
+        String value = "";
+        if (location != null && location.stripLeading().startsWith("/")) {
+            try {
+                XdmItem item = Saxon.xpathSingle(Saxon.wrapNode(document), location);
+                if (item != null) {
+                    path = Saxon.xpath2string(item,
+                            "string-join(for $n in ancestor-or-self::* return local-name($n), ' > ')");
+                    path = path.replaceFirst("^CMD( > Components)? > ?", "");
+                    if (Saxon.xpath2boolean(item, "empty(*)"))
+                        value = Saxon.xpath2string(item, "normalize-space(.)");
+                }
+            } catch (Exception ex) {
+                logger.debug("Couldn't resolve validation location [{}] for the user log", location, ex);
+            }
+        }
+
+        if (path.isBlank())
+            path = fieldFromMessage(message.getText());
+
+        Matcher valueMatcher = VALUE_IN_MESSAGE.matcher(message.getText());
+        if (value.isBlank() && valueMatcher.find())
+            value = valueMatcher.group(1);
+
+        StringBuilder result = new StringBuilder("Metadata problem");
+        if (!path.isBlank())
+            result.append(" in ").append(path);
+        if (!value.isBlank() && value.length() <= 160)
+            result.append(" (value: \"").append(value).append("\")");
+        result.append(": ").append(userText(message.getText()));
+        return result.toString();
+    }
+
+    static String userText(String text) {
+        if (text == null || text.isBlank())
+            return "The value does not satisfy the metadata profile.";
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        boolean schemaValidatorMessage = normalized.startsWith("cvc-");
+        normalized = normalized.replaceFirst("^cvc-[^:]+:\\s*", "");
+        Matcher enumeration = ENUMERATION_ERROR.matcher(normalized);
+        if (enumeration.matches())
+            return "Choose one of these allowed values: " + enumeration.group(2) + ".";
+        Matcher pattern = PATTERN_ERROR.matcher(normalized);
+        if (pattern.matches()) {
+            if (isDateConstraint(pattern.group(2), pattern.group(3)))
+                return "Use YYYY, YYYY-MM, or YYYY-MM-DD; for a range use two such dates separated by '/', or enter Unknown or Unspecified.";
+            return "Use the format required for this field.";
+        }
+        Matcher bound = BOUND_ERROR.matcher(normalized);
+        if (bound.matches())
+            return boundMessage(bound.group(2), bound.group(3));
+        Matcher length = LENGTH_ERROR.matcher(normalized);
+        if (length.matches())
+            return lengthMessage(length.group(2), length.group(3));
+        if (isCascadingValueError(normalized))
+            return "Enter a valid value for this field.";
+        if (normalized.contains("is not a valid value for"))
+            return "Enter a value of the required type.";
+        if (normalized.contains("Attribute '") && normalized.contains("must appear"))
+            return "A required value is missing.";
+        if (normalized.contains("The content of element") && normalized.contains("is not complete"))
+            return "A required metadata field is missing.";
+        if (normalized.contains("Invalid content was found starting with element"))
+            return "This field is not allowed here, or another required field must come before it.";
+        if (schemaValidatorMessage)
+            return "The value does not satisfy the requirements for this field.";
+        return normalized;
+    }
+
+    static String fieldFromMessage(String text) {
+        if (text == null)
+            return "";
+        Matcher element = ELEMENT_IN_MESSAGE.matcher(text);
+        if (element.find())
+            return localName(element.group(1));
+        Matcher type = SIMPLE_TYPE_IN_MESSAGE.matcher(text);
+        if (type.find())
+            return type.group(1).replace('-', ' ');
+        return "";
+    }
+
+    static boolean isCascadingValueError(String text) {
+        return text != null && text.contains("must have no element [children], and the value must be valid");
+    }
+
+    private static String localName(String qualifiedName) {
+        int colon = qualifiedName.indexOf(':');
+        return colon >= 0 ? qualifiedName.substring(colon + 1) : qualifiedName;
+    }
+
+    private static boolean isDateConstraint(String pattern, String type) {
+        return type.toLowerCase().contains("date")
+                || (pattern.contains("[0-9]{4}") && pattern.contains("Unknown")
+                        && pattern.contains("Unspecified"));
+    }
+
+    private static String boundMessage(String constraint, String limit) {
+        return switch (constraint) {
+            case "minInclusive" -> "Enter a value of at least " + limit + ".";
+            case "maxInclusive" -> "Enter a value no greater than " + limit + ".";
+            case "minExclusive" -> "Enter a value greater than " + limit + ".";
+            case "maxExclusive" -> "Enter a value less than " + limit + ".";
+            default -> "Enter a value within the allowed range.";
+        };
+    }
+
+    private static String lengthMessage(String constraint, String limit) {
+        return switch (constraint) {
+            case "minLength" -> "Enter at least " + limit + " characters.";
+            case "maxLength" -> "Enter no more than " + limit + " characters.";
+            case "length" -> "Enter exactly " + limit + " characters.";
+            default -> "Enter a value of the required length.";
+        };
     }
 }
