@@ -79,15 +79,22 @@ public class CMDResource extends Resource {
             // @lat:flatURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:flatURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = (base!=null?base.resolve(str):new URI(str));
+                // lat:flatURI carries an opaque Fedora identifier (e.g.
+                // lat_12345_<uuid>, optionally with a #datastream fragment).
+                // Match the namespace on the raw string first: base.resolve()
+                // would stitch the CMDI file's file: URI in front and hide
+                // the namespace prefix, so the FID check would fail and the
+                // stitched file: URI would collide with lat:localURI below —
+                // producing the "two candidates for a resource URI" error.
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
-                        this.setFID(u);
+                    if (str.startsWith(ns.getStringValue()+"_")) {
+                        this.setFID(new URI(str.replaceAll("#.*","")));
                         m = true;
                     }
                 }
                 if (!m) {
+                    URI u = (base!=null?base.resolve(str):new URI(str));
                     if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                         this.setPID(u);
                     else if (this.uri==null)
@@ -100,15 +107,18 @@ public class CMDResource extends Resource {
             // @lat:localURI
             str = Saxon.xpath2string(Saxon.wrapNode(node),"cmd:ResourceRef/@lat:localURI",null,NAMESPACES);
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                // Same rationale as lat:flatURI above for opaque Fedora IDs;
+                // otherwise localURI is a relative file path that we do want
+                // to resolve against the CMDI file's base.
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
-                        this.setFID(u);
+                    if (str.startsWith(ns.getStringValue()+"_")) {
+                        this.setFID(new URI(str.replaceAll("#.*","")));
                         m = true;
                     }
                 }
                 if (!m) {
+                    URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                     if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                         this.setPID(u);
                     else if (this.uri==null)

@@ -53,6 +53,9 @@ abstract public class FedoraAction extends AbstractAction {
     protected FcrepoClient fedoraClient = null;
 
     private static final String CLIENT_MEMORY_KEY_PREFIX = FedoraAction.class.getName() + ".client:";
+
+    private static final int EXTERNAL_CONTENT_MAX_ATTEMPTS = 121;
+    private static final long EXTERNAL_CONTENT_RETRY_DELAY_MS = 250L;
     
     public void connect(Context context) throws DepositException {
         try {
@@ -135,7 +138,6 @@ abstract public class FedoraAction extends AbstractAction {
             String hdl = Global.asHandleURL(pid).toString();
             String query = "SELECT ?fid WHERE { { ?fid <http://purl.org/dc/elements/1.1/identifier> \""+hdl+"\" } UNION { ?fid <http://purl.org/dc/elements/1.1/identifier> <"+hdl+"> } } ";
             XdmNode tpl = sparql(query);
-            logger.debug("RESULT["+tpl.toString()+"]");
             String f = Saxon.xpath2string(tpl, "normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);
             if (f!=null && !f.isEmpty()) {
                 String rest = fedoraConfig.getString("localBase");
@@ -154,7 +156,6 @@ abstract public class FedoraAction extends AbstractAction {
             String rest = fedoraConfig.getString("localBase");
             String query = "SELECT ?pid WHERE { <"+rest+"/"+fid.toString().replaceAll("#.*","")+"> <http://purl.org/dc/elements/1.1/identifier> ?pid } ";
             XdmNode tpl = sparql(query);
-            logger.debug("RESULT["+tpl.toString()+"]");
             String p = Saxon.xpath2string(tpl, "normalize-space((//srx:results/srx:result/srx:binding[@name='pid']/*[self::srx:literal or self::srx:uri][starts-with(.,'https://hdl.handle.net/')])[1])",null,Global.NAMESPACES);
             if (p!=null && !p.isEmpty())
                 pid = Global.asHandleURL(new URI(p));
@@ -164,10 +165,6 @@ abstract public class FedoraAction extends AbstractAction {
         return pid;
     }
     
-    public Boolean fcrepo_exists(URI fid,String ds) throws DepositException {
-        return fcrepo_exists(fid,ds,null);
-    }
-
     public Boolean fcrepo_exists(URI fid,String ds,URI tx) throws DepositException {
         URI uri = fid;
         if (ds!=null && !ds.isBlank() && !ds.isEmpty())
@@ -177,10 +174,6 @@ abstract public class FedoraAction extends AbstractAction {
                 throw new DepositException(e);
             }
         return fcrepo_exists(uri,tx);
-    }
-
-    public Boolean fcrepo_exists(URI fid) throws DepositException {
-        return fcrepo_exists(fid,(URI)null);
     }
 
     public Boolean fcrepo_exists(URI fid,URI tx) throws DepositException {
@@ -221,13 +214,88 @@ abstract public class FedoraAction extends AbstractAction {
         try (FcrepoResponse response = req.perform()) {
                 logger.debug("FCREPO code["+response.getStatusCode()+"]");
                 res = Saxon.buildDocument(new StreamSource(response.getBody()));
-                logger.debug("FCREPO response["+res.toString()+"]");
             } catch (Exception e) {
                  throw new DepositException(e);
             }
         return res;
     }
-    
+
+    /** The Fedora transaction URI stashed in memory by FedoraTransaction, or null when writing outside a transaction. */
+    protected URI transURI(Context context) throws DepositException {
+        try {
+            if (context.hasInMemory("transLocation"))
+                return new URI(context.getFromMemory("transLocation").toString());
+            logger.warn("No Fedora transaction in memory; write will not be atomic!");
+            return null;
+        } catch (Exception e) {
+            throw new DepositException("Couldn't determine the Fedora transaction URI!", e);
+        }
+    }
+
+    /** PUT a binary (LDP-NR) child datastream, joining the active transaction. */
+    protected void putBinary(Context context, String fid, String ds, InputStream body, String mime) throws DepositException {
+        try (body) {
+            String rfid = fedoraConfig.getString("localServer")+"/"+fid+"/"+ds;
+            logger.debug("PUT binary["+rfid+"]["+mime+"]");
+            PutBuilder pb = new PutBuilder(new URI(rfid),fedoraClient);
+            URI tx = transURI(context);
+            if (tx != null) pb = pb.addTransaction(tx);
+            try (FcrepoResponse response = pb.body(body, mime).perform()) {
+                logger.debug("FCREPO code["+response.getStatusCode()+"]");
+                if (response.getStatusCode() >= 300)
+                    throw new DepositException("can't store the binary ["+rfid+"], status["+response.getStatusCode()+"]");
+            }
+        } catch (DepositException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new DepositException(ex);
+        }
+    }
+
+    /** PUT an external-content (proxy) binary child datastream, joining the active transaction. */
+    protected void putExternal(Context context, String fid, String ds, String ref, String mime) throws DepositException {
+        try {
+            String rfid = fedoraConfig.getString("localServer")+"/"+fid+"/"+ds;
+            logger.debug("PUT external content["+rfid+"] set to ["+ref+"]["+mime+"]");
+            URI refUri = new URI(ref);
+            URI tx = transURI(context);
+            for (int attempt = 1; attempt <= EXTERNAL_CONTENT_MAX_ATTEMPTS; attempt++) {
+                PutBuilder pb = new PutBuilder(new URI(rfid),fedoraClient);
+                if (tx != null) pb = pb.addTransaction(tx);
+                try (FcrepoResponse response = pb.externalContent(refUri, mime, "proxy").perform()) {
+                    int status = response.getStatusCode();
+                    logger.debug("FCREPO code["+status+"]");
+                    if (status < 300)
+                        return;
+
+                    // On Docker Desktop a file moved into a shared bind mount can
+                    // briefly be invisible in another container. Fedora reports
+                    // that allowlist/existence check as HTTP 400. Retry only that
+                    // narrowly defined case; all other errors remain immediate.
+                    boolean retryable = status == 400
+                            && "file".equalsIgnoreCase(refUri.getScheme())
+                            && attempt < EXTERNAL_CONTENT_MAX_ATTEMPTS;
+                    if (!retryable)
+                        throw new DepositException("can't store the external content of ["+rfid+"], status["+status+"]");
+
+                    logger.warn("External file["+ref+"] is not visible to Fedora yet; retrying "
+                            + "attempt["+(attempt + 1)+"/"+EXTERNAL_CONTENT_MAX_ATTEMPTS+"]");
+                }
+
+                try {
+                    Thread.sleep(EXTERNAL_CONTENT_RETRY_DELAY_MS);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new DepositException("Interrupted while waiting for external content ["+ref+"]", ex);
+                }
+            }
+        } catch (DepositException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new DepositException(ex);
+        }
+    }
+
     public Date lookupAsOfDateTime(URI fid) throws DepositException {
         Date res = null;
         try {

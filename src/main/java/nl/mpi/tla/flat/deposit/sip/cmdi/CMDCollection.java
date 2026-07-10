@@ -87,17 +87,24 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             // @lat:flatURI
             str = ((Element)node).getAttribute("lat:flatURI");
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = new URI(str);
-                if (base!=null)
-                    u = base.resolve(str);
+                // lat:flatURI carries an opaque Fedora identifier (e.g.
+                // lat_12345_<uuid>, optionally suffixed with a #datastream
+                // fragment). Match the namespace on the raw attribute value
+                // first: base.resolve() would stitch the CMDI file's file:
+                // URI in front and hide the namespace prefix, so the FID
+                // check would fail and the parent silently drop out of the
+                // SIP's collections set.
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
-                        this.setFID(u);
+                    if (str.startsWith(ns.getStringValue()+"_")) {
+                        this.setFID(new URI(str.replaceAll("#.*","")));
                         m = true;
                     }
                 }
                 if (!m) {
+                    URI u = new URI(str);
+                    if (base!=null)
+                        u = base.resolve(str);
                     if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                         this.setPID(u);
                     else if (this.uri==null)
@@ -110,15 +117,16 @@ public class CMDCollection extends nl.mpi.tla.flat.deposit.sip.Collection {
             // @lat:localURI
             str = ((Element)node).getAttribute("lat:localURI");
             if (str!=null && !str.trim().isEmpty()) {
-                URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
+                // Same rationale as lat:flatURI above.
                 boolean m = false;
                 for(XdmItem ns:namespaces) {
-                    if (u.toString().startsWith(ns.getStringValue()+"_")) {
-                        this.setFID(u);
+                    if (str.startsWith(ns.getStringValue()+"_")) {
+                        this.setFID(new URI(str.replaceAll("#.*","")));
                         m = true;
                     }
                 }
                 if (!m) {
+                    URI u = (base!=null?base.resolve(new URI(null,null,str,null,null)):new URI(str));
                     if (u.toString().matches("(http(s)?://hdl.handle.net/|hdl:).*"))
                         this.setPID(u);
                     else if (this.uri==null)

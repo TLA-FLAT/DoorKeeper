@@ -48,7 +48,7 @@ public class EPICHandleCreation extends AbstractAction {
     /**
      * The Fedora 6 datastream (LDP-NR) URL serving the latest version's content.
      * Used as the temporary handle target at mint time: the memento doesn't exist
-     * yet (the transaction isn't committed), so EPICHandleUpdate repoints the handle
+     * yet (the transaction isn't committed), so FedoraVersioning repoints the handle
      * to the version-specific memento URL once the deposit is committed.
      */
     protected String fcCurrentURL(String server, String fid, String dsid) {

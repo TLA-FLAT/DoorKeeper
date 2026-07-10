@@ -58,8 +58,8 @@ import org.slf4j.LoggerFactory;
  * a media entity attached to the node via field_media_of.
  *
  * Mementos and handles must exist by now, so this action runs after
- * EPICHandleUpdate, i.e. after the Fedora transaction has been committed.
- * All writes are upserts keyed on field_pid (nodes), uri (files) and
+ * FedoraVersioning, i.e. after the Fedora transaction has been committed.
+ * All writes are upserts keyed on field_fid (nodes), uri (files) and
  * field_media_of+name (media), so the action is safe to re-run.
  *
  * @author menzowi
@@ -124,10 +124,15 @@ public class DrupalSync extends FedoraAction {
             // parent collection nodes have to exist before the SIP node can be a member of them
             List<NodeRef> parents = new ArrayList<>();
             for (Collection col : sip.getCollections(false)) {
-                if (col.hasPID() && col.hasFID()) {
-                    parents.add(upsertNode(context, col.getPID(), col.getFID(true), collectionModel, new ArrayList<>(), null));
+                if (col.hasFID()) {
+                    // The FID is enough to key the parent in Drupal (nodes are
+                    // upserted on field_fid). A missing PID just means we skip
+                    // refreshing field_handle on this pass — the parent's own
+                    // ingest already set it.
+                    URI parentPid = col.hasPID() ? col.getPID() : null;
+                    parents.add(upsertNode(context, parentPid, col.getFID(true), collectionModel, new ArrayList<>(), null));
                 } else {
-                    logger.warn("Parent collection["+col+"] has no PID and/or FID; SIP node won't be a member of it");
+                    logger.warn("Parent collection["+col+"] has no FID; SIP node won't be a member of it");
                 }
             }
 
@@ -166,7 +171,7 @@ public class DrupalSync extends FedoraAction {
     /**
      * Create or update the islandora_object node for the object {@code fid}.
      *
-     * Nodes are keyed on the Fedora object ID stored in field_pid: handles
+     * Nodes are keyed on the Fedora object ID stored in field_fid: handles
      * are per-version (every update deposit mints a new one), so the FID is
      * the only identifier that keeps one node per archived object.
      *
@@ -178,8 +183,17 @@ public class DrupalSync extends FedoraAction {
         String title = (suppliedTitle == null || suppliedTitle.isBlank()) ? fetchTitle(fid, fidStr) : suppliedTitle;
         TermRef modelTerm = termId(modelVocabulary, model);
 
+        // The Handle is stored on every node in field_handle in its canonical
+        // dereferenceable URL form so the Drupal UI can render/link to it. It
+        // is also refreshed on every update, since EPIC mints a fresh handle
+        // per version.
+        String handleUrl = (pid != null) ? Global.asHandleURL(pid).toString() : null;
+
         ObjectNode attributes = MAPPER.createObjectNode();
         attributes.put("title", title);
+        if (handleUrl != null) {
+            attributes.put("field_handle", handleUrl);
+        }
 
         ObjectNode relationships = MAPPER.createObjectNode();
         relationships.set("field_model", MAPPER.createObjectNode()
@@ -202,7 +216,7 @@ public class DrupalSync extends FedoraAction {
         ObjectNode document = MAPPER.createObjectNode();
         document.set("data", data);
 
-        JsonNode existing = jsonapiOne("node/"+nodeBundle, "filter[field_pid]="+encode(fidStr));
+        JsonNode existing = jsonapiOne("node/"+nodeBundle, "filter[field_fid]="+encode(fidStr));
         if (existing != null) {
             String nid = existing.at("/attributes/drupal_internal__nid").asText();
             String uuid = existing.at("/id").asText();
@@ -212,7 +226,7 @@ public class DrupalSync extends FedoraAction {
             return new NodeRef(nid, uuid);
         }
 
-        attributes.put("field_pid", fidStr);
+        attributes.put("field_fid", fidStr);
         JsonNode created = apiCall("POST", server+"/jsonapi/node/"+nodeBundle, document);
         String nid = created.at("/data/attributes/drupal_internal__nid").asText();
         String uuid = created.at("/data/id").asText();
@@ -510,7 +524,8 @@ public class DrupalSync extends FedoraAction {
     }
 
     /**
-     * Normalize a PID to the hdl:prefix/uuid form used in field_pid.
+     * Normalize a PID to the hdl:prefix/uuid form (informational; no longer
+     * stored on Drupal — nodes are keyed on field_fid instead).
      */
     protected static String pidToHdl(URI pid) {
         return pid.toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");

@@ -19,6 +19,9 @@ package nl.mpi.tla.flat.deposit.action;
 import org.fcrepo.client.FcrepoResponse;
 import java.io.File;
 import java.net.URI;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import nl.knaw.meertens.pid.PIDService;
 import nl.mpi.tla.flat.deposit.Context;
 import nl.mpi.tla.flat.deposit.DepositException;
@@ -30,22 +33,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Repoints the EPIC handles minted by {@link EPICHandleCreation} from their
- * temporary "current version" target to the version-specific Fedora 6 memento
- * URL.
+ * Snapshots each object touched by this deposit and repoints the freshly minted
+ * EPIC handle to the version-specific memento URL.
  *
- * Fedora 6 mementos can only be created on a committed resource (the memento
+ * <p>For every object (SIP, referenced collection, inserted/updated resource)
+ * that has a PID and FID this action creates a Fedora 6 memento of the LDP-RS
+ * container plus of every managed child datastream that exists on the object
+ * (CMD, DC, OLAC, OBJ, TECHMD). This gives every deposit a complete, addressable
+ * snapshot -- first version included -- and lets each per-version handle resolve
+ * to the datastream memento captured for its deposit.</p>
+ *
+ * <p>Fedora 6 mementos can only be created on committed resources (the memento
  * builders can't join an open transaction), so this action must run <em>after</em>
- * the Fedora transaction has been committed. For each object written by this
- * deposit it explicitly creates a memento of the datastream and updates the
- * handle to point at it.
+ * the Fedora transaction has been committed.</p>
  *
  * @author menzowi
  * @author pavsri
  */
-public class EPICHandleUpdate extends FedoraAction {
+public class FedoraVersioning extends FedoraAction {
 
-    private static final Logger logger = LoggerFactory.getLogger(EPICHandleUpdate.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(FedoraVersioning.class.getName());
+
+    /** Datastream identifiers that carry managed content and should be versioned per deposit. */
+    private static final List<String> VERSIONED_DATASTREAMS = List.of("CMD", "DC", "OLAC", "OBJ", "TECHMD");
 
     @Override
     public boolean perform(Context context) throws DepositException {
@@ -81,14 +91,14 @@ public class EPICHandleUpdate extends FedoraAction {
 
             // the deposited compound object
             if (sip.hasPID() && sip.hasFID())
-                relocate(ps, isTest, localServer, publicServer, sip.getFID(), sip.getPID());
+                versionAndRelocate(ps, isTest, localServer, publicServer, sip.getFID(), sip.getPID());
             else
-                logger.debug("SIP has no PID and/or FID; nothing to update");
+                logger.debug("SIP has no PID and/or FID; nothing to version");
 
             // collections referenced/updated by this deposit
             for (Collection col : sip.getCollections(true)) {
                 if (col.hasPID() && col.hasFID())
-                    relocate(ps, isTest, localServer, publicServer, col.getFID(), col.getPID());
+                    versionAndRelocate(ps, isTest, localServer, publicServer, col.getFID(), col.getPID());
                 else
                     logger.debug("Collection["+col+"] has no PID and/or FID; skipped");
             }
@@ -97,7 +107,7 @@ public class EPICHandleUpdate extends FedoraAction {
             for (Resource res : sip.getResources()) {
                 if (res.isInsert() || res.isUpdate()) {
                     if (res.hasPID() && res.hasFID())
-                        relocate(ps, isTest, localServer, publicServer, res.getFID(), res.getPID());
+                        versionAndRelocate(ps, isTest, localServer, publicServer, res.getFID(), res.getPID());
                     else
                         logger.debug("Resource["+res+"] has no PID and/or FID; skipped");
                 }
@@ -111,9 +121,10 @@ public class EPICHandleUpdate extends FedoraAction {
     }
 
     /**
-     * Create a memento of the object's datastream and repoint its handle to it.
+     * Snapshot the object's container and every managed datastream, then repoint
+     * its handle to the memento of the datastream named in the FID's fragment.
      */
-    protected void relocate(PIDService ps, boolean isTest, String localServer, String publicServer, URI fidUri, URI pidUri) throws DepositException {
+    protected void versionAndRelocate(PIDService ps, boolean isTest, String localServer, String publicServer, URI fidUri, URI pidUri) throws DepositException {
         try {
             String fid  = fidUri.toString().replaceAll("#.*","");
             String frag = fidUri.getRawFragment();
@@ -121,15 +132,32 @@ public class EPICHandleUpdate extends FedoraAction {
                 logger.warn("FID["+fidUri+"] isn't complete; skipping memento/handle update");
                 return;
             }
-            String dsid = frag.replaceAll("@.*","");
+            String handleDsid = frag.replaceAll("@.*","");
 
-            // 1. create an explicit memento of the (committed) datastream
-            URI dsUri = new URI(localServer+"/"+fid+"/"+dsid);
-            String memento = createMemento(dsUri);
+            // 1. memento the container itself (captures RELS-EXT + DC-in-RDF + object properties)
+            URI containerUri = new URI(localServer+"/"+fid);
+            createMemento(containerUri);
+
+            // 2. memento every managed datastream that exists on the object
+            Map<String,String> dsMementos = new LinkedHashMap<>();
+            for (String ds : VERSIONED_DATASTREAMS) {
+                if (!Boolean.TRUE.equals(fcrepo_exists(new URI(fid), ds, null))) {
+                    logger.debug("FID["+fid+"] has no ["+ds+"] datastream; not versioned");
+                    continue;
+                }
+                URI dsUri = new URI(localServer+"/"+fid+"/"+ds);
+                dsMementos.put(ds, createMemento(dsUri));
+            }
+
+            // 3. repoint the handle from its temporary target to the memento URL of the datastream in the FID fragment
+            String memento = dsMementos.get(handleDsid);
+            if (memento == null) {
+                // the datastream named in the FID fragment doesn't exist on the object; nothing to point the handle at
+                throw new DepositException("FID["+fidUri+"] refers to datastream ["+handleDsid+"] but no such datastream exists on the object");
+            }
             // the memento lives on the internal REST endpoint; expose it via the public server
             String loc = memento.replace(localServer, publicServer);
 
-            // 2. repoint the handle from its temporary target to the memento URL
             String pid    = pidUri.toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
             String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
             String uuid   = pid.replaceAll(".*/","");

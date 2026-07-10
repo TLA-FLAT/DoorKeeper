@@ -84,7 +84,6 @@ public class Context {
 	public Context(Flow flow, XdmNode spec, Map<String, XdmValue> params) throws DepositException {
 		this.flow = flow;
 		props.putAll(params);
-                System.err.println("props["+props+"]");
 		loadNamespaces(spec);
 		loadProperties(spec);
 		getSave();
@@ -119,7 +118,6 @@ public class Context {
 
 	private void importProperties(XdmNode spec) throws SaxonApiException, DepositException {
 		for (XdmItem imp : Saxon.xpath(spec, "/flow/config/import", props)) {
-                    System.err.println("imp["+imp.toString()+"]");
 			String prefix = Saxon.xpath2string(imp, "@prefix",props);
 			String clazz = Saxon.xpath2string(imp, "@class",props);
 			try {
