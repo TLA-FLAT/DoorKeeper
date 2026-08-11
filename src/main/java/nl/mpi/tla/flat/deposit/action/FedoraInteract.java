@@ -112,7 +112,7 @@ public class FedoraInteract extends FedoraAction {
         }
 
         protected String toSPARQL_URI(String val) {
-            if (val.startsWith("http:") || val.startsWith("https:")) {
+            if (val.startsWith("http:") || val.startsWith("https:") || val.startsWith("info:fedora/")) {
                 val = "<"+val+">";
             } else {
                 val = "'"+val.replace("'", "\\'")+"'";

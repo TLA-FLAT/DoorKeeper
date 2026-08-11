@@ -80,11 +80,11 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 XdmNode res = sparql(sparql);
                 if (res !=null) {
                     logger.debug("RESULT["+res.toString()+"]");
-                    for (Iterator<XdmItem> iter=Saxon.xpathIterator(res,"normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);iter.hasNext();) {
+                    for (Iterator<XdmItem> iter=Saxon.xpathIterator(res,"//srx:results/srx:result/srx:binding[@name='fid']/*[self::srx:uri or self::srx:literal]",null,Global.NAMESPACES);iter.hasNext();) {
                         XdmItem n = iter.next();
                         String f = n.getStringValue();
                         if (f!=null && !f.isEmpty()) {
-                            URI fid = new URI(f.replace(fedoraConfig.getString("localBase")+"/",""));
+                            URI fid = collectionFID(f);
                             if (!fid.toString().startsWith("islandora:")) {
                                 URI pid = lookupPID(fid);
                                 CMDCollection col = new CMDCollection(pid, fid, namespace, namespaces);
@@ -119,11 +119,11 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
         XdmNode res = sparql(sparql);
         if (res !=null) {
             logger.debug("RESULT["+res.toString()+"]");
-            for (Iterator<XdmItem> iter=Saxon.xpathIterator(res,"normalize-space(//srx:results/srx:result/srx:binding[@name='fid']/srx:uri)",null,Global.NAMESPACES);iter.hasNext();) {
+            for (Iterator<XdmItem> iter=Saxon.xpathIterator(res,"//srx:results/srx:result/srx:binding[@name='fid']/*[self::srx:uri or self::srx:literal]",null,Global.NAMESPACES);iter.hasNext();) {
                 XdmItem n = iter.next();
                 String f = n.getStringValue();
                 if (f!=null && !f.isEmpty()) {
-                    URI fid = new URI(f.replace(fedoraConfig.getString("localBase")+"/","").replaceAll("#.*",""));
+                    URI fid = collectionFID(f);
                     if (hasCMDDatastream(fid)) {
                         URI pid = lookupPID(fid);
                         CMDCollection pcol = new CMDCollection(pid,fid,namespace,namespaces);
@@ -146,6 +146,25 @@ public class FedoraLoadCollectionHierarchy extends FedoraAction {
                 }
             }
         }
+    }
+
+    private URI collectionFID(String value) throws Exception {
+        return normalizeCollectionFID(
+            value,
+            fedoraConfig.getString("localBase"),
+            fedoraConfig.getString("localServer")
+        );
+    }
+
+    static URI normalizeCollectionFID(String value, String localBase, String localServer) throws Exception {
+        String fid = value.trim().replaceAll("#.*", "");
+        for (String prefix : new String[] {localBase + "/", localServer + "/", "info:fedora/"}) {
+            if (fid.startsWith(prefix)) {
+                fid = fid.substring(prefix.length());
+                break;
+            }
+        }
+        return new URI(fid);
     }
 
     protected void completeFID(Collection col) throws DepositException {
