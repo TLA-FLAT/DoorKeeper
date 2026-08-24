@@ -19,6 +19,8 @@ package nl.mpi.tla.flat.deposit.action;
 import org.fcrepo.client.FcrepoResponse;
 import java.io.File;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,14 +36,15 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Snapshots each object touched by this deposit and repoints the freshly minted
- * EPIC handle to the version-specific memento URL.
+ * EPIC handle to the timestamp-addressed Drupal version page.
  *
  * <p>For every object (SIP, referenced collection, inserted/updated resource)
  * that has a PID and FID this action creates a Fedora 6 memento of the LDP-RS
  * container plus of every managed child datastream that exists on the object
  * (CMD, DC, OLAC, OBJ, TECHMD). This gives every deposit a complete, addressable
- * snapshot -- first version included -- and lets each per-version handle resolve
- * to the datastream memento captured for its deposit.</p>
+ * snapshot -- first version included. Each per-version handle resolves to the
+ * public Drupal history route, which combines the matching node revision with
+ * the Fedora datastream memento captured for the deposit.</p>
  *
  * <p>Fedora 6 mementos can only be created on committed resources (the memento
  * builders can't join an open transaction), so this action must run <em>after</em>
@@ -62,8 +65,8 @@ public class FedoraVersioning extends FedoraAction {
         try {
             connect(context);
 
-            String localServer  = fedoraConfig.getString("localServer");
-            String publicServer = fedoraConfig.getString("publicServer");
+            String localServer = fedoraConfig.getString("localServer");
+            String publicDrupal = loadPublicDrupalServer();
 
             String epic = this.getParameter("epicConfig");
             if (epic == null) {
@@ -91,14 +94,14 @@ public class FedoraVersioning extends FedoraAction {
 
             // the deposited compound object
             if (sip.hasPID() && sip.hasFID())
-                versionAndRelocate(ps, isTest, localServer, publicServer, sip.getFID(), sip.getPID());
+                versionAndRelocate(ps, isTest, localServer, publicDrupal, sip.getFID(), sip.getPID());
             else
                 logger.debug("SIP has no PID and/or FID; nothing to version");
 
             // collections referenced/updated by this deposit
             for (Collection col : sip.getCollections(true)) {
                 if (col.hasPID() && col.hasFID())
-                    versionAndRelocate(ps, isTest, localServer, publicServer, col.getFID(), col.getPID());
+                    versionAndRelocate(ps, isTest, localServer, publicDrupal, col.getFID(), col.getPID());
                 else
                     logger.debug("Collection["+col+"] has no PID and/or FID; skipped");
             }
@@ -107,7 +110,7 @@ public class FedoraVersioning extends FedoraAction {
             for (Resource res : sip.getResources()) {
                 if (res.isInsert() || res.isUpdate()) {
                     if (res.hasPID() && res.hasFID())
-                        versionAndRelocate(ps, isTest, localServer, publicServer, res.getFID(), res.getPID());
+                        versionAndRelocate(ps, isTest, localServer, publicDrupal, res.getFID(), res.getPID());
                     else
                         logger.debug("Resource["+res+"] has no PID and/or FID; skipped");
                 }
@@ -121,10 +124,9 @@ public class FedoraVersioning extends FedoraAction {
     }
 
     /**
-     * Snapshot the object's container and every managed datastream, then repoint
-     * its handle to the memento of the datastream named in the FID's fragment.
+     * Snapshot the object and repoint its handle to Drupal's version page.
      */
-    protected void versionAndRelocate(PIDService ps, boolean isTest, String localServer, String publicServer, URI fidUri, URI pidUri) throws DepositException {
+    protected void versionAndRelocate(PIDService ps, boolean isTest, String localServer, String publicDrupal, URI fidUri, URI pidUri) throws DepositException {
         try {
             String fid  = fidUri.toString().replaceAll("#.*","");
             String frag = fidUri.getRawFragment();
@@ -149,20 +151,27 @@ public class FedoraVersioning extends FedoraAction {
                 dsMementos.put(ds, createMemento(dsUri));
             }
 
-            // 3. repoint the handle from its temporary target to the memento URL of the datastream in the FID fragment
+            // 3. Repoint the handle to the public Drupal version route. The
+            // timestamp is the exact Fedora memento identifier, allowing the
+            // UI to serve the correct archived datastream and pair it with the
+            // nearest Drupal node revision.
             String memento = dsMementos.get(handleDsid);
             if (memento == null) {
                 // the datastream named in the FID fragment doesn't exist on the object; nothing to point the handle at
                 throw new DepositException("FID["+fidUri+"] refers to datastream ["+handleDsid+"] but no such datastream exists on the object");
             }
-            // the memento lives on the internal REST endpoint; expose it via the public server
-            String loc = memento.replace(localServer, publicServer);
+            String timestamp = memento.replaceAll(".*/", "");
+            if (!timestamp.matches("[0-9]{14}")) {
+                throw new DepositException("Fedora memento["+memento+"] has no compact UTC timestamp identifier");
+            }
+            String encodedFid = URLEncoder.encode(fid, StandardCharsets.UTF_8).replace("+", "%20");
+            String loc = publicDrupal+"/repository/"+encodedFid+"/version/"+timestamp;
 
             String pid    = pidUri.toString().replaceAll("^http(s?)://hdl.handle.net/","hdl:");
             String prefix = pid.replaceAll("hdl:([^/]*)/.*","$1");
             String uuid   = pid.replaceAll(".*/","");
 
-            logger.info("Update handle["+prefix+"/"+uuid+"] -> memento URI["+loc+"]");
+            logger.info("Update handle["+prefix+"/"+uuid+"] -> archived version URI["+loc+"]");
             if (!isTest)
                 ps.updateLocation(prefix+"/"+uuid, loc);
             logger.info("Updated handle["+prefix+"/"+uuid+"] -> URI["+loc+"]");
@@ -171,6 +180,34 @@ public class FedoraVersioning extends FedoraAction {
         } catch (Exception ex) {
             throw new DepositException(ex);
         }
+    }
+
+    /**
+     * Public Drupal origin used in Handle targets.
+     *
+     * The container environment is preferred so one image/config tree works
+     * for development and production. A drupalConfig publicServer value is a
+     * fallback for non-container deployments.
+     */
+    protected String loadPublicDrupalServer() throws DepositException {
+        String publicDrupal = System.getenv("DRUPAL_PUBLIC_URL");
+        if (publicDrupal == null || publicDrupal.isBlank()) {
+            String drupal = this.getParameter("drupalConfig");
+            if (drupal != null) {
+                File config = new File(drupal);
+                if (config.isFile() && config.canRead()) {
+                    try {
+                        publicDrupal = new XMLConfiguration(config).getString("publicServer");
+                    } catch (Exception ex) {
+                        throw new DepositException("Couldn't read Drupal configuration["+drupal+"]", ex);
+                    }
+                }
+            }
+        }
+        if (publicDrupal == null || publicDrupal.isBlank()) {
+            throw new DepositException("No public Drupal URL configured; set DRUPAL_PUBLIC_URL or Drupal publicServer");
+        }
+        return publicDrupal.replaceAll("/+$", "");
     }
 
     /**

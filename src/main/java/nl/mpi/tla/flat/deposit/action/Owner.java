@@ -63,6 +63,12 @@ public class Owner extends AbstractAction {
                 owner.setParameter(new QName("acl-base"), new XdmAtomicValue(dir.toString()));
                 owner.setParameter(new QName("overwrite-user-name"), new XdmAtomicValue(getOverwriteProperties(context).getProperty("owner.user.name")));
                 owner.setInitialTemplate(new QName("overwrite"));
+                // The overwrite template writes owner.xml with
+                // xsl:result-document, but Saxon still requires a primary
+                // destination before transform() can run.
+                XdmDestination destination = new XdmDestination();
+                destination.setBaseURI(new URI("file:///void/null"));
+                owner.setDestination(destination);
                 owner.transform();
             } else {
                 // check for the policy

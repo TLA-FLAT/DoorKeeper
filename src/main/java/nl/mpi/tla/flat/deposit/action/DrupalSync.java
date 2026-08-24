@@ -59,8 +59,8 @@ import org.slf4j.LoggerFactory;
  *
  * Mementos and handles must exist by now, so this action runs after
  * FedoraVersioning, i.e. after the Fedora transaction has been committed.
- * All writes are upserts keyed on field_fid (nodes), uri (files) and
- * field_media_of+name (media), so the action is safe to re-run.
+ * All writes are upserts keyed on field_fid (nodes and media) and uri
+ * (files), so the action is safe to re-run.
  *
  * @author menzowi
  * @author pavsri
@@ -247,6 +247,7 @@ public class DrupalSync extends FedoraAction {
             String fid = res.getFID(true).toString();
             String frag = res.getFID().getRawFragment();
             String dsid = (frag != null ? frag.replaceAll("@.*","") : "OBJ");
+            String mediaFid = fid+"#"+dsid;
             String fileUri = "fedora://"+fid+"/"+dsid;
             String filename = (res.getFile() != null ? res.getFile().getName() : fid.replaceAll(".*/",""));
 
@@ -275,10 +276,11 @@ public class DrupalSync extends FedoraAction {
             media.set("name", values(filename));
             media.set("field_media_of", targets("target_id", node.nid()));
             media.set("field_media_use", targets("target_id", termId(mediaUseVocabulary, mapping.mediaUse()).tid()));
+            media.set("field_fid", values(mediaFid));
             media.set(mapping.sourceField(), targets("target_id", fileId));
 
             JsonNode existingMedia = jsonapiOne("media/"+mapping.mediaBundle(),
-                    "filter[field_media_of.id]="+encode(node.uuid())+"&filter[name]="+encode(filename));
+                    "filter[field_fid]="+encode(mediaFid));
             if (existingMedia != null) {
                 String mid = existingMedia.at("/attributes/drupal_internal__mid").asText();
                 apiCall("PATCH", server+"/media/"+mid+"?_format=json", media);
