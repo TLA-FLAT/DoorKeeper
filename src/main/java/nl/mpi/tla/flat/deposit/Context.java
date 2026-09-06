@@ -78,6 +78,8 @@ public class Context {
 
 	protected Map<String, Object> memory = new LinkedHashMap<>();
 	protected List<Runnable> cleanupTasks = new ArrayList<>();
+	/* A Fedora transaction is no longer reversible after its commit succeeds. */
+	private boolean committed = false;
 
 	// constructor
 
@@ -147,6 +149,15 @@ public class Context {
 
 	public void setProperty(String name, XdmValue val) {
 		props.put(name, val);
+	}
+
+	/** Mark the point at which external rollback must no longer be attempted. */
+	public synchronized void markCommitted() {
+		committed = true;
+	}
+
+	public synchronized boolean isCommitted() {
+		return committed;
 	}
 
 	// SIP

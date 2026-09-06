@@ -179,8 +179,11 @@ public class Flow {
         try {
             if (initFlow()) {
                 status = Boolean.valueOf(mainFlow(this.start,this.stop));
-            } else
+            } else {
                 status = Boolean.FALSE;
+            }
+            if (!status.booleanValue())
+                rollbackIfPossible();
         } catch (Exception e) {
             status = Boolean.FALSE;
             try {
@@ -191,8 +194,7 @@ public class Flow {
                 Flow.logger.error(" exception during the exception handling flow! "+x.getMessage(),x);
             }
             try {
-                if (rollback)
-                    rollback();
+                rollbackIfPossible();
             } catch(Exception x) {
                 Flow.logger.error(" exception during the rollback! "+x.getMessage(),x);
             }
@@ -211,6 +213,22 @@ public class Flow {
             throw t;
         }
         return status.booleanValue();
+    }
+
+    /**
+     * A successful Fedora transaction commit is the durability boundary.  In
+     * particular, Drupal or memento processing can still fail after it; undoing
+     * filesystem persistence then would leave Fedora external-content URLs
+     * dangling.  Those failures must be retried/reconciled instead.
+     */
+    private void rollbackIfPossible() {
+        if (!rollback)
+            return;
+        if (context.isCommitted()) {
+            Flow.logger.error("workflow failed after the Fedora transaction was committed; skipping rollback");
+            return;
+        }
+        rollback();
     }
 
     private boolean initFlow() throws DepositException {

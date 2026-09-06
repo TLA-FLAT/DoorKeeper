@@ -78,6 +78,7 @@ public class FedoraTransaction extends FedoraAction {
                         );
                         context.putInMemory(KEEP_ALIVE_TASK, thread);
                         context.putInMemory(KEEP_ALIVE_EXECUTOR, scheduler);
+                        context.registerCleanup(() -> stopKeepAlive(context));
                         logger.debug("Thread has been started succussfully! :"+thread);
                     }
                     catch (Exception e) {
@@ -100,6 +101,7 @@ public class FedoraTransaction extends FedoraAction {
                         }
                         else {
                                 logger.debug("Successfully committed the trasaction!");
+                                context.markCommitted();
                                 stopKeepAlive(context);
                         }
                     }
