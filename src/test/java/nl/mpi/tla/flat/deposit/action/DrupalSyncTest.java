@@ -5,6 +5,7 @@ import javax.xml.transform.stream.StreamSource;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.util.Saxon;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -30,5 +31,15 @@ public class DrupalSyncTest {
         TestableDrupalSync sync = new TestableDrupalSync();
         assertTrue(sync.collection(cmd("clarin.eu:cr1:p_collection")));
         assertFalse(sync.collection(cmd("clarin.eu:cr1:p_bundle")));
+    }
+
+    @Test
+    public void sparseFieldsPreserveExistingQueryAndLimitResponseFields() {
+        assertEquals(
+                "http://drupal/jsonapi/node/islandora_object?filter[field_fid]=lat_1"
+                + "&fields[node--islandora_object]=drupal_internal__nid",
+                DrupalSync.sparseFields(
+                        "http://drupal/jsonapi/node/islandora_object?filter[field_fid]=lat_1",
+                        "node--islandora_object", "drupal_internal__nid"));
     }
 }

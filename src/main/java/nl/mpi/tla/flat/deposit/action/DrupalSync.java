@@ -216,18 +216,22 @@ public class DrupalSync extends FedoraAction {
         ObjectNode document = MAPPER.createObjectNode();
         document.set("data", data);
 
-        JsonNode existing = jsonapiOne("node/"+nodeBundle, "filter[field_fid]="+encode(fidStr));
+        String nodeType = "node--"+nodeBundle;
+        JsonNode existing = jsonapiOne("node/"+nodeBundle, "filter[field_fid]="+encode(fidStr),
+                nodeType, "drupal_internal__nid");
         if (existing != null) {
             String nid = existing.at("/attributes/drupal_internal__nid").asText();
             String uuid = existing.at("/id").asText();
             data.put("id", uuid);
-            apiCall("PATCH", server+"/jsonapi/node/"+nodeBundle+"/"+uuid, document);
+            apiCall("PATCH", sparseFields(server+"/jsonapi/node/"+nodeBundle+"/"+uuid,
+                    nodeType, "drupal_internal__nid"), document);
             logger.info("Updated Drupal node["+nid+"] for FID["+fidStr+"] PID["+pidToHdl(pid)+"]");
             return new NodeRef(nid, uuid);
         }
 
         attributes.put("field_fid", fidStr);
-        JsonNode created = apiCall("POST", server+"/jsonapi/node/"+nodeBundle, document);
+        JsonNode created = apiCall("POST", sparseFields(server+"/jsonapi/node/"+nodeBundle,
+                nodeType, "drupal_internal__nid"), document);
         String nid = created.at("/data/attributes/drupal_internal__nid").asText();
         String uuid = created.at("/data/id").asText();
         context.registerRollbackEvent(this, "drupal node creation", "nid", nid, "fid", fidStr);
@@ -255,7 +259,8 @@ public class DrupalSync extends FedoraAction {
             // (status can't be set: core forbids it and flips it to permanent
             // once the media below references the file)
             String fileId;
-            JsonNode existingFile = jsonapiOne("file/file", "filter[uri.value]="+encode(fileUri));
+            JsonNode existingFile = jsonapiOne("file/file", "filter[uri.value]="+encode(fileUri),
+                    "file--file", "drupal_internal__fid");
             if (existingFile != null) {
                 fileId = existingFile.at("/attributes/drupal_internal__fid").asText();
                 logger.debug("Found Drupal file["+fileId+"] for URI["+fileUri+"]");
@@ -280,7 +285,8 @@ public class DrupalSync extends FedoraAction {
             media.set(mapping.sourceField(), targets("target_id", fileId));
 
             JsonNode existingMedia = jsonapiOne("media/"+mapping.mediaBundle(),
-                    "filter[field_fid]="+encode(mediaFid));
+                    "filter[field_fid]="+encode(mediaFid),
+                    "media--"+mapping.mediaBundle(), "drupal_internal__mid");
             if (existingMedia != null) {
                 String mid = existingMedia.at("/attributes/drupal_internal__mid").asText();
                 apiCall("PATCH", server+"/media/"+mid+"?_format=json", media);
@@ -352,7 +358,8 @@ public class DrupalSync extends FedoraAction {
         String key = vocabulary+"|"+name;
         TermRef term = termCache.get(key);
         if (term == null) {
-            JsonNode result = jsonapiOne("taxonomy_term/"+vocabulary, "filter[name]="+encode(name));
+            JsonNode result = jsonapiOne("taxonomy_term/"+vocabulary, "filter[name]="+encode(name),
+                    "taxonomy_term--"+vocabulary, "drupal_internal__tid");
             if (result == null)
                 throw new DepositException("Taxonomy term["+name+"] doesn't exist in vocabulary["+vocabulary+"]!");
             term = new TermRef(result.at("/attributes/drupal_internal__tid").asText(), result.at("/id").asText());
@@ -457,14 +464,27 @@ public class DrupalSync extends FedoraAction {
     /**
      * JSON:API collection GET returning the first matching resource, or null.
      */
-    protected JsonNode jsonapiOne(String resource, String query) throws DepositException {
-        JsonNode result = apiCall("GET", server+"/jsonapi/"+resource+"?"+query, null);
+    protected JsonNode jsonapiOne(String resource, String query, String resourceType, String fields) throws DepositException {
+        String url = sparseFields(server+"/jsonapi/"+resource+"?"+query+"&page[limit]=2",
+                resourceType, fields);
+        JsonNode result = apiCall("GET", url, null);
         JsonNode data = result.get("data");
         if (data == null || !data.isArray() || data.isEmpty())
             return null;
         if (data.size() > 1)
             logger.warn("Multiple Drupal ["+resource+"] matches for ["+query+"]; using the first one");
         return data.get(0);
+    }
+
+    /**
+     * Limit JSON:API response normalization to the identifiers DrupalSync
+     * actually consumes. Islandora objects have many fields and relationships;
+     * serializing their complete representation can dominate ingest time even
+     * though JSON:API always includes the resource UUID separately.
+     */
+    protected static String sparseFields(String url, String resourceType, String fields) {
+        return url + (url.contains("?") ? "&" : "?")
+                + "fields["+resourceType+"]="+encode(fields);
     }
 
     protected JsonNode apiCall(String method, String url, ObjectNode body) throws DepositException {
