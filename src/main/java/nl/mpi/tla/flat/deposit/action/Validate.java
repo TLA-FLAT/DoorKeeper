@@ -20,18 +20,33 @@ package nl.mpi.tla.flat.deposit.action;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.XMLConstants;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.stream.StreamResult;
 
 import nl.mpi.tla.schemanon.Message;
@@ -56,6 +71,8 @@ import org.w3c.dom.Document;
 public class Validate extends AbstractAction {
 
     private static final Logger logger = LoggerFactory.getLogger(Validate.class.getName());
+    private static final Duration SCHEMA_CACHE_TTL = Duration.ofHours(24);
+    private static final int MAX_SCHEMA_BYTES = 10 * 1024 * 1024;
     private static final Pattern ENUMERATION_ERROR = Pattern.compile(
             "Value '([^']*)' is not facet-valid with respect to enumeration '\\[([^]]*)\\]'.*",
             Pattern.DOTALL);
@@ -85,7 +102,6 @@ public class Validate extends AbstractAction {
 
             Document rec = context.getSIP().getRecord();
             String xsd = Saxon.xpath2string(Saxon.wrapNode(rec), "/*/@xsi:schemaLocation", null, NAMESPACES).replaceAll(".* ","");
-            logger.debug("XSD schema location["+xsd+"]");
             if (xsd.isEmpty())
                 throw new DepositException("The SIP document doesn't specify a @xsi:schemaLocation!");
 
@@ -102,7 +118,7 @@ public class Validate extends AbstractAction {
 
             // the CMD XSD may carry embedded Schematron rules (validated as a side
             // effect of validating against it), on top of the separately configured rules
-            boolean valid = validate(new SchemAnon(URI.create(xsd).toURL()), doc, validationDocument);
+            boolean valid = validate(new SchemAnon(cachedSchemaSource(URI.create(xsd).toURL(), cache)), doc, validationDocument);
             if (rules != null && !rules.isEmpty())
                 valid = validate(new SchemAnon(Paths.get(rules).toUri().toURL()), doc, validationDocument) && valid;
 
@@ -116,6 +132,86 @@ public class Validate extends AbstractAction {
         } catch (Exception ex) {
             UserLog.metadataError("The metadata could not be validated. Please check the metadata profile and values.");
             throw new DepositException(ex);
+        }
+    }
+
+    /**
+     * Cache the top-level remote XSD while retaining its original URL as the
+     * base URI, so relative imports continue to resolve against the registry.
+     * Each SchemAnon instance gets a fresh DOMSource because it reads the
+     * schema more than once during type detection and validation.
+     */
+    static Source cachedSchemaSource(URL url, File cacheDir) throws Exception {
+        String protocol = url.getProtocol().toLowerCase(Locale.ROOT);
+        if (!protocol.equals("http") && !protocol.equals("https"))
+            return new StreamSource(url.toExternalForm());
+
+        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(url.toExternalForm().getBytes(StandardCharsets.UTF_8)));
+        Path cacheFile = cacheDir.toPath().resolve(hash + ".xsd");
+        boolean hit = Files.isRegularFile(cacheFile)
+                && Files.size(cacheFile) > 0
+                && Files.size(cacheFile) <= MAX_SCHEMA_BYTES
+                && Files.getLastModifiedTime(cacheFile).toInstant()
+                        .isAfter(Instant.now().minus(SCHEMA_CACHE_TTL));
+
+        byte[] bytes = hit ? Files.readAllBytes(cacheFile) : downloadSchema(url);
+
+        Document schema;
+        try {
+            schema = parseSchema(bytes, url);
+        } catch (Exception ex) {
+            if (!hit)
+                throw ex;
+            logger.warn("Cached CMDI schema is invalid; downloading it again", ex);
+            bytes = downloadSchema(url);
+            schema = parseSchema(bytes, url);
+            hit = false;
+        }
+
+        if (!hit) {
+            try {
+                writeSchemaCache(cacheFile, bytes);
+            } catch (Exception ex) {
+                // A writable cache is an optimization, not a prerequisite for
+                // validating a schema that has already been downloaded.
+                logger.warn("Couldn't write CMDI schema cache file [{}]", cacheFile, ex);
+            }
+        }
+        return new DOMSource(schema, url.toExternalForm());
+    }
+
+    private static byte[] downloadSchema(URL url) throws Exception {
+        URLConnection connection = url.openConnection();
+        connection.setConnectTimeout(5000);
+        connection.setReadTimeout(20000);
+        try (InputStream input = connection.getInputStream()) {
+            byte[] bytes = input.readNBytes(MAX_SCHEMA_BYTES + 1);
+            if (bytes.length > MAX_SCHEMA_BYTES)
+                throw new java.io.IOException("CMDI schema exceeds the 10 MiB download limit: " + url);
+            return bytes;
+        }
+    }
+
+    private static Document parseSchema(byte[] bytes, URL url) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        return factory.newDocumentBuilder().parse(new ByteArrayInputStream(bytes), url.toExternalForm());
+    }
+
+    private static void writeSchemaCache(Path cacheFile, byte[] bytes) throws Exception {
+        Path temporary = Files.createTempFile(cacheFile.getParent(), "schema-", ".tmp");
+        try {
+            Files.write(temporary, bytes);
+            try {
+                Files.move(temporary, cacheFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ex) {
+                Files.move(temporary, cacheFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
         }
     }
 

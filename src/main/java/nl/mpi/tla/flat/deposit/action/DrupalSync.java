@@ -38,6 +38,8 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmNode;
 import nl.mpi.tla.flat.deposit.Context;
@@ -74,6 +76,13 @@ public class DrupalSync extends FedoraAction {
     protected HttpClient http;
     protected String server;
     protected String authorization;
+    protected String authMode = "basic";
+    protected String authUser;
+    private static final long TOKEN_REFRESH_MARGIN_SECONDS = 120;
+    private static final Map<AuthKey, CachedToken> TOKEN_CACHE = new ConcurrentHashMap<>();
+
+    private record AuthKey(String server, String user) { }
+    private record CachedToken(String value, long expiresAt) { }
 
     protected String nodeBundle = "islandora_object";
     protected String modelVocabulary = "islandora_models";
@@ -82,7 +91,12 @@ public class DrupalSync extends FedoraAction {
     protected String collectionModel = "Collection";
     protected final Set<String> collectionProfiles = new LinkedHashSet<>();
 
-    protected final Map<String,TermRef> termCache = new HashMap<>();
+    // Taxonomy terms are deployment configuration. Reuse successful lookups
+    // across ingest flows for the lifetime of this DoorKeeper process.
+    private static final Map<TermKey,TermRef> TERM_CACHE = new ConcurrentHashMap<>();
+
+    private record TermKey(String server, String vocabulary, String name) {
+    }
 
     /**
      * One row of the mimetype mapping CSV. The columns follow the historic
@@ -352,18 +366,30 @@ public class DrupalSync extends FedoraAction {
     }
 
     /**
-     * Look up a taxonomy term by name (cached per run).
+     * Look up a taxonomy term by name (cached for the process lifetime).
      */
     protected TermRef termId(String vocabulary, String name) throws DepositException {
-        String key = vocabulary+"|"+name;
-        TermRef term = termCache.get(key);
-        if (term == null) {
+        TermKey key = new TermKey(server, vocabulary, name);
+        TermRef term = TERM_CACHE.get(key);
+        if (term != null)
+            return term;
+
+        // Serialize first lookups so concurrent deposits cannot fetch the same
+        // term repeatedly. Missing terms and failed requests are never cached.
+        synchronized (TERM_CACHE) {
+            term = TERM_CACHE.get(key);
+            if (term != null)
+                return term;
             JsonNode result = jsonapiOne("taxonomy_term/"+vocabulary, "filter[name]="+encode(name),
                     "taxonomy_term--"+vocabulary, "drupal_internal__tid");
             if (result == null)
                 throw new DepositException("Taxonomy term["+name+"] doesn't exist in vocabulary["+vocabulary+"]!");
-            term = new TermRef(result.at("/attributes/drupal_internal__tid").asText(), result.at("/id").asText());
-            termCache.put(key, term);
+            String tid = result.at("/attributes/drupal_internal__tid").asText();
+            String uuid = result.at("/id").asText();
+            if (tid.isBlank() || uuid.isBlank())
+                throw new DepositException("Taxonomy term["+name+"] in vocabulary["+vocabulary+"] has no TID or UUID!");
+            term = new TermRef(tid, uuid);
+            TERM_CACHE.put(key, term);
         }
         return term;
     }
@@ -435,6 +461,12 @@ public class DrupalSync extends FedoraAction {
             if (user == null || user.isEmpty() || pass == null || pass.isEmpty())
                 throw new DepositException("The Drupal configuration["+drupal+"] doesn't specify userName/userPass!");
             authorization = "Basic " + Base64.getEncoder().encodeToString((user+":"+pass).getBytes(StandardCharsets.UTF_8));
+            authUser = user;
+            String configuredMode = System.getenv("DOORKEEPER_DRUPAL_AUTH_MODE");
+            authMode = (configuredMode == null || configuredMode.isBlank()
+                    ? xConfig.getString("authMode", "basic") : configuredMode).trim().toLowerCase(java.util.Locale.ROOT);
+            if (!authMode.equals("basic") && !authMode.equals("jwt"))
+                throw new DepositException("Unsupported Drupal authMode["+authMode+"] (expected basic or jwt)");
 
             HttpClient.Builder builder = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1);
             if (xConfig.getBoolean("trustAll", false))
@@ -489,17 +521,14 @@ public class DrupalSync extends FedoraAction {
 
     protected JsonNode apiCall(String method, String url, ObjectNode body) throws DepositException {
         try {
-            HttpRequest.Builder req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Authorization", authorization);
-            if (body != null)
-                req = req.header("Content-Type", url.contains("/jsonapi/") ? "application/vnd.api+json" : "application/json")
-                         .method(method, HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)));
-            else
-                req = req.method(method, HttpRequest.BodyPublishers.noBody());
-
-            HttpResponse<String> response = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
-            logger.debug("Drupal "+method+"["+url+"] code["+response.statusCode()+"]");
+            String payload = body == null ? null : MAPPER.writeValueAsString(body);
+            String bearer = authMode.equals("jwt") ? token().value() : null;
+            HttpResponse<String> response = sendDrupal(method, url, payload, bearer);
+            if (bearer != null && response.statusCode() == 401) {
+                // A revoked or unexpectedly expired token gets one fresh attempt.
+                TOKEN_CACHE.remove(new AuthKey(server, authUser), new CachedToken(bearer, tokenExpiry(bearer)));
+                response = sendDrupal(method, url, payload, token().value());
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300)
                 throw new DepositException("Unexpected status["+response.statusCode()+"] from Drupal "+method+"["+url+"]: "
                         + excerpt(response.body()));
@@ -509,6 +538,54 @@ public class DrupalSync extends FedoraAction {
         } catch (Exception ex) {
             throw new DepositException("Drupal "+method+"["+url+"] failed!", ex);
         }
+    }
+
+    private HttpResponse<String> sendDrupal(String method, String url, String payload, String bearer) throws IOException, InterruptedException {
+        HttpRequest.Builder req = HttpRequest.newBuilder().uri(URI.create(url))
+                .header("Authorization", bearer == null ? authorization : "Bearer " + bearer);
+        if (payload != null)
+            req.header("Content-Type", url.contains("/jsonapi/") ? "application/vnd.api+json" : "application/json")
+                    .method(method, HttpRequest.BodyPublishers.ofString(payload));
+        else
+            req.method(method, HttpRequest.BodyPublishers.noBody());
+        return http.send(req.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private CachedToken token() throws Exception {
+        AuthKey key = new AuthKey(server, authUser);
+        CachedToken cached = TOKEN_CACHE.get(key);
+        long now = java.time.Instant.now().getEpochSecond();
+        if (cached != null && cached.expiresAt() > now + TOKEN_REFRESH_MARGIN_SECONDS)
+            return cached;
+        synchronized (TOKEN_CACHE) {
+            cached = TOKEN_CACHE.get(key);
+            now = java.time.Instant.now().getEpochSecond();
+            if (cached != null && cached.expiresAt() > now + TOKEN_REFRESH_MARGIN_SECONDS)
+                return cached;
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(server + "/jwt/token"))
+                    .timeout(Duration.ofSeconds(15)).header("Authorization", authorization).GET().build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300)
+                throw new DepositException("Drupal JWT issuance returned HTTP " + response.statusCode());
+            String value = MAPPER.readTree(response.body()).path("token").asText();
+            long expiresAt = tokenExpiry(value);
+            if (expiresAt <= now + TOKEN_REFRESH_MARGIN_SECONDS)
+                throw new DepositException("Drupal issued a JWT without a usable exp claim");
+            cached = new CachedToken(value, expiresAt);
+            TOKEN_CACHE.put(key, cached);
+            return cached;
+        }
+    }
+
+    private static long tokenExpiry(String jwt) throws IOException {
+        String[] parts = jwt.split("\\.");
+        if (parts.length < 2)
+            throw new IOException("Drupal JWT has no payload");
+        byte[] payload = Base64.getUrlDecoder().decode(parts[1]);
+        JsonNode exp = MAPPER.readTree(payload).path("exp");
+        if (!exp.canConvertToLong())
+            throw new IOException("Drupal JWT has no numeric exp claim");
+        return exp.asLong();
     }
 
     @Override
