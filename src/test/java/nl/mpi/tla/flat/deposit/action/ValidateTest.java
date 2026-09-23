@@ -16,6 +16,10 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.dom.DOMSource;
@@ -26,6 +30,8 @@ import org.junit.rules.TemporaryFolder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertFalse;
 
 public class ValidateTest {
 
@@ -101,16 +107,58 @@ public class ValidateTest {
             var document = factory.newDocumentBuilder().parse(
                     new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
 
+            int initialIncludes = 0;
             for (int i = 0; i < 2; i++) {
-                SchemAnon validator = new SchemAnon(Validate.cachedSchemaSource(url, temporaryFolder.getRoot()));
+                SchemAnon validator = Validate.cachedValidator(url, temporaryFolder.getRoot(), false);
                 assertTrue(validator.validate(new DOMSource(document)));
+                validator.getMessages();
+                if (i == 0) initialIncludes = includeDownloads.get();
             }
 
             assertEquals(1, mainDownloads.get());
-            assertTrue("Relative include should resolve against the original URL", includeDownloads.get() > 0);
+            assertTrue("Relative include should resolve against the original URL", initialIncludes > 0);
+            assertEquals("Warm validation should not fetch includes again", initialIncludes, includeDownloads.get());
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    public void deploymentRulesReuseCompilationAndClearPreviousFailures() throws Exception {
+        var rules = temporaryFolder.newFile("rules.sch").toPath();
+        Files.writeString(rules, "<schema xmlns='http://purl.oclc.org/dsdl/schematron' queryBinding='xslt2'>"
+                + "<pattern><rule context='root'><assert test=\"@ok = 'yes'\">Expected yes</assert>"
+                + "</rule></pattern></schema>");
+        URL url = rules.toUri().toURL();
+        var validator = Validate.cachedValidator(url, temporaryFolder.getRoot(), true);
+        Validate action = new Validate();
+        assertFalse(runValidation(action, url, false));
+        // A compiled deployment ruleset remains usable without re-reading it.
+        Files.delete(rules);
+        assertSame(validator, Validate.cachedValidator(url, temporaryFolder.getRoot(), true));
+        assertTrue(runValidation(action, url, true));
+        assertTrue("Previous errors must not leak into the next validation", validator.getMessages().isEmpty());
+
+        var executor = Executors.newFixedThreadPool(4);
+        try {
+            var results = new ArrayList<Future<Boolean>>();
+            for (int i = 0; i < 16; i++) {
+                final boolean valid = i % 2 == 0;
+                results.add(executor.submit(() -> runValidation(new Validate(), url, valid) == valid));
+            }
+            for (Future<Boolean> result : results)
+                assertTrue("Concurrent validations must retain their own result", result.get());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private boolean runValidation(Validate action, URL rules, boolean valid) throws Exception {
+        var factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        var document = factory.newDocumentBuilder().parse(new ByteArrayInputStream(
+                ("<root ok='" + (valid ? "yes" : "no") + "'/>").getBytes(StandardCharsets.UTF_8)));
+        return action.validateCached(rules, temporaryFolder.getRoot(), true, new DOMSource(document), document);
     }
 
     private static void respond(HttpExchange exchange, String body) throws IOException {

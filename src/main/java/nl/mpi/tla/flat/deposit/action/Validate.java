@@ -36,6 +36,8 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,6 +75,12 @@ public class Validate extends AbstractAction {
     private static final Logger logger = LoggerFactory.getLogger(Validate.class.getName());
     private static final Duration SCHEMA_CACHE_TTL = Duration.ofHours(24);
     private static final int MAX_SCHEMA_BYTES = 10 * 1024 * 1024;
+    // SchemAnon caches compilation, but also holds mutable validation results.
+    // Bound retained profiles and lock each instance through result processing.
+    private static final int MAX_VALIDATORS = 64;
+    private static final Map<ValidatorKey, CachedValidator> VALIDATORS = new LinkedHashMap<>(16, 0.75f, true);
+    private record ValidatorKey(String url, String cacheDirectory, boolean deploymentRules) { }
+    private record CachedValidator(SchemAnon validator, long createdNanos) { }
     private static final Pattern ENUMERATION_ERROR = Pattern.compile(
             "Value '([^']*)' is not facet-valid with respect to enumeration '\\[([^]]*)\\]'.*",
             Pattern.DOTALL);
@@ -118,9 +126,9 @@ public class Validate extends AbstractAction {
 
             // the CMD XSD may carry embedded Schematron rules (validated as a side
             // effect of validating against it), on top of the separately configured rules
-            boolean valid = validate(new SchemAnon(cachedSchemaSource(URI.create(xsd).toURL(), cache)), doc, validationDocument);
+            boolean valid = validateCached(URI.create(xsd).toURL(), cache, false, doc, validationDocument);
             if (rules != null && !rules.isEmpty())
-                valid = validate(new SchemAnon(Paths.get(rules).toUri().toURL()), doc, validationDocument) && valid;
+                valid = validateCached(Paths.get(rules).toUri().toURL(), cache, true, doc, validationDocument) && valid;
 
             if (valid)
                 UserLog.metadataInfo("The metadata passed validation.");
@@ -132,6 +140,43 @@ public class Validate extends AbstractAction {
         } catch (Exception ex) {
             UserLog.metadataError("The metadata could not be validated. Please check the metadata profile and values.");
             throw new DepositException(ex);
+        }
+    }
+
+    /** Deployment rules reload on restart; profile schemas retain the 24h refresh policy. */
+    boolean validateCached(URL url, File cache, boolean deploymentRules, Source document,
+            Document validationDocument) throws Exception {
+        SchemAnon validator = cachedValidator(url, cache, deploymentRules);
+        synchronized (validator) {
+            // Include getMessages() in the lock: it consumes the current report.
+            return validate(validator, document, validationDocument);
+        }
+    }
+
+    static SchemAnon cachedValidator(URL url, File cache, boolean deploymentRules) throws Exception {
+        ValidatorKey key = new ValidatorKey(url.toExternalForm(), cache.getCanonicalPath(), deploymentRules);
+        synchronized (VALIDATORS) {
+            CachedValidator existing = VALIDATORS.get(key);
+            if (existing != null && (deploymentRules
+                    || System.nanoTime() - existing.createdNanos() < SCHEMA_CACHE_TTL.toNanos())) {
+                return existing.validator();
+            }
+        }
+        // Fetch/parse outside the map lock so another profile is never held up
+        // by network I/O. Only the winning instance is subsequently compiled.
+        SchemAnon created = new SchemAnon(deploymentRules
+                ? new StreamSource(url.toExternalForm()) : cachedSchemaSource(url, cache));
+        synchronized (VALIDATORS) {
+            CachedValidator existing = VALIDATORS.get(key);
+            if (existing != null && (deploymentRules
+                    || System.nanoTime() - existing.createdNanos() < SCHEMA_CACHE_TTL.toNanos())) {
+                return existing.validator();
+            }
+            VALIDATORS.put(key, new CachedValidator(created, System.nanoTime()));
+            while (VALIDATORS.size() > MAX_VALIDATORS) {
+                VALIDATORS.remove(VALIDATORS.keySet().iterator().next());
+            }
+            return created;
         }
     }
 
