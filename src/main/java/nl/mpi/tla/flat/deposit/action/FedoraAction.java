@@ -53,6 +53,12 @@ abstract public class FedoraAction extends AbstractAction {
     protected FcrepoClient fedoraClient = null;
 
     private static final String CLIENT_MEMORY_KEY_PREFIX = FedoraAction.class.getName() + ".client:";
+    private static final String TITLE_MEMORY_KEY_PREFIX = FedoraAction.class.getName() + ".title:";
+
+    /** The title written to Fedora's DC stream during this deposit, keyed by clean FID. */
+    protected static String titleMemoryKey(String fid) {
+        return TITLE_MEMORY_KEY_PREFIX + fid.replaceFirst("#.*$", "");
+    }
 
     private static final int EXTERNAL_CONTENT_MAX_ATTEMPTS = 121;
     private static final long EXTERNAL_CONTENT_RETRY_DELAY_MS = 250L;

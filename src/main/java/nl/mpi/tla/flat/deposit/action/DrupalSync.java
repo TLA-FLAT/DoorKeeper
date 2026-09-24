@@ -194,7 +194,7 @@ public class DrupalSync extends FedoraAction {
      */
     protected NodeRef upsertNode(Context context, URI pid, URI fid, String model, List<NodeRef> parents, String suppliedTitle) throws DepositException {
         String fidStr = fid.toString().replaceAll("#.*","");
-        String title = (suppliedTitle == null || suppliedTitle.isBlank()) ? fetchTitle(fid, fidStr) : suppliedTitle;
+        String title = resolveTitle(context, fid, fidStr, suppliedTitle);
         TermRef modelTerm = termId(modelVocabulary, model);
 
         // The Handle is stored on every node in field_handle in its canonical
@@ -338,6 +338,16 @@ public class DrupalSync extends FedoraAction {
 
     protected boolean isCollectionProfile(String profile) {
         return profile != null && collectionProfiles.contains(profile);
+    }
+
+    /** Prefer the DC title written by FedoraInteract in this deposit. */
+    protected String resolveTitle(Context context, URI fid, String fallback, String suppliedTitle) {
+        if (suppliedTitle != null && !suppliedTitle.isBlank())
+            return suppliedTitle;
+        Object cached = context.getFromMemory(titleMemoryKey(fid.toString()));
+        if (cached instanceof String title && !title.isBlank())
+            return title;
+        return fetchTitle(fid, fallback);
     }
 
     /**
